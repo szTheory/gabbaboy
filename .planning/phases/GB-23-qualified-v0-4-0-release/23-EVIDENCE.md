@@ -67,6 +67,14 @@ The following retained private review records are supplements to the three fixed
 
 The final record-only W has H's parent/source semantics; S has W's qualified tree. The subsequent trusted control corrections preserve S/tag/notes/original 20 asset identities and are qualified at the actual G5 main and successful publisher boundaries. The normal immutable report gate at closeout checks the original implementation-bound 80 findings; it does not falsely assert that 965 reviewed all later source. All real product semantic tests and refusal controls remain required.
 
+## Final Phase 23 lesson and software boundary
+
+Lesson commit `293c9fa7743b10f130a99514d6fdf091c9d4761e` records the six-core/Playstead committed-source scan, actual CI/readback lessons and scoped future direction. Root checked all 28 selected source blobs against their pinned immutable commits. The existing Plan 08 T1 check and missing-evidence/XFER controls passed on that lesson commit.
+
+Boundary commit `e3b418dfbdb8b61d1c3088c34fb8909ad002efbd` contains exactly all nine completed plan SUMMARY paths, the Phase 23 — Qualified v0.4.0 Release owner route `/gsd-audit-milestone`, and both false automatic-advance flags. The existing T2 assertion reads those Git objects and passes; removed-route and enabled-auto mutations reject. Shared generated acceptance covers all 22 criteria from the nine summaries with zero human checkpoints; its 21 weakened-copy controls pass. The first focused summary/closure CTests also passed. Final configured planning/summary/report checks are run at the exact enclosing metadata head before its protected PR/merge.
+
+Boundary issue/PR triage at 2026-11-14T00:53:55.113Z found no open issues or PRs. Main remained the qualified G5 control; direct tag S, all 22 public asset tuples and notes remained fixed. The enclosing normal protected planning closeout is required to pass its latest exact-head checks and preserve merge-tree identity before final handoff. This final documentation record does not become shipped product S, refresh old phase evidence, classify unresolved fallback items or authorize another release attempt. The owner-controlled next stage is the v0.4 milestone audit; no automatic advance occurs.
+
 ## Historical qualification and bounded recovery chronology
 
 Everything below records the observations and authority at its stated boundary, not the current release state. Historical temporary checkout names are privacy-normalized as `$VERSION_CHECKOUT`, `$BOOKKEEPING_CHECKOUT` or `$TEMP_CHECKOUT`; these are descriptive placeholders. Exact original local paths remain only in private raw logs.

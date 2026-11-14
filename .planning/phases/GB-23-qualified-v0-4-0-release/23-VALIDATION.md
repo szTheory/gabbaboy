@@ -1,8 +1,8 @@
 ---
 phase: "GB-23"
 slug: "qualified-v0-4-0-release"
-status: in_progress
-nyquist_compliant: false
+status: complete
+nyquist_compliant: true
 wave_0_complete: true
 created: "2026-11-03"
 updated: "2026-11-14"
@@ -10,7 +10,7 @@ updated: "2026-11-14"
 
 # Phase 23 — Validation Evidence
 
-The qualified [v0.4.0 release](https://github.com/szTheory/gabbaboy/releases/tag/v0.4.0) and fresh public-byte readback pass. Product source S, trusted control G5, historical reviewed implementation and later documentation boundaries are distinct in [23-EVIDENCE.md](23-EVIDENCE.md). Plan 23-06 shared closure passes over eight completed summaries. Final all-nine-summary closure and the Plan 23-08 boundary remain pending; this interim record does not complete that plan.
+The qualified [v0.4.0 release](https://github.com/szTheory/gabbaboy/releases/tag/v0.4.0) and fresh public-byte readback pass. Product source S, trusted control G5, historical reviewed implementation and later documentation boundaries are distinct in [23-EVIDENCE.md](23-EVIDENCE.md). Plan 23-06 release closure and final Plan 23-08 nine-summary closure pass. The immutable lesson/boundary assertions and their mutation controls pass at the recorded Git commits. The enclosing protected planning closeout remains the final merge/handoff gate.
 
 ## Automated evidence and rejection controls
 
@@ -20,12 +20,12 @@ The qualified [v0.4.0 release](https://github.com/szTheory/gabbaboy/releases/tag
 | 23-02 | Concise actual release notes and ledger use the shared immutable claims input | Missing/hidden/contradictory disclosures and notice mismatches refuse | Pass; actual publisher rechecks notes |
 | 23-03 | Version/window inputs, exact actual 0.4.0 output and tracked generated artifacts | Wrong/mixed version, changed managed inputs/body/source/window refuse | Pass; active S window checked in actual successful publisher |
 | 23-09 | Existing notes/docs/changelog entrypoints reject incomplete raw-HTML visibility bypasses | Visible/masked positive counterparts and specific causal refusals | Pass in preserved reviewed source and complete hosted inventories |
-| 23-04 | Fixed three structured reports retain all 80 findings at implementation 96505505; accepted later scoped reviews are supplements | Missing/duplicate/stale roles, source/pin drift and unresolved blocking findings refuse | Pass at reviewed/qualified boundaries; final closeout immutable report gate remains required |
+| 23-04 | Fixed three structured reports retain all 80 findings at implementation 96505505; accepted later scoped reviews are supplements | Missing/duplicate/stale roles, source/pin drift and unresolved blocking findings refuse | Pass at reviewed/qualified boundaries; same historical report blobs remain unchanged; final exact-head immutable gate is required before push |
 | 23-07 | Actual 0.4.0 release-token pins and unchanged format/behavior/battery policy | Wrong release, corrupt/semantic state and cross-release native-state imports refuse | Pass; exact source/state evidence in 23-07-SUMMARY |
 | 23-05 | Real H/R1/W/R2/nightly, protected b47, actual G5 main, S producers and published assets | Stale source/checks, writer conflicts, changed existing asset tuples, invalid products, game insertion and failed consumers hold publication | Pass; publisher 43526085579, attempt 1 and independent public22 readback |
 | 23-06-T1 | All 22 actual public downloads, exact pre-publish 22, preserved original 20, source archive, final receipt and owner families | Four licensed-game insertion copies refuse with product-fixture-leak; metadata/digest/receipt checks fail closed | Pass; native hosted platform evidence bound to public hashes plus fresh native macOS public-byte C/C++/host continuation |
 | 23-06-T2 | Goal/requirement reconciliation and shared generated closure | Existing malformed-summary, weakened-closure and optimized-interpreter refusal controls | Pass; shared writer/default check cover 20 criteria, 21 weakened-copy controls reject, and all six configured summary/closure CTests pass |
-| 23-08 | Source-bound transfer/CI lessons, exactly nine summaries, immutable owner route and false auto flags | Removed evidence/transfer/route and enabled-auto mutation controls | Pending this final planned task |
+| 23-08 | Source-bound transfer/CI lessons, exactly nine summaries, immutable owner route and false auto flags | Removed evidence/transfer/route and enabled-auto mutation controls | Pass; lesson 293c9fa7743b, boundary e3b418dfbdb8, exact nine summaries, owner-route/auto-flag mutation controls and shared closure checks |
 
 ## Actual hosted qualification
 
@@ -46,3 +46,7 @@ The unclassified REL-01 edge and both descriptor-less transparency prohibitions 
 ## Closure execution
 
 Use only the existing shared writer with 23-UAT-EVIDENCE.md, then its --self-test and default check. Plan 23-06 closure includes only completed summaries. Plan 23-08 must add its completed summary, require the exact nine-summary set and regenerate closure. Lesson/boundary assertions read immutable Git objects and their mutation controls; never current live routes/ancestry. Phase 23 stops before owner-only /gsd-audit-milestone, with both auto flags false.
+
+## Final closure sign-off
+
+The existing shared writer/default check passes all 22 criteria from exactly nine completed summaries with no human checkpoint, and its 21 weakened-copy controls reject. Immutable lesson and boundary checks pass at the full commits recorded in 23-EVIDENCE.md. Four Pending fixture/rights/diagnostic requirements and all three unresolved classification flags remain separate from software acceptance. Final exact-head configured planning checks and protected CI are required before the metadata merge; no source, timeout, inventory or release-asset change accompanies this closeout.
