@@ -570,7 +570,8 @@ def check_v04_report(repo: Path, rev: str, baseline_rev: str,
     elif len(criterion_rows) == 3:
         for number, cells, _ in criterion_rows:
             status_index = status_columns[0]
-            if len(cells) <= status_index or cells[status_index].strip().upper() != "VERIFIED":
+            result = re.sub(r"[*_`]", "", cells[status_index]).strip().upper() if len(cells) > status_index else ""
+            if result != "VERIFIED":
                 errors.append(f"v04-report-criteria: criterion {number} result must be VERIFIED")
     criterion_lines = [line.lower() for _, _, line in criterion_rows]
     if len(criterion_lines) != 3:
@@ -1321,9 +1322,9 @@ This is a historical reconstruction of the approved synthetic-plus-metadata Phas
 
 | Phase 22 roadmap criterion | Historical status | Evidence and limits |
 |---|---|---|
-| 1. The original compiled synthetic composition tracer preserves source-cell mask, identity, and image controls. | VERIFIED | See {artifact_link('22-01-SUMMARY.md')} and {artifact_link('22-EVIDENCE.md')}. The recorded compiled tracer check covers the source-cell mask and identity/image controls. |
-| 2. The full 513-name metadata inventory records seven gates, admitted=0, and executed=0. | VERIFIED | See {artifact_link('22-02-SUMMARY.md')}, {artifact_link('22-10-SUMMARY.md')}, and {artifact_link('22-SOURCE-AUDIT.md')}. The 482 protocol candidates remain blocked. |
-| 3. Documentation and automated checks keep the tracer labeled synthetic-only, record the real-fixture no-go without asserting a license prohibition, and leave DIAG-01, DIAG-02, and RIGHTS-01 Pending. | VERIFIED | See {artifact_link('22-11-SUMMARY.md')} and {artifact_link('22-12-SUMMARY.md')}. Synthetic-only claims describe no real game or diagnostic evidence. |
+| 1. The original compiled synthetic composition tracer preserves source-cell mask, identity, and image controls. | **VERIFIED** | See {artifact_link('22-01-SUMMARY.md')} and {artifact_link('22-EVIDENCE.md')}. The recorded compiled tracer check covers the source-cell mask and identity/image controls. |
+| 2. The full 513-name metadata inventory records seven gates, admitted=0, and executed=0. | **VERIFIED** | See {artifact_link('22-02-SUMMARY.md')}, {artifact_link('22-10-SUMMARY.md')}, and {artifact_link('22-SOURCE-AUDIT.md')}. The 482 protocol candidates remain blocked. |
+| 3. Documentation and automated checks keep the tracer labeled synthetic-only, record the real-fixture no-go without asserting a license prohibition, and leave DIAG-01, DIAG-02, and RIGHTS-01 Pending. | **VERIFIED** | See {artifact_link('22-11-SUMMARY.md')} and {artifact_link('22-12-SUMMARY.md')}. Synthetic-only claims describe no real game or diagnostic evidence. |
 
 The other recorded Phase 22 summaries are {artifact_link('22-11-SUMMARY.md')} and {artifact_link('22-12-SUMMARY.md')}.
 
@@ -1372,7 +1373,7 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         ("false requirement completion", report_content.replace("    status: Pending", "    status: Satisfied", 1), "v04-report-requirements"),
         ("weakened criterion 3", report_content.replace("DIAG-01, DIAG-02, and RIGHTS-01 Pending",
                                                           "diagnostic and rights requirements Pending", 1), "v04-report-criteria"),
-        ("criterion result", report_content.replace("| VERIFIED | See [22-01-SUMMARY.md]", "| PARTIAL | See [22-01-SUMMARY.md]", 1),
+        ("criterion result", report_content.replace("| **VERIFIED** | See [22-01-SUMMARY.md]", "| **PARTIAL** | See [22-01-SUMMARY.md]", 1),
          "v04-report-criteria"),
         ("duplicate gate key", report_content.replace(f"unresolved_gates:\n{gates}",
                                                          f"unresolved_gates:\n{gates}\nunresolved_gates:\n{gates}", 1),
