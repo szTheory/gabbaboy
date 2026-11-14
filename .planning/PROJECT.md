@@ -6,11 +6,11 @@ GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game 
 
 ## Current State
 
-**Shipped and archived: [v0.3.0](https://github.com/szTheory/gabbaboy/releases/tag/v0.3.0), Save States & Host Contract.** Four phases and 35 plans satisfy all 17 requirements. The [milestone audit](milestones/v0.3-MILESTONE-AUDIT.md) remains `tech_debt`; the owner accepted a documented closeout override for three stale historical phase projections and retained nonblocking debt, including the standalone closeout helper failure. See [closeout](milestones/v0.3-CLOSEOUT.md).
+**Published and independently reconciled: [v0.4.0](https://github.com/szTheory/gabbaboy/releases/tag/v0.4.0), Evidence Floor.** The permanent product source is `3de1b0e427f37a202be4469dd818266f359c8b20`. The successful trusted publisher and fresh public download/receipt/consumer/source checks reconcile all 22 assets; the original 20 payload/evidence identities and notes were preserved through bounded recovery. See [Phase 23 evidence](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md) for the source, control and publication boundaries.
 
-The release adds bounded transactional native save/load with exact continuation, numbered player slots and the POSIX raw-save/SIGTERM/exit-code host contract. It remains a bootless software preview for tested DMG-CPU-B and CGB-CPU-E modes/corpus. Physical hardware, perceptual output, general compatibility, cross-emulator save interoperability and live Playstead integration are unqualified; packages are unsigned and not notarized.
+The release states the justified absence of a newly admitted CGB game and real diagnostic fixture. FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remain Pending. Existing DMG-CPU-B/CGB-CPU-E software-model and fixture/harness observations do not qualify hardware, perception, mode-3 timing, general game compatibility, Linux player, Steam Deck or live Playstead integration. Packages remain unsigned and not notarized. The source archive and fixture-free products retain their separate policies and notices.
 
-The final implementation-head audit passed its full suite without failures/skips; boundary main CI and all 22 published asset identities/digests reconciled. These are source-bound observations, not a claim that archival itself reran hosted release producers. Original failed release attempts and boundary verification reports remain unchanged.
+Phase 23 release reconciliation and final nine-summary automated closure pass. Its enclosing protected planning closeout remains the final merge gate before the owner-controlled milestone audit. The v0.4 milestone audit remains owner-controlled. The archived [v0.3 audit](milestones/v0.3-MILESTONE-AUDIT.md) and its [accepted closeout debt](milestones/v0.3-CLOSEOUT.md) retain their original scope and receipts.
 
 ## Current Milestone: v0.4 Evidence Floor
 
@@ -24,7 +24,7 @@ The final implementation-head audit passed its full suite without failures/skips
 
 The root project license remains MIT. Full libretro work is deferred from v0.4; a direct Steam Deck development build over the owner's existing SSH workflow is exploratory only and does not establish Linux-player or Deck support. libfuturo informs future consumer-contract thinking but adds no dependency and does not freeze GabbaBoy's API or state format.
 
-Phases 20–22 are complete. Phase 22 closes at a metadata-only no-go assessment: no real diagnostic fixture was admitted or executed, seven real-fixture gates remain unresolved, and no license prohibition is inferred. GAME-01, GAME-02, and FEED-01 are complete; FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain pending. REL-01 is owned by Phase 23, which has not started.
+Phases 20–22 are complete. Phase 22 closes at a metadata-only no-go assessment: no real diagnostic fixture was admitted or executed, seven real-fixture gates remain unresolved, and no license prohibition is inferred. GAME-01, GAME-02, and FEED-01 are complete; FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain pending. REL-01 is complete against actual qualified publication/readback and requirement reconciliation; Phase 23 stops at the owner-controlled milestone-audit boundary.
 
 <details>
 <summary>Completed v0.3 scope and kickoff context</summary>
@@ -129,7 +129,7 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 
 ### Active
 
-All v0.3 requirements are validated in the [requirements archive](milestones/v0.3-REQUIREMENTS.md). v0.4 requirements and status are tracked in [REQUIREMENTS.md](REQUIREMENTS.md); Phase 23 release evidence (REL-01) remains pending.
+All v0.3 requirements are validated in the [requirements archive](milestones/v0.3-REQUIREMENTS.md). v0.4 requirements and status are tracked in [REQUIREMENTS.md](REQUIREMENTS.md); Phase 23 release evidence (REL-01) is complete against qualified v0.4.0 publication/readback; FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remain Pending.
 
 Ongoing project principles: dependency-light C API with explicit contracts; headless core independent of the player; reproducible tests, sanitizers, fuzzing, and baselines; tested artifacts through PR and release automation; source-linked decisions, current docs, and transferable lessons.
 

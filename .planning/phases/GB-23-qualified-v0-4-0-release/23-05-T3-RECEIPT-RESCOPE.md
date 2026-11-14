@@ -1,0 +1,3 @@
+# D-185 — Approved receipt-reuse recovery
+
+Owner approval: “yes i approve” on2026-11-12. Exact proposal cad2f073e811fc708c2f83d694a79ad1fb67a67c, baseG900650557e2e79954d8974c8e43fa57b635ece5e. Scope and safeguards are adopted in DECISIONS D-185; detailed checked proposal/patch/bundle/review digests are retained in build/phase23-recovery-version147. One protected corrective qualification plus normal post-merge checks and one existing same-source/tag/draft retry; all old source/asset/limit/authority guards remain. No phase/review/gap reset or additional automatic retry. Original publication approval remains valid; D184 is spent-failed. Root acts next at Plan23-05 T3, /gsd-execute-phase 23; stop afterPhase23.

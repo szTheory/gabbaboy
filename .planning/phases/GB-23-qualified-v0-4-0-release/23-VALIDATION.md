@@ -1,114 +1,52 @@
 ---
 phase: "GB-23"
 slug: "qualified-v0-4-0-release"
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-11-03"
+updated: "2026-11-14"
 ---
 
-# Phase 23 — Validation Strategy
+# Phase 23 — Validation Evidence
 
-> Per-phase validation contract for feedback sampling during execution.
+The qualified [v0.4.0 release](https://github.com/szTheory/gabbaboy/releases/tag/v0.4.0) and fresh public-byte readback pass. Product source S, trusted control G5, historical reviewed implementation and later documentation boundaries are distinct in [23-EVIDENCE.md](23-EVIDENCE.md). Plan 23-06 release closure and final Plan 23-08 nine-summary closure pass. The immutable lesson/boundary assertions and their mutation controls pass at the recorded Git commits. The enclosing protected planning closeout remains the final merge/handoff gate.
 
----
+## Automated evidence and rejection controls
 
-## Test Infrastructure
+| Plan/task | Current evidence | Meaningful refusal/control | Result |
+|---|---|---|---|
+| 23-01 | Exact source-bound v0.4 support profile/generator and public ledger at S | Wrong profile/source/output and broader unsupported claims refuse; original v0.3 ledger stays pinned | Pass; source-bound controls also pass in actual G5 inventories |
+| 23-02 | Concise actual release notes and ledger use the shared immutable claims input | Missing/hidden/contradictory disclosures and notice mismatches refuse | Pass; actual publisher rechecks notes |
+| 23-03 | Version/window inputs, exact actual 0.4.0 output and tracked generated artifacts | Wrong/mixed version, changed managed inputs/body/source/window refuse | Pass; active S window checked in actual successful publisher |
+| 23-09 | Existing notes/docs/changelog entrypoints reject incomplete raw-HTML visibility bypasses | Visible/masked positive counterparts and specific causal refusals | Pass in preserved reviewed source and complete hosted inventories |
+| 23-04 | Fixed three structured reports retain all 80 findings at implementation 96505505; accepted later scoped reviews are supplements | Missing/duplicate/stale roles, source/pin drift and unresolved blocking findings refuse | Pass at reviewed/qualified boundaries; same historical report blobs remain unchanged; final exact-head immutable gate is required before push |
+| 23-07 | Actual 0.4.0 release-token pins and unchanged format/behavior/battery policy | Wrong release, corrupt/semantic state and cross-release native-state imports refuse | Pass; exact source/state evidence in 23-07-SUMMARY |
+| 23-05 | Real H/R1/W/R2/nightly, protected b47, actual G5 main, S producers and published assets | Stale source/checks, writer conflicts, changed existing asset tuples, invalid products, game insertion and failed consumers hold publication | Pass; publisher 43526085579, attempt 1 and independent public22 readback |
+| 23-06-T1 | All 22 actual public downloads, exact pre-publish 22, preserved original 20, source archive, final receipt and owner families | Four licensed-game insertion copies refuse with product-fixture-leak; metadata/digest/receipt checks fail closed | Pass; native hosted platform evidence bound to public hashes plus fresh native macOS public-byte C/C++/host continuation |
+| 23-06-T2 | Goal/requirement reconciliation and shared generated closure | Existing malformed-summary, weakened-closure and optimized-interpreter refusal controls | Pass; shared writer/default check cover 20 criteria, 21 weakened-copy controls reject, and all six configured summary/closure CTests pass |
+| 23-08 | Source-bound transfer/CI lessons, exactly nine summaries, immutable owner route and false auto flags | Removed evidence/transfer/route and enabled-auto mutation controls | Pass; lesson 293c9fa7743b, boundary e3b418dfbdb8, exact nine summaries, owner-route/auto-flag mutation controls and shared closure checks |
 
-| Property | Value |
-|----------|-------|
-| **Framework** | CTest through the existing CMake preset suite |
-| **Config file** | `CMakePresets.json` (`phase1` configure/build/test presets) |
-| **Quick run command** | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error -R '^(support_claims|support_claims_controls|release_disclosure_generator|release_disclosure_controls|release_window_contract|release_window_controls)$'` |
-| **Full suite command** | `CTEST_PARALLEL_LEVEL=4 ctest --test-dir build -T Test --no-compress-output --test-output-size-passed 16777216 --output-on-failure --no-tests=error --output-junit <cgb-corpus-ctest-RUN_NONCE.xml>` |
-| **Estimated runtime** | Measured: focused Phase 23 selection 679.93 seconds and full suite 980.81 seconds with four CTest workers |
+## Actual hosted qualification
 
----
+[Main G5 CI 43516339016](https://github.com/szTheory/gabbaboy/actions/runs/43516339016) completed successfully at attempt 1. All six complete exact canonical inventories match their retained baseline identities and every expected case passed with none skipped. The required aggregate passed; planning/player-package skips were the explicit full-CI/player-required=false contract. The root verified all 11 nonskipped raw/log payloads byte-for-byte. Seven fixture ZIPs matched their live metadata. S corpus in the actual successful release then independently passed its full exact 1,942-case inventory with no skips. These actual results establish coverage; counts, budgets and clocks alone do not.
 
-## Sampling Rate
+No broad local replay or third local release_lifecycle_controls retest was performed. The unchanged required lifecycle/product controls have fresh actual hosted G5 evidence; only focused changed/new closure checks run locally. Final closeout configuration must name its immutable final documentation revision.
 
-- **After every task commit:** Run the focused contract and its negative control for the changed behavior.
-- **After every plan wave:** Run the full suite command above.
-- **Before `$gsd-verify-work`:** Full suite and final-head release evidence must be green.
-- **Max feedback latency:** Use existing CTest timeouts; record measured suite and hosted queue/dependency waits before proposing any scheduling change.
+## Independent readback and scope
 
----
+The public readback uses real downloads, not rebuilt product substitutes. It checks public API/source/tag/run, unchanged original 20/body, actual prepublish artifact22, exact file hashes, strict production checksum/final-receipt parsing, four production product-policy positives and four game-insertion refusals, exact source archive/receipt and all six owner evidence families. Local native macOS public-byte C/C++ and installed-host continuation pass. Linux/Windows execution is the current native hosted evidence on exactly the same public archive hashes. Initial local restored-tag and wrong-platform CLI failures remain in the private execution journal and are not called passes.
 
-## Per-Task Verification Map
+FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remain Pending. The two exact candidate no-go reasons, 513 named diagnostics/seven unresolved gates/zero newly admitted or executed real fixtures, software-model scope, hardware/perception/timing/general-game/platform exclusions, and unsigned/not-notarized status remain explicit. A no-go is not an inferred license ban.
 
-All entries are planned checks, not execution evidence. Each task's PLAN has an observable failure condition immediately after every runnable command. The new v0.4 test identities are created and registered by their owning task before invocation.
+## Workflow-only flags and authority
 
-| Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
-|---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 23-01-T1 | 01 | 1 | REL-01 | T-23-01/02 | Immutable candidate facts reach exact production-rendered Markdown; promotion/refusal controls are causal | e2e | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(support_ledger_v04_tracer|support_claims_v04|support_claims_v04_controls|support_claims|support_claims_controls)$'` | Existing verifier; new tests created by this task | pending |
-| 23-01-T2 | 01 | 1 | REL-01 | T-23-01/02 | Preserve 513/seven/zero/zero, Pending status, model/evidence distinctions and historical bytes | integration | Same focused selection plus existing disclosure generator/controls, as written in 23-01-PLAN.md | Existing verifier; task expands its controls | pending |
-| 23-02-T1 | 02 | 2 | REL-01 | T-23-03/04 | Actual note omissions, contradictions, hidden clauses and unsupported promotions reject | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(release_notes_v04|release_notes_v04_controls|release_disclosure_generator|release_disclosure_controls|support_claims_v04|support_claims_v04_controls|adoption_claim_boundaries_controls)$'` | New note tests created by this task | pending |
-| 23-02-T2 | 02 | 2 | REL-01 | T-23-03/04 | Public runbook retains actual matrix, limits and existing recovery holds | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(v02_adoption_docs|v02_adoption_docs_controls|release_notes_v04|release_notes_v04_controls)$'` | Existing docs tests extended | pending |
-| 23-03-T1 | 03 | 3 | REL-01 | T-23-05 | Every new immutable managed input independently invalidates a stale window | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(release_window_contract|release_window_controls)$'` | Existing tests extended | pending |
-| 23-03-T2 | 03 | 3 | REL-01 | T-23-06 | Exact requested 0.4.0 accepts; wrong/mixed/missing generated output rejects | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(release_window_contract|release_window_controls|release_version_v04_controls)$'` | New expected-version controls created by this task | pending |
-| 23-09-T1 | 09 | 4 | REL-01 | T-23-19/20 | Every reproduced incomplete HTML opener rejects production notes/docs proof for its raw-HTML diagnostic; visible/masked counterparts pass | integration | `python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . --rev "$(git rev-parse HEAD)"`; `python3 -I tests/scripts/verify-v02-adoption.py --self-test docs --root .` | Existing script/self-tests; targeted controls and guard added by this task | pending — red/green required |
-| 23-09-T2 | 09 | 4 | REL-01 | T-23-19/20 | Committed changelog rejects every opener before heading and inside selected section; old-guard causal counterpart exposes bypass; existing content gates retained | integration | `python3 -I tests/scripts/verify-version-window.py --self-test-version-v04 --repo .`; configured serial notes/docs/window/disclosure CTest selection in 23-09-PLAN.md | Existing script, fixture CLI and CTest gates; expanded controls added by this task | pending — red/green required |
-| 23-04-T1 | 04 | 5 | REL-01 | T-23-07/08 | Production review-evidence CLI and causal controls reject missing roles/reports, wrong/stale SHA, invalid schema/disposition, open blocking findings and source drift | integration | `python3 -I tests/scripts/verify-review-evidence.py --self-test --rev "$(git rev-parse HEAD)" --repo .`; configured `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase23_review_evidence_controls$'` | New verifier, CTest pair and exact inventory entries created by this task | pass |
-| 23-04-T2 | 04 | 5 | REL-01 | T-23-07/08 | Three independent reviewers perform source review; real immutable reports mechanically enforce role/source/schema/disposition completeness | verify-review-evidence.py real-report gate plus focused review-evidence CTests | Three exact-source reports review implementation `950c78b0bac936992403511a3cfa41f7cb1069c6`; evidence candidate `7c9067ed5b2822748f611915119c61a1b4290f25`. Real-report gate passed (3 reports, 78 findings) with no open blocking finding. Coverage self-test passed 573 controls; workflow-policy CI/ledger groups passed; test-budget check passed (1,942 tests, 288 rows); fresh configure/build passed; focused Phase 23 selection passed 224/224 in 1,173.12 seconds, including both report CTests and all 200 docs controls. | local pass |
-| 23-04-T3 | 04 | 5 | REL-01 | T-23-07/09 | Current qualification head contains reviewed implementation plus only allowlisted evidence; full local suite and live exact-head protection pass | Real-report check, configured full CTest and live exact-head release gate | At evidence candidate `7c9067ed5b2822748f611915119c61a1b4290f25`, the review gate passed for implementation `950c78b0bac936992403511a3cfa41f7cb1069c6`; configure/build passed; full CTest passed 1,942/1,942 in 1,891.20 seconds. The 199 numbered docs shards averaged 5.70 seconds (median 5, max 14); all 200 docs controls passed. The PR still points to the prior `029a77f5a87682cee545aa99edc1fe5263e5a77c` candidate; one D-165 exact-head hosted attempt remains unused. | local pass; hosted pending |
-| 23-07-T1 | 07 | 6 | REL-01 | T-23-16 | Actual generated immutable CMake/manifest output is exactly 0.4.0 before freeze/rehearsal/tag | integration | Immutable Git-object version assertion in 23-07-PLAN.md; paired wrong/mixed-version controls from 23-03 | Existing output; one-off assertion | pending |
-| 23-07-T2 | 07 | 6 | REL-01 | T-23-17 | Compiled 0.4 pins, exact old/new digest disposition and independent base continuation evidence retain same-release-only policy | integration | Existing state pin/planning/refusal/semantic/codec controls in 23-07-PLAN.md with explicit immutable compatibility base | Existing checks | pending |
-| 23-05-T1 | 05 | 7 | REL-01 | T-23-10 | Actual exact 0.4 output precedes H/R1/record-only W/R2/nightly/current-check freeze sequence | e2e | Exact-version, actual notes, active-window and live run/check commands in 23-05-PLAN.md | Existing workflow; checker extensions from 01–03 | pending |
-| 23-05-T2 | 05 | 7 | REL-01 | T-23-12 | Owner makes a concrete one-way authority decision after preparation; stale head holds action | other | Existing exact-head PR gate; owner decision records authority separately from software acceptance | Existing gate | pending authority |
-| 23-05-T3 | 05 | 7 | REL-01 | T-23-10/11/12 | Actual tagged/downloaded bytes, consumers/notices/fixture controls/nightly/final live inventory precede publication | e2e | Live release workflow plus existing published-asset readback verifier in 23-05-PLAN.md | Existing workflows/checkers | pending |
-| 23-06-T1 | 06 | 8 | REL-01 | T-23-13 | Fresh final API/download inventory matches qualified source, product and consumer evidence | e2e | Existing published-asset verifier and lifecycle/product/workflow controls in 23-06-PLAN.md | Existing commands | pending |
-| 23-06-T2 | 06 | 8 | REL-01 | T-23-14 | Exact SUMMARY schema and shared closure accept evidence and reject weakened copies; Pending requirements preserved | integration | Shared `verify-uat-closure.py` write/self-test and summary/closure CTest commands in 23-06-PLAN.md | Existing checker/CTest | pending |
-| 23-08-T1 | 08 | 9 | REL-01 | T-23-18 | Sanitized transfer/CI lessons and future direction cite actual immutable release evidence | other | Lesson/roadmap section and evidence-link assertion with removed-reference/transfer controls in 23-08-PLAN.md | Existing documents; one-off bookkeeping assertion | pending |
-| 23-08-T2 | 08 | 9 | REL-01 | T-23-15/18 | All nine summaries enter final closure; point-in-time boundary facts, owner route and false auto flags survive handoff | integration | Exact-summary-set/route/flag assertion with mutation controls; shared --write using 23-UAT-EVIDENCE.md, --self-test and final check in 23-08-PLAN.md | Existing config/checker; one-off bookkeeping assertion | pending |
+The unclassified REL-01 edge and both descriptor-less transparency prohibitions remain unresolved/flagged-unverified per 23-SOURCE-AUDIT.md. Passing software evidence does not classify them or fabricate human UAT. Owner publication authority is separately recorded in the decision chronology, with the final one-shot grant consumed before dispatch. There are zero pending human gameplay/perception/document-reading checkpoints.
 
----
+## Closure execution
 
-## Wave 0 Requirements
+Use only the existing shared writer with 23-UAT-EVIDENCE.md, then its --self-test and default check. Plan 23-06 closure includes only completed summaries. Plan 23-08 must add its completed summary, require the exact nine-summary set and regenerate closure. Lesson/boundary assertions read immutable Git objects and their mutation controls; never current live routes/ancestry. Phase 23 stops before owner-only /gsd-audit-milestone, with both auto flags false.
 
-- [ ] Extend the source-bound support-claims profile for v0.4 and add positive and negative contract coverage.
-- [ ] Extend generated release-disclosure checks for the required v0.4 evidence distinctions and limits.
-- [ ] Include the v0.4 claims input in the version-window contract and retain changed-input refusal controls.
-- [ ] Preserve the historical v0.3.0 support ledger and Phase 21/22 evidence records unchanged.
+## Final closure sign-off
 
-These are delivered inside 23-01 through 23-03, with tests and registration in each first implementation task; no separate foundation-only wave is needed. Plan 23-04-T1 additionally creates tests/scripts/verify-review-evidence.py and the phase23_review_evidence_contract and phase23_review_evidence_controls registrations plus both tests/expected-tests.txt entries. Both modes check the immutable registration/inventory contract, with missing/mutated registration controls. The controls run immediately on committed disposable inputs; the real-report positive CTest first runs in 23-04-T2 after all three actual reports are committed. Missing reports must fail rather than skip.
-
-## Independent-review evidence contract
-
-The owner-approved targeted rescope inserts 23-09 before 23-04; all later waves shift once. Existing findings RC-02/SEC-23-06/ADV-09 are bound to implementation 276f317d199cdd3246e9a90ce72a1f3a1235af1c and reports at 4c833703329a256e87614bc91c2b5b974427d6d8, with the later handoff containing metadata only. After 23-09's tested fix and SUMMARY commit, 23-04 T2 must reissue all three independent reports for the new actual implementation and run the direct real-report gate before unchanged T3 qualification. The old reports correctly fail that gate; passing plan checks or local regression controls does not close their findings. No manual UAT is added.
-
-Plan 23-04-T2 assigns distinct release-consumer, security and adversarial reviewers to 23-REVIEW.md, 23-SECURITY.md and 23-ADVERSARIAL.md. Their single marked strict-JSON blocks bind report/reviewer identities, roles, independence declaration, reviewed_sha and each finding's category/severity/required_property/disposition/rationale/fix_sha/verification_ref. All reports must name the explicit actual IMPLEMENTATION_SHA. An unresolved correctness/security finding, or any other high/critical/blocking finding, prevents qualification. Fixed/rejected findings require the source-bound disposition evidence specified in the plan. The checker enforces these declared mechanical facts; substantive LLM review quality comes from the independent source-reading reviewers.
-
-The direct --check reads the real report blobs at REVIEW_EVIDENCE_SHA and compares their reviewed_sha to the explicitly passed IMPLEMENTATION_SHA. --qualification-sha additionally rejects changes outside the six exact Phase 23 report/evidence/validation/summary paths. This separates reviewed implementation from the later commit that records its reviews without allowing an unreviewed source/test/workflow change. Plan 23-04-T3 repeats this check at observed QUALIFICATION_SHA before qualification/merge; the hosted gate checks that actual PR head. The permanent contract CTest reads reports from its configure-time immutable revision and validates their common historical implementation identity; it does not claim later generated release-version deltas were reviewed. Plan 23-05 retains its separate generated-delta review.
-
-The --self-test must run the production --check CLI over committed disposable fixtures, pairing each accepted counterpart with a targeted missing-report/role, duplicate-identity, wrong/stale-existing-SHA, malformed/duplicate/unknown-key, invalid-disposition, unresolved correctness/high/blocking-security or non-evidence source-change mutation. Each mutant must reject with its intended diagnostic; dirty working-tree repair cannot change the immutable outcome. Tests/registration/inventory are source-linked; no execution result is claimed here.
-
----
-
-## Manual-Only Verifications
-
-All phase behavior has automated verification. Hosted credentials, required-check status, generated version-PR content, and real downloaded release artifacts must be observed through the existing trusted release process; local tests cannot substitute for those results. No human gameplay or perceptual review is a Phase 23 gate.
-
-Plan 23-06's closure covers completed release-evidence summaries. Final phase acceptance additionally requires Plan 23-08's completed summary and regeneration through the same shared tool with `23-UAT-EVIDENCE.md` as the evidence input; `23-UAT.md` is generated output. Plan 23-08 asserts the exact nine-summary set because shared closure validates only summaries that exist.
-
-Plan 23-05 includes the expressly required one-way decision immediately before version-PR merge/tag/publication. This is an authority boundary, not human UAT. The spec-less REL-01 edge remains unclassified/unresolved, and two descriptor-less transparency prohibitions remain flagged-unverified; 23-SOURCE-AUDIT.md records the recall/precision/projection evidence without manufacturing human acceptance scenarios.
-
----
-
-## Validation Sign-Off
-
-- [ ] All tasks have automated verification or explicit Wave 0 dependencies.
-- [ ] Sampling continuity: no three consecutive tasks without automated verification.
-- [ ] Wave 0 covers all planned missing test references.
-- [ ] No watch-mode flags.
-- [ ] Feedback latency is measured and bounded by existing timeouts.
-- [ ] Set `nyquist_compliant: true` only after the verification map is complete and passing.
-
-**Planning status:** Exact task map complete; execution and approval evidence pending. `nyquist_compliant` and `wave_0_complete` remain false until the required checks actually run and pass.
-
-## D-165 hosted qualification result
-
-The one authorized exact-head attempt at `0916cb465211a97b09bf970971f113861adb7141` failed its required native inventory: Linux had one 60-second CTest timeout; Windows had two 60-second timeouts and one 90-second timeout. The Linux sanitizer inventory was cancelled at its existing 55-minute job cap after 1,819/1,853 tests. macOS native and the other completed lanes passed. The three preview jobs failed because required CI failed. See [23-EVIDENCE.md](23-EVIDENCE.md#d-165-exact-head-hosted-qualification-at-0916cb46) for exact timings and run records. This result does not qualify the phase; a new hosted attempt requires an owner-approved rescope.
-
-## Recovery qualification status (2026-11-10)
-
-Implementation `5eefa412` has accepted release, security and adversarial source reviews. Configure/build and affected registration/review controls pass; no gate, assertion, test inventory or timeout was removed or relaxed. The preceding complete `1626388a` suite contained all required identities without skips and had one contention timeout; it remains failed evidence. The scheduling correction requires a fresh consolidated full run, strict full/focused result reconciliation and the existing exact-head hosted qualification. No new hosted attempt, merge, tag or publication has occurred. REL-01 remains Pending; Phase 24 is not authorized.
+The existing shared writer/default check passes all 22 criteria from exactly nine completed summaries with no human checkpoint, and its 21 weakened-copy controls reject. Immutable lesson and boundary checks pass at the full commits recorded in 23-EVIDENCE.md. Four Pending fixture/rights/diagnostic requirements and all three unresolved classification flags remain separate from software acceptance. Final exact-head configured planning checks and protected CI are required before the metadata merge; no source, timeout, inventory or release-asset change accompanies this closeout.

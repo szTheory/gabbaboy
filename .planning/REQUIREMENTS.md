@@ -27,7 +27,7 @@
 
 ### Release Evidence
 
-- [ ] **REL-01**: The qualified v0.4 release and support documentation state whether a CGB game was admitted or why it was not, identify evidence by model and source, and preserve limits on hardware, perceptual, timing, and general-compatibility claims.
+- [x] **REL-01**: The qualified v0.4 release and support documentation state whether a CGB game was admitted or why it was not, identify evidence by model and source, and preserve limits on hardware, perceptual, timing, and general-compatibility claims.
 
 ## v2 Requirements
 
@@ -62,7 +62,7 @@ Deferred to a later owner-approved milestone.
 | DIAG-01 | Phase 22 | Pending |
 | DIAG-02 | Phase 22 | Pending |
 | FEED-01 | Phase 21 | Complete |
-| REL-01 | Phase 23 | Pending |
+| REL-01 | Phase 23 | Complete |
 
 **Coverage:**
 - v1 requirements: 8 total
@@ -71,4 +71,4 @@ Deferred to a later owner-approved milestone.
 
 ---
 *Requirements defined: 2026-10-31*  
-*Last updated: 2026-10-31 after v0.4 roadmap approval*
+*Last updated: 2026-11-14 after qualified v0.4.0 publication/readback; four fixture/rights/diagnostic requirements remain Pending*

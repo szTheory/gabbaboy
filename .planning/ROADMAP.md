@@ -20,7 +20,7 @@ Numbering continues after completed Phase 19. Decimal phases are reserved for ex
 - [x] **Phase 20: Fixture Admission Tune-up** — New evidence enters through a checked rights and distribution boundary. Nine plans and exact-head hosted platform/package qualification are complete; RIGHTS-01 remains pending because no fixture was admitted.
 - [x] **Phase 21: CGB Game Progress and Scene Regressions** — The shared runner proves CGB progress and records the bounded game-candidate outcome. (completed 2026-11-02)
 - [x] **Phase 22: Synthetic Composition and Diagnostic Gate Assessment** — Preserve synthetic composition evidence and machine-check why the real diagnostic candidates remain unadmitted. Completed 2026-11-03; DIAG-01, DIAG-02, and RIGHTS-01 remain pending because all seven real-fixture gates remain unresolved.
-- [ ] **Phase 23: Qualified v0.4.0 Release** — Published artifacts and support records carry only the evidence actually established.
+- [x] **Phase 23: Qualified v0.4.0 Release** — Published artifacts and support records carry only the evidence actually established. (completed 2026-11-13)
 
 ## Phase Details
 
@@ -129,7 +129,7 @@ The source coverage and dependency audit is [22-SOURCE-AUDIT.md](phases/GB-22-co
 
 ### Phase 23: Qualified v0.4.0 Release
 
-**Status**: In progress — the approved nine-scheduled-plan rescope passed independent plan verification. The total cap of 10 includes the single required gap-closure reserve, funded by reallocating one unused ordinary slot from completed Phase 21 without changing its plans or evidence. Plans 23-01 through 23-03 and 23-09 are complete. Plan 23-04 T1's immutable review-evidence controls pass at the fixed source; T2 is next to reissue all three independent reports and pass the direct report gate before T3 qualification. Execution continues inline after the selected no-progress recovery. REL-01 remains Pending; no release qualification or publication is claimed.
+**Status**: Complete — all nine scheduled plans have source-bound summaries and automated software closure. Qualified v0.4.0 publication/readback closes REL-01, while FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remain Pending. The enclosing normal protected planning closeout must satisfy latest exact-head checks before merge. Stop after Phase 23; the owner-controlled next stage is /gsd-audit-milestone.
 
 **Goal**: Users receive a qualified v0.4.0 release whose packages and support records accurately describe the established CGB game and diagnostic evidence.
 **Depends on**: Phase 22
@@ -139,35 +139,35 @@ The source coverage and dependency audit is [22-SOURCE-AUDIT.md](phases/GB-22-co
   2. Release notes and the support ledger identify an admitted game's exact software-model progress result or the justified absence after the two named attempts, distinguish diagnostic and reproducibility observations, and retain hardware, perceptual, timing, platform, and compatibility limits.
   3. Published/downloaded artifact identities and digests reconcile with the release source, installed consumers work against those bytes, required license/component notices are present, and the fixture-exclusion checks accept the real packages and reject their game-ROM insertion control.
 **Plan cap**: 10
-**Plans**: Four of nine scheduled plans are complete in the nine-wave dependency order; the tenth cap slot remains reserved for the single gap-closure round.
+**Plans**: All nine scheduled plans are complete in the existing dependency order. The cap of 10 retains its reserved gap slot; no plan or milestone was added.
 
 Plans:
 **Wave 1**
 - [x] 23-01-PLAN.md — Generate the source-bound v0.4 support ledger and preserve evidence limits.
 
-**Wave 2** *(blocked on Wave 1 completion)*
+**Wave 2**
 - [x] 23-02-PLAN.md — Generate concise release notes from the same checked evidence.
 
-**Wave 3** *(blocked on Wave 2 completion)*
+**Wave 3**
 - [x] 23-03-PLAN.md — Bind the complete release claim and require observed exact release-please output.
 
-**Wave 4** *(blocked on Wave 3 completion)*
+**Wave 4**
 - [x] 23-09-PLAN.md — Fix incomplete raw-HTML visibility bypasses in the existing notes/docs/changelog validators and add causal automated controls.
 
-**Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 23-04-PLAN.md — Reissue all three independent source-bound reports after the visibility fix, gate their committed evidence and qualify the implementation head.
+**Wave 5**
+- [x] 23-04-PLAN.md — Reissue all three independent source-bound reports after the visibility fix, gate their committed evidence and qualify the implementation head.
 
-**Wave 6** *(blocked on Wave 5 completion)*
-- [ ] 23-07-PLAN.md — Apply the observed 0.4.0 state-version policy before version freeze.
+**Wave 6**
+- [x] 23-07-PLAN.md — Apply the observed 0.4.0 state-version policy before version freeze.
 
-**Wave 7** *(blocked on Wave 6 completion)*
-- [ ] 23-05-PLAN.md — Prepare the version PR and use the existing trusted release lifecycle.
+**Wave 7**
+- [x] 23-05-PLAN.md — Prepare the version PR and use the existing trusted release lifecycle.
 
-**Wave 8** *(blocked on Wave 7 completion)*
-- [ ] 23-06-PLAN.md — Reconcile downloaded release evidence and generate automated phase closure.
+**Wave 8**
+- [x] 23-06-PLAN.md — Reconcile downloaded release evidence and generate automated phase closure.
 
-**Wave 9** *(blocked on Wave 8 completion)*
-- [ ] 23-08-PLAN.md — Record transferable lessons and stop at the owner-controlled milestone boundary.
+**Wave 9**
+- [x] 23-08-PLAN.md — Record transferable lessons and stop at the owner-controlled milestone boundary.
 
 Use the existing release path. RM-032 tooling is not an automatic work list; only a concrete release blocker can justify a narrowly scoped required change. Keep full libretro, supported Linux/Steam Deck gameplay, CGB timing rewrites, license migration, and a libfuturo dependency or early API/state freeze outside this milestone.
 
@@ -197,7 +197,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 | 20. Fixture Admission Tune-up | 9/9 | Complete; RIGHTS-01 remains pending because no fixture was admitted | 2026-11-01 |
 | 21. CGB Game Progress and Scene Regressions | 8/8 | Complete; PR #140 passed exact-head checks and merged as `bef2cfbd` | 2026-11-02 |
 | 22. Synthetic Composition and Diagnostic Gate Assessment | 5/5 | Complete; exact-head qualification and merge passed; DIAG-01/02 and RIGHTS-01 remain pending | 2026-11-03 |
-| 23. Qualified v0.4.0 Release | 4/9 | In Progress | - |
+| 23. Qualified v0.4.0 Release | 9/9 | Complete    | 2026-11-13 |
 
 ## Planning and Approval Boundary
 
