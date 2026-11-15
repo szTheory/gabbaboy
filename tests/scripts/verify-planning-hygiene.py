@@ -293,27 +293,42 @@ def phase_file(paths: list[str], number: str, filename: str) -> str | None:
     return candidate if candidate in paths else None
 
 
+def yaml_source_lines(text: str) -> tuple[str, list[str]]:
+    """Normalize YAML line endings and split only its LF, CR, or CRLF boundaries."""
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    if not normalized:
+        return normalized, []
+    lines = normalized.split("\n")
+    if lines[-1] == "":
+        lines.pop()
+    return normalized, lines
+
+
 def frontmatter_fields(text: str) -> tuple[dict[str, str], str]:
-    match = GAP_FRONTMATTER.match(text.replace("\r\n", "\n"))
+    normalized, _ = yaml_source_lines(text)
+    match = GAP_FRONTMATTER.match(normalized)
     if match is None:
-        return {}, text
+        return {}, normalized
     fields: dict[str, str] = {}
-    for line in match.group(1).splitlines():
+    _, lines = yaml_source_lines(match.group(1))
+    for line in lines:
         if line and not line[0].isspace() and ":" in line:
             key, value = line.split(":", 1)
             fields[key.strip()] = value.strip().strip("\"'")
-    return fields, text[match.end():]
+    return fields, normalized[match.end():]
 
 
 def frontmatter_duplicates(text: str) -> list[str]:
     """Return duplicate top-level YAML keys and repeated fields within a sequence object."""
-    match = GAP_FRONTMATTER.match(text.replace("\r\n", "\n"))
+    normalized, _ = yaml_source_lines(text)
+    match = GAP_FRONTMATTER.match(normalized)
     if match is None:
         return []
+    _, lines = yaml_source_lines(match.group(1))
     top_level: set[str] = set()
     item_fields: set[str] | None = None
     duplicates: list[str] = []
-    for line in match.group(1).splitlines():
+    for line in lines:
         if not line.strip():
             continue
         if not line[0].isspace():
@@ -339,10 +354,11 @@ def frontmatter_duplicates(text: str) -> list[str]:
 
 
 def frontmatter_sequence(text: str, key: str) -> list[str] | None:
-    match = GAP_FRONTMATTER.match(text.replace("\r\n", "\n"))
+    normalized, _ = yaml_source_lines(text)
+    match = GAP_FRONTMATTER.match(normalized)
     if match is None:
         return None
-    lines = match.group(1).splitlines()
+    _, lines = yaml_source_lines(match.group(1))
     for index, line in enumerate(lines):
         if line.strip() != f"{key}:":
             continue
@@ -360,10 +376,11 @@ def frontmatter_sequence(text: str, key: str) -> list[str] | None:
 
 
 def frontmatter_objects(text: str, key: str) -> list[dict[str, str]] | None:
-    match = GAP_FRONTMATTER.match(text.replace("\r\n", "\n"))
+    normalized, _ = yaml_source_lines(text)
+    match = GAP_FRONTMATTER.match(normalized)
     if match is None:
         return None
-    lines = match.group(1).splitlines()
+    _, lines = yaml_source_lines(match.group(1))
     start = next((index for index, line in enumerate(lines) if line.strip() == f"{key}:"), None)
     if start is None:
         return None
@@ -473,10 +490,11 @@ def _frontmatter_root_key_is_alias(line: str, key: str) -> bool:
 
 def frontmatter_mapping_pairs(text: str, key: str) -> list[tuple[str, str]] | None:
     """Read only one canonical root map while retaining pairs and rejecting YAML aliases."""
-    match = GAP_FRONTMATTER.match(text.replace("\r\n", "\n"))
+    normalized, _ = yaml_source_lines(text)
+    match = GAP_FRONTMATTER.match(normalized)
     if match is None:
         return None
-    lines = match.group(1).splitlines()
+    _, lines = yaml_source_lines(match.group(1))
     for line in lines:
         if line and not line[0].isspace() and line != f"{key}:" and _frontmatter_root_key_is_alias(line, key):
             return None
@@ -1522,6 +1540,24 @@ def self_test_v04_reconciliation(base: Path, source_repo: Path) -> int:
                              f"{actual_lines!r} != {expected_lines!r}")
         controls += 1
 
+    yaml_line_cases = (
+        ("", "", []),
+        ("one", "one", ["one"]),
+        ("one\n", "one\n", ["one"]),
+        ("one\r", "one\n", ["one"]),
+        ("one\r\n", "one\n", ["one"]),
+        ("one\r\ntwo\rthree", "one\ntwo\nthree", ["one", "two", "three"]),
+        ("one\u0085two", "one\u0085two", ["one\u0085two"]),
+        ("one\u2028two", "one\u2028two", ["one\u2028two"]),
+        ("one\u2029two", "one\u2029two", ["one\u2029two"]),
+    )
+    for source, expected_text, expected_lines in yaml_line_cases:
+        actual_text, actual_lines = yaml_source_lines(source)
+        if actual_text != expected_text or actual_lines != expected_lines:
+            raise SystemExit(f"planning-hygiene self-test FAIL: YAML line boundary {source!r}: "
+                             f"{actual_text!r} {actual_lines!r} != {expected_text!r} {expected_lines!r}")
+        controls += 1
+
     source_repo = source_repo.resolve()
     object_result = git_run(source_repo, "rev-parse", "--git-path", "objects")
     if object_result.returncode != 0:
@@ -1693,6 +1729,13 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
                 return frontmatter + separator + body.replace("\n", newline)
         return document.replace("\n", newline)
 
+    def with_frontmatter_newline(document: str, newline: str) -> str:
+        frontmatter, closing, body = document.partition("\n---\n")
+        if not closing:
+            raise SystemExit("planning-hygiene self-test FAIL: fixture report has no closing frontmatter delimiter")
+        normalized_frontmatter = frontmatter.replace("\n", newline)
+        return f"{normalized_frontmatter}{newline}---{newline}{body}"
+
     def with_root_block_scalar(document: str, separator: str, apparent_value: str) -> str:
         frontmatter, closing, body = document.partition("\n---\n")
         if not closing:
@@ -1750,6 +1793,13 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         real_owner_rev = commit({report_path: real_owner},
                                 f"keep disposition owner beside scalar text after {separator_name}")
         cli_check("report", real_owner_rev)
+
+        scalar_positive = with_root_block_scalar(report_content, separator, root_value_cases[0][2])
+        for newline, newline_name in (("\n", "LF"), ("\r\n", "CRLF"), ("\r", "CR")):
+            twin = with_frontmatter_newline(scalar_positive, newline)
+            twin_rev = commit({report_path: twin},
+                              f"accept {separator_name} scalar with {newline_name} frontmatter")
+            cli_check("report", twin_rev)
 
     cli_check("report", report_rev)
     matched_quote_requirements = report_content.replace(
