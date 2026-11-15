@@ -1693,6 +1693,64 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
                 return frontmatter + separator + body.replace("\n", newline)
         return document.replace("\n", newline)
 
+    def with_root_block_scalar(document: str, separator: str, apparent_value: str) -> str:
+        frontmatter, closing, body = document.partition("\n---\n")
+        if not closing:
+            raise SystemExit("planning-hygiene self-test FAIL: fixture report has no closing frontmatter delimiter")
+        scalar = f"line_boundary_note: |-\n  harmless{separator}{apparent_value}"
+        return f"{frontmatter}\n{scalar}\n---\n{body}"
+
+    line_boundary_cases = (
+        ("\u2028", "U+2028"),
+        ("\u0085", "NEL"),
+        ("\u2029", "U+2029"),
+    )
+    requirement_map = ("requirements:\n  FIXT-01: pending\n  RIGHTS-01: pending\n"
+                       "  DIAG-01: pending\n  DIAG-02: pending\n")
+    gate_sequence = f"unresolved_gates:\n{gates}\n"
+    disposition_sequence = f"requirement_dispositions:\n{dispositions}\n"
+    root_value_cases = (
+        ("requirements map", requirement_map, "requirements:\n  FIXT-01: pending\n  RIGHTS-01: pending\n"
+         "  DIAG-01: pending\n  DIAG-02: pending\n", "v04-report-requirements"),
+        ("required scalar field", "phase: GB-22-composition-and-microtest-evidence\n",
+         "phase: GB-22-composition-and-microtest-evidence", "v04-report-field"),
+        ("unresolved-gates sequence", gate_sequence,
+         "unresolved_gates:\n" + "\n".join(f"  - {gate}" for gate in V04_UNRESOLVED_GATES),
+         "v04-report-gates"),
+        ("requirement-dispositions objects", disposition_sequence,
+         "requirement_dispositions:\n" + "\n".join(
+             f"  - id: {requirement}\n    status: Pending\n    original_owner: {owner}"
+             for requirement, owner in V04_PENDING_OWNERS.items()), "v04-report-requirements"),
+    )
+    for separator, separator_name in line_boundary_cases:
+        for label, required_fragment, apparent_value, refusal in root_value_cases:
+            missing_value = report_content.replace(required_fragment, "", 1)
+            if missing_value == report_content:
+                raise SystemExit(f"planning-hygiene self-test FAIL: could not remove required {label} fixture value")
+            negative = with_root_block_scalar(missing_value, separator, apparent_value)
+            negative_rev = commit({report_path: negative},
+                                  f"hide missing {label} root value after {separator_name}")
+            cli_check("report", negative_rev, refusal)
+            positive = with_root_block_scalar(report_content, separator, apparent_value)
+            positive_rev = commit({report_path: positive},
+                                  f"keep real {label} beside scalar text after {separator_name}")
+            cli_check("report", positive_rev)
+
+        disposition_member = "    original_owner: Phase 21\n"
+        apparent_member = (f"    note: |-\n      harmless{separator}"
+                           "      original_owner: Phase 21\n")
+        missing_owner = report_content.replace(disposition_member, apparent_member, 1)
+        if missing_owner == report_content:
+            raise SystemExit("planning-hygiene self-test FAIL: could not remove disposition owner fixture value")
+        missing_owner_rev = commit({report_path: missing_owner},
+                                   f"hide missing disposition owner after {separator_name}")
+        cli_check("report", missing_owner_rev, "v04-report-requirements")
+        real_owner = report_content.replace(disposition_member,
+                                            disposition_member + apparent_member, 1)
+        real_owner_rev = commit({report_path: real_owner},
+                                f"keep disposition owner beside scalar text after {separator_name}")
+        cli_check("report", real_owner_rev)
+
     cli_check("report", report_rev)
     matched_quote_requirements = report_content.replace(
         "  FIXT-01: pending\n  RIGHTS-01: pending\n  DIAG-01: pending\n  DIAG-02: pending",
