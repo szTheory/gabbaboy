@@ -4,16 +4,16 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: "23.1"
 current_phase_name: Close v0.4 requirement and verification gaps
-current_plan: 1 of 1
-status: blocked
-stopped_at: "D-198 recovery scope recorded; next: $gsd-autonomous --from 23.1"
-last_updated: "2026-11-15T14:24:47.416Z"
-state_head: 4045cb5ebdc9784854fd1e9b36418400d1090050
+current_plan: 1
+status: In progress — D-199 recovery authorized; Critical finding remains open
+stopped_at: "Phase 23.1 D-199 rescope captured; next: $gsd-autonomous --from 23.1"
+last_updated: "2026-11-15T16:07:04.086Z"
+state_head: afc2f62a78e6e5b77ee4f2869de238c851b2968f
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 32
-  completed_plans: 32
+  completed_plans: 31
   percent: 80
 last_activity: 2026-11-15
 ---
@@ -23,12 +23,12 @@ last_activity: 2026-11-15
 ## Current Position
 
 **Current Phase:** 23.1
-**Current Phase Name:** Close v0.4 requirement and verification gaps (INSERTED)
-**Current Plan:** 1 of 1
-**Status:** Blocked
+**Current Phase Name:** Close v0.4 requirement and verification gaps
+**Current Plan:** 1
+**Status:** In progress — D-199 recovery authorized; Critical finding remains open
 **Progress:** [████████░░] 80%
 
-Completed stages: Phase 23 release and the v0.4 gaps audit are recorded. Phase 23.1 D-196 review found two Critical checker gaps; D-198 authorizes one same-plan Task 6 and one independent review. Phase 23.1 remains pending implementation and verification. Next route: $gsd-autonomous --from 23.1.
+Completed stages: Phase 23 release and the v0.4 gaps audit are recorded. D-198 Task 6 passed its bounded checks, but the sole review found a Critical YAML block-scalar U+2028 bypass. D-199 authorizes one final same-plan Task 7 and one independent review. Next work: Phase 23.1 — Close v0.4 requirement and verification gaps. Resume with $gsd-autonomous --from 23.1.
 
 ## Qualified Release
 
@@ -53,7 +53,7 @@ The **v0.4 milestone audit remains open with gaps found**. Phase 22 has a histor
 
 Diagnostics remain metadata-only: 513 names, seven unresolved gates, admitted=0, executed=0; 482 protocol candidates remain blocked and 31 initial exclusions do not complete suite accounting. Potion Panic stopped before a ref/commit was returned from its creator-linked repository, and its fork is not source authority. µCity 1.3's required source include has no identified grant/notice under the recorded scope. Neither outcome establishes permission or a license prohibition.
 
-Phase 23.1 remains incomplete and blocked by the two Critical findings from D-196; no phase verifier ran. D-198 authorizes exactly one same-plan Task 6 for CR-01/CR-02 and one independent review. The current route is `$gsd-autonomous --from 23.1`. If review leaves any Critical/correctness/security finding or new blocker, stop without another correction, review, or verifier. The v0.4 remains open. D-103's exact-final-head full-suite gate remains unfulfilled; no broad local suite and no third local lifecycle retest are permitted. The publication allowance is spent: no release retry and no tag/asset/rights action. Both automatic-advance flags remain false. After Phase 23.1 passes its required gates, the owner-only audit handoff remains /gsd-audit-milestone v0.4; accepting gaps or tech debt remains an owner decision. At milestone completion, reconcile reviewed work through the established PR/merge route, return to `main`, verify the expected merged head and clean status, and only then remove or close the clean worktree.
+Phase 23.1 remains incomplete. Task 6 corrected the D-196 findings at candidate `12fcb174885d7682cade9c88a5316c00fa4b0c0a`; the self-test, immutable report/handoff checks, 125/124 wrapper boundary, summary coverage, automated closure, and two named CTests passed. The sole D-198 review at `afc2f62` found one Critical: a U+2028 inside a YAML block scalar can fabricate the required `requirements:` root map. No phase verifier ran. D-198's one-task/one-review cap is exhausted; the owner acts next with `$gsd-discuss-phase 23.1` to decide whether to authorize another bounded recovery. Do not resume Autonomous execution until that scope is authorized. The v0.4 remains open, and FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remain Pending under their original owners. D-103's exact-final-head suite remains unfulfilled; no broad local suite or third lifecycle retest is permitted. The publication allowance is spent: no release retry or tag/asset/rights action. Both automatic-advance flags remain false. No next phase or milestone is selected. At successful milestone closeout, reconcile reviewed work through the established PR/merge route, return to `main`, verify the expected merged head and clean status, and only then remove or close the clean worktree.
 
 ## Accumulated Context
 
@@ -62,6 +62,8 @@ Phase 23.1 remains incomplete and blocked by the two Critical findings from D-19
 - Phase 23.1 inserted after Phase 23: Close v0.4 requirement and verification gaps (URGENT)
 - Phase 23.1 Task 5 and the sole D-196 review completed; two Critical checker issues remain open. Owner acts next with `$gsd-discuss-phase 23.1` to define bounded recovery, then `$gsd-autonomous --from 23.1` after scope authorization. The milestone remains open; finish on a clean `main` after approved reconciliation.
 - Phase 23.1 recovery-scoped: D-198 records one Task 6 and one independent review for CR-01/CR-02; next route is $gsd-autonomous --from 23.1.
+- Phase 23.1 D-198 Task 6 and its sole review completed. The review found a Critical YAML block-scalar U+2028 bypass; the cap is exhausted, Phase 23.1 is incomplete, and no verifier ran. Owner next runs `$gsd-discuss-phase 23.1` to decide on a new scope; no next phase/milestone is selected.
+- Phase 23.1 recovery scope authorized: D-199 completes the recovery discussion and authorizes exactly one final same-plan Task 7 plus one independent review for the D-198 YAML block-scalar bypass. Resume with $gsd-autonomous --from 23.1; if the review finds a Critical or new blocker, stop before phase verification.
 
 ## Performance Metrics
 
@@ -80,13 +82,14 @@ Phase 23.1 remains incomplete and blocked by the two Critical findings from D-19
 - [Phase 23.1]: D-196 authorizes exactly one same-plan Task 5 for the two D-195 findings, followed by one independent review of its committed candidate. The plan passed review; next: -execute-phase 23.1 (Task 5 only). Any unresolved Critical/correctness/security finding or new blocker stops the phase without further code, review, or phase verification.
 - [Phase 23.1]: D-196 route correction: an earlier state-entry attempt expanded the literal dollar sign. The exact current command is `$gsd-execute-phase 23.1`, resuming Task 5 only.
 - [Phase 23.1]: D-198 authorizes one same-plan Task 6 for the two D-196 Critical findings and one independent review; next: $gsd-autonomous --from 23.1.
+- [Phase 23.1]: D-198 Task 6 checks passed, but the sole review at `12fcb174885d7682cade9c88a5316c00fa4b0c0a` found a Critical YAML block-scalar U+2028 bypass. The review cap is exhausted; no fix or verifier follows. Owner next: `$gsd-discuss-phase 23.1`.
+- [Phase 23.1]: D-199 authorizes exactly one same-plan Task 7 for the D-198 YAML block-scalar bypass and one independent review. The current Critical remains open; next: $gsd-autonomous --from 23.1. Stop before phase verification if review finds any Critical or new blocker. — This preserves the one-plan cap and all D-193–D-198 limits while allowing the owner-directed v0.4 continuation. At milestone closeout, reconcile reviewed work to main and verify a clean worktree.
 
 ## Session
 
-**Last session:** 2026-11-15T13:44:50.608Z
-**Stopped at:** D-198 recovery scope recorded; next: $gsd-autonomous --from 23.1
+**Last session:** 2026-11-15T16:00:29.576Z
+**Stopped at:** Phase 23.1 D-199 rescope captured; next: $gsd-autonomous --from 23.1
 **Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-CONTEXT.md
 
 ### Blockers
-
 None
