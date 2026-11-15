@@ -1743,6 +1743,25 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         scalar = f"line_boundary_note: |-\n  harmless{separator}{apparent_value}"
         return f"{frontmatter}\n{scalar}\n---\n{body}"
 
+    def with_combined_block_scalars(document: str, separator: str,
+                                    apparent_values: tuple[str, ...]) -> str:
+        frontmatter, closing, body = document.partition("\n---\n")
+        if not closing:
+            raise SystemExit("planning-hygiene self-test FAIL: fixture report has no closing frontmatter delimiter")
+        owner_field = "    original_owner: Phase 21\n"
+        apparent_owner = (f"    note: |-\n      harmless{separator}"
+                          "      original_owner: Phase 21\n")
+        if owner_field not in frontmatter:
+            raise SystemExit("planning-hygiene self-test FAIL: could not find the disposition owner fixture value")
+        frontmatter = frontmatter.replace(owner_field, owner_field + apparent_owner, 1)
+        scalars = []
+        for index, value in enumerate(apparent_values):
+            if value.endswith("\n"):
+                value = value[:-1]
+            scalars.append(f"line_boundary_note_{index}: |-\n  harmless{separator}{value}")
+        scalar_fields = "\n".join(scalars)
+        return f"{frontmatter}\n{scalar_fields}\n---\n{body}"
+
     line_boundary_cases = (
         ("\u2028", "U+2028"),
         ("\u0085", "NEL"),
@@ -1774,10 +1793,6 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
             negative_rev = commit({report_path: negative},
                                   f"hide missing {label} root value after {separator_name}")
             cli_check("report", negative_rev, refusal)
-            positive = with_root_block_scalar(report_content, separator, apparent_value)
-            positive_rev = commit({report_path: positive},
-                                  f"keep real {label} beside scalar text after {separator_name}")
-            cli_check("report", positive_rev)
 
         disposition_member = "    original_owner: Phase 21\n"
         apparent_member = (f"    note: |-\n      harmless{separator}"
@@ -1788,18 +1803,15 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         missing_owner_rev = commit({report_path: missing_owner},
                                    f"hide missing disposition owner after {separator_name}")
         cli_check("report", missing_owner_rev, "v04-report-requirements")
-        real_owner = report_content.replace(disposition_member,
-                                            disposition_member + apparent_member, 1)
-        real_owner_rev = commit({report_path: real_owner},
-                                f"keep disposition owner beside scalar text after {separator_name}")
-        cli_check("report", real_owner_rev)
 
-        scalar_positive = with_root_block_scalar(report_content, separator, root_value_cases[0][2])
-        for newline, newline_name in (("\n", "LF"), ("\r\n", "CRLF"), ("\r", "CR")):
-            twin = with_frontmatter_newline(scalar_positive, newline)
-            twin_rev = commit({report_path: twin},
-                              f"accept {separator_name} scalar with {newline_name} frontmatter")
-            cli_check("report", twin_rev)
+    for (separator, separator_name), (newline, newline_name) in zip(
+            line_boundary_cases, (("\n", "LF"), ("\r\n", "CRLF"), ("\r", "CR"))):
+        positive = with_combined_block_scalars(
+            report_content, separator, tuple(case[2] for case in root_value_cases))
+        twin = with_frontmatter_newline(positive, newline)
+        twin_rev = commit({report_path: twin},
+                          f"accept combined {separator_name} scalar with {newline_name} frontmatter")
+        cli_check("report", twin_rev)
 
     cli_check("report", report_rev)
     matched_quote_requirements = report_content.replace(
