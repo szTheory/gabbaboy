@@ -1451,7 +1451,82 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         controls += 1
 
     cli_check("report", report_rev)
+    matched_quote_requirements = report_content.replace(
+        "  FIXT-01: pending\n  RIGHTS-01: pending\n  DIAG-01: pending\n  DIAG-02: pending",
+        "  FIXT-01: 'pending'\n  RIGHTS-01: \"pending\"\n  DIAG-01: pending\n  DIAG-02: pending", 1)
+    matched_quote_rev = commit({report_path: matched_quote_requirements}, "quote valid requirement scalars")
+    cli_check("report", matched_quote_rev)
+
+    hidden_goal_heading = report_content.replace(
+        "## Goal Achievement", "```text\n## Goal Achievement\n```\n", 1)
+    hidden_goal_rev = commit({report_path: hidden_goal_heading}, "hide required report heading in backtick fence")
+    cli_check("report", hidden_goal_rev, "v04-report-heading")
+
+    tilde_hidden_no_go_heading = report_content.replace(
+        "## Exact game no-go facts", "~~~text\n## Exact game no-go facts\n~~~\n", 1)
+    tilde_hidden_no_go_rev = commit({report_path: tilde_hidden_no_go_heading},
+                                   "hide required report heading in tilde fence")
+    cli_check("report", tilde_hidden_no_go_rev, "v04-report-heading")
+
+    goal_start = report_content.index("## Goal Achievement\n\n") + len("## Goal Achievement\n\n")
+    goal_end = report_content.index("\n\n## Exact game no-go facts", goal_start)
+    goal_body = report_content[goal_start:goal_end]
+    coded_goal_body = report_content[:goal_start] + "~~~text\n" + goal_body + "\n~~~" + report_content[goal_end:]
+    coded_goal_body_rev = commit({report_path: coded_goal_body}, "hide report criteria body in tilde fence")
+    cli_check("report", coded_goal_body_rev, "v04-report-criteria")
+
+    no_go_start = report_content.index("## Exact game no-go facts\n\n") + len("## Exact game no-go facts\n\n")
+    no_go_end = report_content.index("\n\n## Requirement truth and preserved limits", no_go_start)
+    no_go_body = report_content[no_go_start:no_go_end]
+    indented_no_go_body = "\n".join("    " + line if line else "    " for line in no_go_body.splitlines())
+    coded_no_go_body = report_content[:no_go_start] + indented_no_go_body + report_content[no_go_end:]
+    coded_no_go_body_rev = commit({report_path: coded_no_go_body}, "indent report no-go facts as code")
+    cli_check("report", coded_no_go_body_rev, "v04-report-no-go")
+
+    hidden_report_boundary = report_content.replace(
+        "## Exact game no-go facts\n\n",
+        "## Exact game no-go facts\n\n```text\n## Requirement truth and preserved limits\n```\n\n", 1)
+    hidden_report_boundary_rev = commit({report_path: hidden_report_boundary},
+                                        "hide report heading duplicate and fake boundary")
+    cli_check("report", hidden_report_boundary_rev)
+
+    opposite_fence_close = report_content.replace(
+        "## Goal Achievement\n\n",
+        "## Goal Achievement\n\n```text\n~~~\n## Goal Achievement\n```\n\n", 1)
+    opposite_fence_close_rev = commit({report_path: opposite_fence_close},
+                                      "keep opposite fence marker inside code")
+    cli_check("report", opposite_fence_close_rev)
+
+    shorter_fence_close = report_content.replace(
+        "## Goal Achievement\n\n",
+        "## Goal Achievement\n\n````text\n```\n## Goal Achievement\n````\n\n", 1)
+    shorter_fence_close_rev = commit({report_path: shorter_fence_close},
+                                     "keep shorter fence marker inside code")
+    cli_check("report", shorter_fence_close_rev)
+
+    unclosed_goal_fence = report_content.replace("## Goal Achievement", "```text\n## Goal Achievement", 1)
+    unclosed_goal_fence_rev = commit({report_path: unclosed_goal_fence}, "mask unclosed report fence to EOF")
+    cli_check("report", unclosed_goal_fence_rev, "v04-report-heading")
+
+    indented_no_go_heading = report_content.replace(
+        "## Exact game no-go facts", "    ## Exact game no-go facts", 1)
+    indented_no_go_heading_rev = commit({report_path: indented_no_go_heading},
+                                       "hide required report heading in indented code")
+    cli_check("report", indented_no_go_heading_rev, "v04-report-heading")
+
+    closing_hash_positive = report_content.replace("## Goal Achievement", "## Goal Achievement ###", 1)
+    closing_hash_positive_rev = commit({report_path: closing_hash_positive}, "retain visible ATX closing hashes")
+    cli_check("report", closing_hash_positive_rev)
+
     first_disposition = "\n".join(dispositions.splitlines()[:3])
+    unmatched_quote = report_content.replace("  RIGHTS-01: pending", "  RIGHTS-01: 'pending", 1)
+    unmatched_quote_rev = commit({report_path: unmatched_quote}, "add unmatched requirement quote")
+    cli_check("report", unmatched_quote_rev, "v04-report-requirements")
+    wrong_parent_requirements = report_content.replace(
+        "requirements:\n  FIXT-01: pending\n  RIGHTS-01: pending\n  DIAG-01: pending\n  DIAG-02: pending",
+        "metadata:\n  requirements:\n  FIXT-01: pending\n  RIGHTS-01: pending\n  DIAG-01: pending\n  DIAG-02: pending", 1)
+    wrong_parent_rev = commit({report_path: wrong_parent_requirements}, "nest requirements under metadata")
+    cli_check("report", wrong_parent_rev, "v04-report-requirements")
     for label, mutated, error_code in (
         ("wrong phase", report_content.replace("phase: GB-22-composition-and-microtest-evidence",
                                                  "phase: GB-21-cgb-game-progress-and-scene-regressions", 1), "v04-report-field"),
@@ -1467,6 +1542,15 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
          "v04-report-requirements"),
         ("extra nested requirement", report_content.replace(
             "requirements:\n", "requirements:\n  EXTRA-01: pending\n", 1), "v04-report-requirements"),
+        ("missing root requirements map", report_content.replace(
+            "requirements:\n  FIXT-01: pending\n  RIGHTS-01: pending\n  DIAG-01: pending\n  DIAG-02: pending\n", "", 1),
+         "v04-report-requirements"),
+        ("duplicate root requirements map", report_content.replace(
+            "  DIAG-02: pending\nrequirement_dispositions:",
+            "  DIAG-02: pending\nrequirements:\n  FIXT-01: pending\n  RIGHTS-01: pending\n  DIAG-01: pending\n  DIAG-02: pending\nrequirement_dispositions:", 1),
+         "v04-report-frontmatter-duplicate"),
+        ("mismatched requirement quote", report_content.replace(
+            "  RIGHTS-01: pending", "  RIGHTS-01: 'pending\"", 1), "v04-report-requirements"),
         ("malformed nested requirement", report_content.replace("  DIAG-02: pending", "    DIAG-02: pending", 1),
          "v04-report-requirements"),
         ("non-empty requirements satisfaction", report_content.replace(
@@ -1545,6 +1629,49 @@ The next command is owner-only: `/gsd-audit-milestone v0.4`. No next phase or mi
     handoff_files = {state_path: state_handoff, project_path: project_state, continuation_path: continuation}
     handoff_rev = commit(handoff_files, "reconcile current handoff")
     cli_check("handoff", handoff_rev)
+
+    state_hidden_heading = state_handoff.replace(
+        "## Owner Handoff\n", "```text\n## Owner Handoff\n```\n\n", 1)
+    state_hidden_heading_rev = commit({state_path: state_hidden_heading}, "hide STATE handoff heading in code")
+    cli_check("handoff", state_hidden_heading_rev, "v04-handoff-heading")
+    git("checkout", "-q", handoff_rev)
+    project_hidden_heading = project_state.replace(
+        "## Current State\n", "~~~text\n## Current State\n~~~\n\n", 1)
+    project_hidden_heading_rev = commit({project_path: project_hidden_heading}, "hide PROJECT state heading in code")
+    cli_check("handoff", project_hidden_heading_rev, "v04-handoff-heading")
+    git("checkout", "-q", handoff_rev)
+    continuation_hidden_heading = continuation.replace(
+        "## Owner Handoff\n", "~~~text\n## Owner Handoff\n~~~\n\n", 1)
+    continuation_hidden_heading_rev = commit(
+        {continuation_path: continuation_hidden_heading}, "hide continuation handoff heading in code")
+    cli_check("handoff", continuation_hidden_heading_rev, "v04-handoff-heading")
+
+    git("checkout", "-q", handoff_rev)
+    state_coded_body = state_handoff.replace("## Owner Handoff\n\n", "## Owner Handoff\n\n```text\n", 1) + "\n```\n"
+    state_coded_body_rev = commit({state_path: state_coded_body}, "hide STATE handoff body in code")
+    cli_check("handoff", state_coded_body_rev, "v04-handoff-stale")
+    git("checkout", "-q", handoff_rev)
+    project_coded_body = project_state.replace("## Current State\n\n", "## Current State\n\n~~~text\n", 1) + "\n~~~\n"
+    project_coded_body_rev = commit({project_path: project_coded_body}, "hide PROJECT state body in code")
+    cli_check("handoff", project_coded_body_rev, "v04-handoff-pending")
+    git("checkout", "-q", handoff_rev)
+    continuation_coded_body = continuation.replace(
+        "## Owner Handoff\n\n", "## Owner Handoff\n\n```text\n", 1) + "\n```\n"
+    continuation_coded_body_rev = commit({continuation_path: continuation_coded_body},
+                                         "hide continuation handoff body in code")
+    cli_check("handoff", continuation_coded_body_rev, "v04-handoff-pending")
+
+    for label, path, document, title in (
+            ("STATE", state_path, state_handoff, "Owner Handoff"),
+            ("PROJECT", project_path, project_state, "Current State"),
+            ("continuation", continuation_path, continuation, "Owner Handoff")):
+        hidden_duplicate_boundary = document.replace(
+            f"## {title}\n\n", f"## {title}\n\n```text\n## {title}\n## Fake section boundary\n```\n\n", 1)
+        hidden_duplicate_rev = commit({path: hidden_duplicate_boundary},
+                                      f"hide {label} heading duplicate and fake boundary")
+        cli_check("handoff", hidden_duplicate_rev)
+        git("checkout", "-q", handoff_rev)
+
     setext_state_rev = commit({state_path: state_handoff + "\n   Owner Handoff\n   ---\nDuplicate state handoff.\n"},
                               "add Setext STATE handoff duplicate")
     cli_check("handoff", setext_state_rev, "v04-handoff-heading")
