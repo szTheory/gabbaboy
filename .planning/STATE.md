@@ -7,8 +7,8 @@ current_phase_name: Close v0.4 requirement and verification gaps (INSERTED)
 current_plan: 1 of 1
 status: blocked
 stopped_at: "D-198 recovery scope recorded; next: $gsd-autonomous --from 23.1"
-last_updated: "2026-11-15T14:00:12.182Z"
-state_head: 8e53ae69d27423c2db4581edcee68933b5e1658d
+last_updated: "2026-11-15T14:01:09.211Z"
+state_head: 007955bf7d6e30cb52e25de2e5b22367dc84a583
 progress:
   total_phases: 5
   completed_phases: 4
@@ -53,7 +53,7 @@ The **v0.4 milestone audit remains open with gaps found**. Phase 22 has a histor
 
 Diagnostics remain metadata-only: 513 names, seven unresolved gates, admitted=0, executed=0; 482 protocol candidates remain blocked and 31 initial exclusions do not complete suite accounting. Potion Panic stopped before a ref/commit was returned from its creator-linked repository, and its fork is not source authority. µCity 1.3's required source include has no identified grant/notice under the recorded scope. Neither outcome establishes permission or a license prohibition.
 
-Phase 23.1 remains incomplete and blocked by the two Critical findings from D-196; no phase verifier ran. D-198 authorizes exactly one same-plan Task 6 for CR-01/CR-02 and one independent review. The current route is `$gsd-autonomous --from 23.1`. If review leaves any Critical/correctness/security finding or new blocker, stop without another correction, review, or verifier. The v0.4 remains open. D-103's exact-final-head full-suite gate remains unfulfilled; no broad local suite or third local lifecycle retest is permitted. The publication allowance is spent: no release retry and no tag/asset/rights action. Both automatic-advance flags remain false. After Phase 23.1 passes its required gates, the owner-only audit handoff remains /gsd-audit-milestone v0.4; accepting gaps or tech debt remains an owner decision. At milestone completion, reconcile reviewed work through the established PR/merge route, return to `main`, verify the expected merged head and clean status, and only then remove or close the clean worktree.
+Phase 23.1 remains incomplete and blocked by the two Critical findings from D-196; no phase verifier ran. D-198 authorizes exactly one same-plan Task 6 for CR-01/CR-02 and one independent review. The current route is `$gsd-autonomous --from 23.1`. If review leaves any Critical/correctness/security finding or new blocker, stop without another correction, review, or verifier. The v0.4 remains open. D-103's exact-final-head full-suite gate remains unfulfilled; no broad local suite and no third local lifecycle retest are permitted. The publication allowance is spent: no release retry and no tag/asset/rights action. Both automatic-advance flags remain false. After Phase 23.1 passes its required gates, the owner-only audit handoff remains /gsd-audit-milestone v0.4; accepting gaps or tech debt remains an owner decision. At milestone completion, reconcile reviewed work through the established PR/merge route, return to `main`, verify the expected merged head and clean status, and only then remove or close the clean worktree.
 
 ## Accumulated Context
 
