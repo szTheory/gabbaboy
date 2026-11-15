@@ -6,9 +6,9 @@ current_phase: "23.1"
 current_phase_name: Close v0.4 requirement and verification gaps (INSERTED)
 current_plan: 1 of 1
 status: blocked
-stopped_at: Phase 23.1 blocked after the sole D-195 review found two Critical issues; owner decides whether to authorize a new recovery scope
-last_updated: "2026-11-15T02:37:59.712Z"
-state_head: 80d980ad165f840db4c7d180efb95668985d55f4
+stopped_at: D-196 authorized; Task 5 is next via $gsd-execute-phase 23.1
+last_updated: "2026-11-15T03:58:11.140Z"
+state_head: 42be554c662182058d77152f026c80168e762e1d
 progress:
   total_phases: 5
   completed_phases: 4
@@ -76,11 +76,13 @@ Phase 23.1's one D-194 correction cycle is consumed. Its independent review reco
 - [Phase GB-23.1]: D-194 permits exactly one same-plan correction and independent review for CR-01, CR-02, and WR-01; all other D-193 stops remain.
 - [Phase 23.1]: D-195: one final same-plan CR-01/CR-02 recovery and independent review authorized; preserve all other stops; next route is -plan-phase 23.1 --skip-research.
 - [Phase 23.1]: D-195: one final same-plan CR-01/CR-02 recovery and independent review authorized; preserve all other stops; next route is $gsd-plan-phase 23.1 --skip-research. Use this corrected route; the immediately preceding note had a shell-expanded command.
+- [Phase 23.1]: D-196 authorizes exactly one same-plan Task 5 for the two D-195 findings, followed by one independent review of its committed candidate. The plan passed review; next: -execute-phase 23.1 (Task 5 only). Any unresolved Critical/correctness/security finding or new blocker stops the phase without further code, review, or phase verification.
+- [Phase 23.1]: D-196 route correction: an earlier state-entry attempt expanded the literal dollar sign. The exact current command is `$gsd-execute-phase 23.1`, resuming Task 5 only.
 
 ## Session
 
 **Last session:** 2026-11-15T02:36:08.401Z
-**Stopped at:** Phase 23.1 blocked after the sole D-195 review found two Critical issues; owner decides whether to authorize a new recovery scope
+**Stopped at:** D-196 authorized; Task 5 is next via $gsd-execute-phase 23.1
 **Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/.continue-here.md
 
 ### Blockers
