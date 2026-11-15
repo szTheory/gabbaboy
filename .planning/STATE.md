@@ -5,10 +5,10 @@ milestone_name: Evidence Floor
 current_phase: "23.1"
 current_phase_name: Close v0.4 requirement and verification gaps
 current_plan: 1
-status: D-200 Task 8 checks passed at 9991327df736f668bd8c98f4fd9441a4c563905b; sole independent review pending; Phase 23.1 remains incomplete
-stopped_at: Phase 23.1 Task 8 checks passed at 9991327df736f668bd8c98f4fd9441a4c563905b; sole D-200 review pending before any phase verifier
-last_updated: "2026-11-15T19:28:57.054Z"
-state_head: 9991327df736f668bd8c98f4fd9441a4c563905b
+status: D-200 sole review found Critical CR-03 and CR-04; Phase 23.1 is blocked, incomplete and unverified.
+stopped_at: "Phase 23.1 stopped after sole D-200 review found Critical CR-03/CR-04; no verifier or further fix/review; owner next: $gsd-discuss-phase 23.1"
+last_updated: "2026-11-15T19:54:18.193Z"
+state_head: 6d4227a1dd56471f743c21aa3ae904b129d53c81
 progress:
   total_phases: 5
   completed_phases: 4
@@ -25,7 +25,7 @@ last_activity: 2026-11-15
 **Current Phase:** 23.1
 **Current Phase Name:** Close v0.4 requirement and verification gaps
 **Current Plan:** 1
-**Status:** D-200 Task 8 checks passed at `9991327df736f668bd8c98f4fd9441a4c563905b`; sole independent review pending; Phase 23.1 remains incomplete
+**Status:** D-200 sole review found Critical CR-03 and CR-04; Phase 23.1 is blocked, incomplete and unverified.
 **Progress:** [████████░░] 80%
 
 Completed stages: Phase 23 release and the v0.4 gaps audit are recorded. Phase 23.1 Task 7 passed its bounded checks at source candidate 7fda5b2fb11d62a680dc4a7340eee7c85e2caf90; the sole D-199 review found a Critical Unicode whitespace bypass. Phase 23.1 remains incomplete and unverified; no verifier or further fix/review ran. The D-199 allowance is exhausted. Owner next: $gsd-discuss-phase 23.1.
@@ -71,6 +71,7 @@ Current D-200 handoff: Task 8 checks passed at `9991327df736f668bd8c98f4fd9441a4
 - Phase 23.1 D-198 Task 6 and its sole review completed. The review found a Critical YAML block-scalar U+2028 bypass; the cap is exhausted, Phase 23.1 is incomplete, and no verifier ran. Owner next runs `$gsd-discuss-phase 23.1` to decide on a new scope; no next phase/milestone is selected.
 - Phase 23.1 recovery scope authorized: D-199 completes the recovery discussion and authorizes exactly one final same-plan Task 7 plus one independent review for the D-198 YAML block-scalar bypass. Resume with $gsd-autonomous --from 23.1; if the review finds a Critical or new blocker, stop before phase verification.
 - Phase 23.1 D-200 recovery authorized: One same-plan Task 8 and one exact-candidate review; plan 4fbc33d passed static plan checks. Task 8 implementation has not started; next: $gsd-autonomous --from 23.1.
+- Phase 23.1 blocked after Phase 23: D-200 sole exact-candidate review found Critical CR-03 and CR-04 after closing D-199 CR-01 and D-196 CR-02; the one-review allowance is exhausted, no phase verifier or further correction/review follows, and the owner acts next with $gsd-discuss-phase 23.1.
 
 ## Performance Metrics
 
@@ -94,10 +95,10 @@ Current D-200 handoff: Task 8 checks passed at `9991327df736f668bd8c98f4fd9441a4
 
 ## Session
 
-**Last session:** 2026-11-15T19:28:56.845Z
-**Stopped at:** Phase 23.1 Task 8 checks passed at 9991327df736f668bd8c98f4fd9441a4c563905b; sole D-200 review pending before any phase verifier
+**Last session:** 2026-11-15T19:52:03.491Z
+**Stopped at:** Phase 23.1 stopped after sole D-200 review found Critical CR-03/CR-04; no verifier or further fix/review; owner next: $gsd-discuss-phase 23.1
 **Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/.continue-here.md
 
 ### Blockers
 
-- D-200 independent review is pending at exact source candidate `9991327df736f668bd8c98f4fd9441a4c563905b`. Phase 23.1 remains incomplete and no phase verifier may run until the review closes every Critical and all normal phase gates pass.
+- D-200 sole review of source candidate 9991327df736f668bd8c98f4fd9441a4c563905b found Critical CR-03 (ASCII-spaced duplicate keys evade validation) and CR-04 (unpaired or mixed quotes normalize scalar values). D-200 is exhausted; no phase verifier, further source correction, or review is authorized. Owner acts next: $gsd-discuss-phase 23.1.
