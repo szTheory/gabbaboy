@@ -1476,6 +1476,25 @@ def self_test_plan_cap_rev(base: Path) -> int:
 def self_test_v04_reconciliation(base: Path, source_repo: Path) -> int:
     """Exercise report/handoff contracts through the real CLI in a disposable Git repository."""
     controls = 0
+    line_cases = (
+        ("", []),
+        ("one", ["one"]),
+        ("one\n", ["one"]),
+        ("one\n\n", ["one", ""]),
+        ("one\r", ["one"]),
+        ("one\r\n", ["one"]),
+        ("one\u2028two", ["one\u2028two"]),
+        ("one\u2029two", ["one\u2029two"]),
+        ("one\vtwo", ["one\vtwo"]),
+        ("one\ftwo", ["one\ftwo"]),
+    )
+    for source, expected_lines in line_cases:
+        actual_lines = visible_markdown_lines(source)
+        if actual_lines != expected_lines:
+            raise SystemExit(f"planning-hygiene self-test FAIL: Markdown line boundary {source!r}: "
+                             f"{actual_lines!r} != {expected_lines!r}")
+        controls += 1
+
     source_repo = source_repo.resolve()
     object_result = git_run(source_repo, "rev-parse", "--git-path", "objects")
     if object_result.returncode != 0:
@@ -1623,12 +1642,13 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
 
     report_rev = commit({report_path: report_content}, "add historical report")
 
-    def cli_check(stage: str, rev: str, expected_code: str | None = None) -> None:
+    def cli_check(stage: str, rev: str, expected_code: str | None = None,
+                  check_baseline: str | None = None) -> None:
         nonlocal controls
         output, error = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
             result = main(["--check", "v04-reconciliation", "--stage", stage, "--rev", rev,
-                           "--baseline-rev", baseline_rev, "--repo", str(repo)])
+                           "--baseline-rev", check_baseline or baseline_rev, "--repo", str(repo)])
         if expected_code is None:
             expected_line = f"v04-reconciliation pass stage={stage}"
             if result != 0 or output.getvalue().strip() != expected_line:
@@ -1638,6 +1658,13 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         elif result != 1 or expected_code not in error.getvalue():
             raise SystemExit(f"planning-hygiene self-test FAIL: {stage} CLI negative wanted {expected_code}: {result} {output.getvalue()} {error.getvalue()}")
         controls += 1
+
+    def with_markdown_newline(document: str, newline: str) -> str:
+        if document.startswith("---\n"):
+            frontmatter, separator, body = document.partition("\n---\n")
+            if separator:
+                return frontmatter + separator + body.replace("\n", newline)
+        return document.replace("\n", newline)
 
     cli_check("report", report_rev)
     matched_quote_requirements = report_content.replace(
@@ -1871,6 +1898,26 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
             "  DIAG-02: pending\n? requirements\n: {FIXT-01: pending, RIGHTS-01: satisfied, "
             "DIAG-01: pending, DIAG-02: pending}\nrequirement_dispositions:", 1),
          "v04-report-requirements"),
+        ("anchored root replacing canonical map", report_content.replace(
+            "requirements:\n", "&req requirements:\n", 1), "v04-report-requirements"),
+        ("tagged root replacing canonical map", report_content.replace(
+            "requirements:\n", "!<tag:example.com,2026:requirements> requirements:\n", 1),
+         "v04-report-requirements"),
+        ("tag-then-anchor root replacing canonical map", report_content.replace(
+            "requirements:\n", "!custom &req requirements:\n", 1), "v04-report-requirements"),
+        ("anchor-then-tag root replacing canonical map", report_content.replace(
+            "requirements:\n", "&req !custom requirements:\n", 1), "v04-report-requirements"),
+        ("aliased root replacing canonical map", report_content.replace(
+            "requirements:\n", "*requirements:\n", 1), "v04-report-requirements"),
+        ("anchored contradictory root before canonical map", report_content.replace(
+            "requirements:\n", "&req requirements:\n  FIXT-01: pending\n  RIGHTS-01: satisfied\n"
+            "  DIAG-01: pending\n  DIAG-02: pending\nrequirements:\n", 1),
+         "v04-report-requirements"),
+        ("tagged contradictory root after canonical map", report_content.replace(
+            "  DIAG-02: pending\nrequirement_dispositions:",
+            "  DIAG-02: pending\n!custom requirements:\n  FIXT-01: pending\n  RIGHTS-01: satisfied\n"
+            "  DIAG-01: pending\n  DIAG-02: pending\nrequirement_dispositions:", 1),
+         "v04-report-requirements"),
         ("mismatched requirement quote", report_content.replace(
             "  RIGHTS-01: pending", "  RIGHTS-01: 'pending\"", 1), "v04-report-requirements"),
         ("malformed nested requirement", report_content.replace("  DIAG-02: pending", "    DIAG-02: pending", 1),
@@ -1907,6 +1954,74 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
     ):
         mutated_rev = commit({report_path: mutated}, f"mutate report {label}")
         cli_check("report", mutated_rev, error_code)
+
+    decorated_roots = (
+        "&req requirements:",
+        "!<tag:example.com,2026:requirements> requirements:",
+        "!custom &req requirements:",
+        "&req !custom requirements:",
+        "*requirements:",
+    )
+    canonical_root = "requirements:\n"
+    contradictory_map = ("  FIXT-01: pending\n  RIGHTS-01: satisfied\n"
+                         "  DIAG-01: pending\n  DIAG-02: pending\n")
+    for decorated_root in decorated_roots:
+        for position in ("before", "after"):
+            if position == "before":
+                mutated = report_content.replace(canonical_root,
+                                                 decorated_root + "\n" + contradictory_map + canonical_root, 1)
+            else:
+                mutated = report_content.replace("  DIAG-02: pending\nrequirement_dispositions:",
+                                                 "  DIAG-02: pending\n" + decorated_root + "\n"
+                                                 + contradictory_map + "requirement_dispositions:", 1)
+            mutated_rev = commit({report_path: mutated}, f"add decorated {position} requirements root")
+            cli_check("report", mutated_rev, "v04-report-requirements")
+            git("checkout", "-q", report_rev)
+
+    markdown_separators = ("\u2028", "\u2029", "\v", "\f")
+    for separator in markdown_separators:
+        fake_heading = report_content.replace(
+            "## Goal Achievement\n", f"prose{separator}## Goal Achievement\n", 1)
+        fake_heading_rev = commit({report_path: fake_heading}, "inject a report heading through a Unicode separator")
+        cli_check("report", fake_heading_rev, "v04-report-heading")
+        git("checkout", "-q", report_rev)
+
+        malformed_delimiter = report_content.replace(
+            "## Goal Achievement\n", f"##{separator}Goal Achievement\n", 1)
+        malformed_delimiter_rev = commit({report_path: malformed_delimiter},
+                                         "use a non-horizontal report ATX delimiter")
+        cli_check("report", malformed_delimiter_rev, "v04-report-heading")
+        git("checkout", "-q", report_rev)
+
+        criterion_two = next(line for line in report_content.split("\n") if line.startswith("| 2."))
+        fake_criterion = report_content.replace(criterion_two,
+                                               f"prose{separator}{criterion_two}", 1)
+        fake_criterion_rev = commit({report_path: fake_criterion},
+                                    "inject a criterion row through a Unicode separator")
+        cli_check("report", fake_criterion_rev, "v04-report-criteria")
+        git("checkout", "-q", report_rev)
+
+        malformed_requirements = requirements.replace(
+            "| FIXT-01 | Phase 21 | Pending |\n| RIGHTS-01 | Phase 20 | Pending |",
+            "| FIXT-01 | Phase 21 | Pending |" + separator + "| RIGHTS-01 | Phase 20 | Pending |", 1)
+        git("checkout", "-q", baseline_rev)
+        malformed_baseline_rev = commit({".planning/REQUIREMENTS.md": malformed_requirements},
+                                        "join requirement rows with a non-CommonMark separator")
+        malformed_report_rev = commit({report_path: report_content}, "add report over malformed traceability rows")
+        cli_check("report", malformed_report_rev, "v04-report-requirements", malformed_baseline_rev)
+        git("checkout", "-q", report_rev)
+
+    for newline_label, newline in (("CRLF", "\r\n"), ("CR", "\r")):
+        newline_report_rev = commit({report_path: with_markdown_newline(report_content, newline)},
+                                    f"preserve report with {newline_label} Markdown lines")
+        cli_check("report", newline_report_rev)
+        git("checkout", "-q", report_rev)
+
+    tab_heading = report_content.replace("## Goal Achievement\n", "##\tGoal Achievement\t##\t\n", 1)
+    tab_heading_rev = commit({report_path: tab_heading}, "accept horizontal tab ATX delimiters")
+    cli_check("report", tab_heading_rev)
+    git("checkout", "-q", report_rev)
+
     git("checkout", "-q", report_rev)
     changed_history = "Phase 20 historical report was rewritten.\n"
     history_rev = commit({f"{phase_dirs['20']}/20-VERIFICATION.md": changed_history}, "mutate historical report")
@@ -1951,6 +2066,44 @@ The next command is owner-only: `/gsd-audit-milestone v0.4`. No next phase or mi
     handoff_files = {state_path: state_handoff, project_path: project_state, continuation_path: continuation}
     handoff_rev = commit(handoff_files, "reconcile current handoff")
     cli_check("handoff", handoff_rev)
+    handoff_documents = (
+        ("STATE", state_path, state_handoff, "Owner Handoff"),
+        ("PROJECT", project_path, project_state, "Current State"),
+        ("continuation", continuation_path, continuation, "Owner Handoff"),
+    )
+    for separator in markdown_separators:
+        for label, path, document, title in handoff_documents:
+            heading = f"## {title}\n"
+            fake_heading = document.replace(heading, f"handoff prose{separator}{heading}", 1)
+            fake_heading_rev = commit({path: fake_heading},
+                                     f"inject a {label} heading through a Unicode separator")
+            cli_check("handoff", fake_heading_rev, "v04-handoff-heading")
+            git("checkout", "-q", handoff_rev)
+
+            malformed_delimiter = document.replace(heading, f"##{separator}{title}\n", 1)
+            malformed_delimiter_rev = commit({path: malformed_delimiter},
+                                             f"use a non-horizontal {label} ATX delimiter")
+            cli_check("handoff", malformed_delimiter_rev, "v04-handoff-heading")
+            git("checkout", "-q", handoff_rev)
+
+        owner_line = "- FIXT-01 — Pending, original owner Phase 21."
+        fake_owner = state_handoff.replace(owner_line, f"owner prose{separator}{owner_line}", 1)
+        fake_owner_rev = commit({state_path: fake_owner}, "inject a STATE owner row through a Unicode separator")
+        cli_check("handoff", fake_owner_rev, "v04-handoff-owner")
+        git("checkout", "-q", handoff_rev)
+
+    for label, path, document, title in handoff_documents:
+        tab_document = document.replace(f"## {title}\n", f"##\t{title}\t##\t\n", 1)
+        tab_rev = commit({path: tab_document}, f"accept horizontal tab ATX delimiters in {label}")
+        cli_check("handoff", tab_rev)
+        git("checkout", "-q", handoff_rev)
+
+        for newline_label, newline in (("CRLF", "\r\n"), ("CR", "\r")):
+            newline_document_rev = commit({path: with_markdown_newline(document, newline)},
+                                          f"preserve {label} with {newline_label} Markdown lines")
+            cli_check("handoff", newline_document_rev)
+            git("checkout", "-q", handoff_rev)
+
     state_hidden_heading = state_handoff.replace(
         "## Owner Handoff\n", "```text\n## Owner Handoff\n```\n\n", 1)
     state_hidden_heading_rev = commit({state_path: state_hidden_heading}, "hide STATE handoff heading in code")
