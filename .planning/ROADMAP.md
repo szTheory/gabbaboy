@@ -187,10 +187,10 @@ The [source coverage and dependency audit](phases/GB-23-qualified-v0-4-0-release
   2. `22-VERIFICATION.md` records the approved synthetic-plus-metadata Phase 22 result from immutable implementation and evidence boundaries, including 513 names, seven unresolved gates, admitted=0, executed=0, the exact no-go facts, and Pending original requirements. Historical Phase 20/21 reports and the milestone audit snapshot stay unchanged.
   3. Current state, project summary, and the Phase 23.1 handoff link the new report only after it exists, preserve stale Phase 20/21 status and four Pending requirements, and receive machine-checked SUMMARY/UAT closure without claiming milestone completion.
 **Plan cap**: 1
-**Plans:** The single plan's original tasks, D-194/D-195 recovery history, D-196 Task 5 and D-198 Task 6 are recorded in its SUMMARY. D-198 source candidate `12fcb174885d7682cade9c88a5316c00fa4b0c0a` passed the 287-control self-test, immutable report/handoff checks, 125/124 wrapper boundary, summary/UAT closure, and the two named CTests after configure-only generation. The sole D-198 review found a Critical issue: U+2028 inside a YAML block scalar can fabricate the required root map, and the production CLI accepts the malformed report. D-199 authorizes exactly one final same-plan Task 7 and one independent review. Phase 23.1 remains incomplete; no phase verifier ran. Resume with `$gsd-autonomous --from 23.1`; if review finds a Critical or new blocker, stop before verification. Preserve D-103's suite and all other explicit stops. Finish at `main` only after an approved clean reconciliation.
+**Plans:** The single plan's original tasks, D-194/D-195 recovery history, D-196 Task 5 and D-198 Task 6 are recorded in its SUMMARY. D-198 source candidate `12fcb174885d7682cade9c88a5316c00fa4b0c0a` passed its 287-control self-test, immutable report/handoff checks, 125/124 wrapper boundary, summary/UAT closure, and two named CTests after configure-only generation. The sole D-198 review found a Critical issue: U+2028 inside a YAML block scalar can fabricate the required root map, and the production CLI accepts the malformed report. D-199's bounded Task 7 checks passed at source candidate `7fda5b2fb11d62a680dc4a7340eee7c85e2caf90`; the sole independent review remains pending. Phase 23.1 remains incomplete; no phase verifier ran. Resume with `$gsd-autonomous --from 23.1`; if review finds a Critical or new blocker, stop before verification. Preserve D-103's suite and all other explicit stops. Finish at `main` only after an approved clean reconciliation.
 
 Plans:
-- [ ] 23.1-01-PLAN.md — Enforce the exact cap exception, reconstruct Phase 22 verification from immutable evidence, and reconcile the open-milestone handoff with automated closure; D-199 bounded checks and the sole review remain pending.
+- [ ] 23.1-01-PLAN.md — Enforce the exact cap exception, reconstruct Phase 22 verification from immutable evidence, and reconcile the open-milestone handoff with automated closure; D-199 bounded checks pass and the sole independent review remains pending.
 
 ## Requirement Coverage
 
@@ -217,7 +217,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 | 21. CGB Game Progress and Scene Regressions | 8/8 | Complete; PR #140 passed exact-head checks and merged as `bef2cfbd` | 2026-11-02 |
 | 22. Synthetic Composition and Diagnostic Gate Assessment | 5/5 | Complete; exact-head qualification and merge passed; DIAG-01/02 and RIGHTS-01 remain pending | 2026-11-03 |
 | 23. Qualified v0.4.0 Release | 9/9 | Complete    | 2026-11-13 |
-| 23.1. Close v0.4 requirement and verification gaps | 0/1 | D-199 candidate committed; self-test and report check pass; handoff recheck, remaining bounded checks, and sole review pending | — |
+| 23.1. Close v0.4 requirement and verification gaps | 0/1 | D-199 bounded checks pass at `7fda5b2`; sole independent review pending | — |
 
 ## Planning and Approval Boundary
 
