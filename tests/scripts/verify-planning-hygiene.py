@@ -304,6 +304,11 @@ def yaml_source_lines(text: str) -> tuple[str, list[str]]:
     return normalized, lines
 
 
+def yaml_horizontal_strip(value: str) -> str:
+    """Trim only YAML's horizontal token whitespace, never Unicode scalar content."""
+    return value.strip(" \t")
+
+
 def frontmatter_fields(text: str) -> tuple[dict[str, str], str]:
     normalized, _ = yaml_source_lines(text)
     match = GAP_FRONTMATTER.match(normalized)
@@ -312,9 +317,9 @@ def frontmatter_fields(text: str) -> tuple[dict[str, str], str]:
     fields: dict[str, str] = {}
     _, lines = yaml_source_lines(match.group(1))
     for line in lines:
-        if line and not line[0].isspace() and ":" in line:
+        if line and line[0] not in " \t" and ":" in line:
             key, value = line.split(":", 1)
-            fields[key.strip()] = value.strip().strip("\"'")
+            fields[yaml_horizontal_strip(key)] = yaml_horizontal_strip(value).strip("\"'")
     return fields, normalized[match.end():]
 
 
@@ -329,9 +334,9 @@ def frontmatter_duplicates(text: str) -> list[str]:
     item_fields: set[str] | None = None
     duplicates: list[str] = []
     for line in lines:
-        if not line.strip():
+        if not yaml_horizontal_strip(line):
             continue
-        if not line[0].isspace():
+        if line[0] not in " \t":
             item_fields = None
             top = re.match(r"^([A-Za-z0-9_-]+):", line)
             if top:
@@ -340,11 +345,11 @@ def frontmatter_duplicates(text: str) -> list[str]:
                     duplicates.append(f"top-level key '{key}'")
                 top_level.add(key)
             continue
-        item = re.match(r"^\s+-\s+([A-Za-z0-9_-]+):", line)
+        item = re.match(r"^[ \t]*-[ \t]+([A-Za-z0-9_-]+):", line)
         if item:
             item_fields = {item.group(1)}
             continue
-        nested = re.match(r"^\s+([A-Za-z0-9_-]+):", line)
+        nested = re.match(r"^[ \t]+([A-Za-z0-9_-]+):", line)
         if nested and item_fields is not None:
             key = nested.group(1)
             if key in item_fields:
@@ -360,17 +365,17 @@ def frontmatter_sequence(text: str, key: str) -> list[str] | None:
         return None
     _, lines = yaml_source_lines(match.group(1))
     for index, line in enumerate(lines):
-        if line.strip() != f"{key}:":
+        if line != f"{key}:":
             continue
         values: list[str] = []
         for item in lines[index + 1:]:
-            if not item.strip():
+            if not yaml_horizontal_strip(item):
                 continue
             if not item.startswith((" ", "\t")):
                 break
-            value = re.match(r"\s+-\s+(.+?)\s*$", item)
+            value = re.match(r"^[ \t]+-[ \t]+(.+?)[ \t]*$", item)
             if value:
-                values.append(value.group(1).strip().strip("\"'"))
+                values.append(yaml_horizontal_strip(value.group(1)).strip("\"'"))
         return values
     return None
 
@@ -381,23 +386,23 @@ def frontmatter_objects(text: str, key: str) -> list[dict[str, str]] | None:
     if match is None:
         return None
     _, lines = yaml_source_lines(match.group(1))
-    start = next((index for index, line in enumerate(lines) if line.strip() == f"{key}:"), None)
+    start = next((index for index, line in enumerate(lines) if line == f"{key}:"), None)
     if start is None:
         return None
     entries: list[dict[str, str]] = []
     current: dict[str, str] | None = None
     for line in lines[start + 1:]:
-        if line and not line[0].isspace():
+        if line and line[0] not in " \t":
             break
-        item = re.match(r"\s+-\s+([A-Za-z0-9_-]+):\s*(.*?)\s*$", line)
+        item = re.match(r"^[ \t]*-[ \t]+([A-Za-z0-9_-]+):[ \t]*(.*?)[ \t]*$", line)
         if item:
             if current is not None:
                 entries.append(current)
-            current = {item.group(1): item.group(2).strip().strip("\"'")}
+            current = {item.group(1): yaml_horizontal_strip(item.group(2)).strip("\"'")}
             continue
-        field = re.match(r"\s+([A-Za-z0-9_-]+):\s*(.*?)\s*$", line)
+        field = re.match(r"^[ \t]+([A-Za-z0-9_-]+):[ \t]*(.*?)[ \t]*$", line)
         if field and current is not None:
-            current[field.group(1)] = field.group(2).strip().strip("\"'")
+            current[field.group(1)] = yaml_horizontal_strip(field.group(2)).strip("\"'")
     if current is not None:
         entries.append(current)
     return entries
@@ -461,15 +466,15 @@ def _decode_frontmatter_key(raw: str) -> str | None:
 
 def _frontmatter_root_key_is_alias(line: str, key: str) -> bool:
     """Recognize YAML-equivalent root spellings without normalizing them as accepted input."""
-    candidate = line.strip(" \t")
+    candidate = yaml_horizontal_strip(line)
     # YAML node properties may precede a key in either order. This schema needs no tagged or
     # anchored root key, so strip only enough property syntax to fail closed on its protected key.
     while True:
-        property_prefix = re.match(r"^(?:&[^\s\[\]{},]+|!(?:<[^>]*>|[^\s\[\]{},]+))[ \t]+(.+)$",
+        property_prefix = re.match(r"^(?:&[^ \t\[\]{},]+|!(?:<[^>]*>|[^ \t\[\]{},]+))[ \t]+(.+)$",
                                    candidate)
         if property_prefix is None:
             break
-        candidate = property_prefix.group(1).strip(" \t")
+        candidate = yaml_horizontal_strip(property_prefix.group(1))
     if candidate.startswith("?") and len(candidate) > 1 and candidate[1] in " \t":
         candidate = candidate[1:].strip(" \t")
     if not candidate:
@@ -484,7 +489,7 @@ def _frontmatter_root_key_is_alias(line: str, key: str) -> bool:
         return decoded is None and candidate[1:].lstrip(" \\t").startswith(key)
     colon = candidate.find(":")
     plain = candidate[:colon] if colon >= 0 else candidate
-    plain = re.split(r"[ \t]+#", plain, maxsplit=1)[0].strip(" \t")
+    plain = yaml_horizontal_strip(re.split(r"[ \t]+#", plain, maxsplit=1)[0])
     return plain == key
 
 
@@ -496,16 +501,16 @@ def frontmatter_mapping_pairs(text: str, key: str) -> list[tuple[str, str]] | No
         return None
     _, lines = yaml_source_lines(match.group(1))
     for line in lines:
-        if line and not line[0].isspace() and line != f"{key}:" and _frontmatter_root_key_is_alias(line, key):
+        if line and line[0] not in " \t" and line != f"{key}:" and _frontmatter_root_key_is_alias(line, key):
             return None
     roots = [index for index, line in enumerate(lines) if line == f"{key}:"]
     if len(roots) != 1:
         return None
     pairs: list[tuple[str, str]] = []
     for line in lines[roots[0] + 1:]:
-        if not line.strip():
+        if not yaml_horizontal_strip(line):
             continue
-        if not line[0].isspace():
+        if line[0] not in " \t":
             break
         if not line.startswith("  ") or line.startswith("   "):
             return None
@@ -1886,6 +1891,33 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
                                      f"reject {separator_name} in required phase value")
         cli_check("report", malformed_value_rev, "v04-report-field")
 
+        duplicate_alias = report_content.replace(
+            phase_field, phase_field + f"\nphase{separator}: GB-21-cgb-game-progress-and-scene-regressions", 1)
+        duplicate_alias_rev = commit({report_path: duplicate_alias},
+                                     f"keep {separator_name} phase alias from overriding the canonical field")
+        cli_check("report", duplicate_alias_rev)
+
+        for field, original, refusal in (
+                ("status", "Pending", "v04-report-requirements"),
+                ("original_owner", "Phase 21", "v04-report-requirements")):
+            target = f"    {field}: {original}\n"
+            malformed = report_content.replace(target, f"    {field}: {original}{separator}\n", 1)
+            malformed_rev = commit({report_path: malformed},
+                                   f"reject {separator_name} in disposition {field} value")
+            cli_check("report", malformed_rev, refusal)
+
+        malformed_gate = report_content.replace(
+            V04_UNRESOLVED_GATES[0], V04_UNRESOLVED_GATES[0] + separator, 1)
+        malformed_gate_rev = commit({report_path: malformed_gate},
+                                    f"reject {separator_name} in sequence value")
+        cli_check("report", malformed_gate_rev, "v04-report-gates")
+
+        malformed_requirement = report_content.replace(
+            "  RIGHTS-01: pending", f"  RIGHTS-01: pending{separator}", 1)
+        malformed_requirement_rev = commit({report_path: malformed_requirement},
+                                            f"reject {separator_name} in requirement map value")
+        cli_check("report", malformed_requirement_rev, "v04-report-requirements")
+
         for label, required_fragment, apparent_value, refusal in boundary_root_cases:
             missing_value = report_content.replace(required_fragment, "", 1)
             if missing_value == report_content:
@@ -1905,6 +1937,13 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         scalar_positive_rev = commit({report_path: scalar_positive},
                                      f"preserve {separator_name} apparent schema inside scalar content")
         cli_check("report", scalar_positive_rev)
+
+    for invalid_control in ("\v", "\f"):
+        invalid_value = report_content.replace(
+            "phase: GB-22-composition-and-microtest-evidence",
+            "phase: GB-22-composition-and-microtest-evidence" + invalid_control, 1)
+        invalid_value_rev = commit({report_path: invalid_value}, "refuse invalid YAML control in required scalar")
+        cli_check("report", invalid_value_rev, "v04-report-field")
 
     cli_check("report", report_rev)
     matched_quote_requirements = report_content.replace(
