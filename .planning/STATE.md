@@ -6,16 +6,16 @@ current_phase: "23.1"
 current_phase_name: Close v0.4 requirement and verification gaps (INSERTED)
 current_plan: 1 of 1
 status: blocked
-stopped_at: D-196 sole review complete; two Critical findings remain; owner acts next via $gsd-discuss-phase 23.1
-last_updated: "2026-11-15T04:40:44Z"
-state_head: fd4a005f7e97835e6d1ca822d472752263dc3f9c
+stopped_at: "D-198 recovery scope recorded; next: $gsd-autonomous --from 23.1"
+last_updated: "2026-11-15T13:45:06.021Z"
+state_head: 7a2153db7dbb5fdf414eb4497c29837df3ddeaf7
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 32
   completed_plans: 32
   percent: 80
-last_activity: 2026-11-14
+last_activity: 2026-11-15
 ---
 
 # Project State
@@ -28,7 +28,7 @@ last_activity: 2026-11-14
 **Status:** Blocked
 **Progress:** [████████░░] 80%
 
-Completed stages: Phase 23 — Qualified v0.4.0 Release and the v0.4 milestone audit are complete. Phase 23.1 Task 5 and its sole D-196 independent review are complete; the review found two Critical checker gaps (anchored YAML root aliases and Unicode separators creating synthetic Markdown headings). Phase 23.1 remains blocked and incomplete, no phase verification was run, and no further source correction or review cycle is authorized. The owner acts next via $gsd-discuss-phase 23.1.
+Completed stages: Phase 23 release and the v0.4 gaps audit are recorded. Phase 23.1 D-196 review found two Critical checker gaps; D-198 authorizes one same-plan Task 6 and one independent review. Phase 23.1 remains pending implementation and verification. Next route: $gsd-autonomous --from 23.1.
 
 ## Qualified Release
 
@@ -53,14 +53,15 @@ The **v0.4 milestone audit remains open with gaps found**. Phase 22 now has a hi
 
 The diagnostic record remains metadata-only: 513 names, seven unresolved gates, admitted=0, executed=0; 482 protocol candidates remain blocked and the 31 initial exclusions do not complete suite accounting. Potion Panic stopped before a ref/commit was returned from its creator-linked repository, and its fork is not source authority. µCity 1.3's required source include has no identified grant/notice under the recorded scope. Neither outcome establishes permission or a license prohibition.
 
-Phase 23.1's one D-194 correction cycle is consumed. Its independent review records two Critical correctness blockers: the requirement map can be read from the wrong YAML parent, and ATX headings inside code blocks can satisfy protected sections. The relevant security threats are open; final phase verification was not run. No further fix or review cycle is authorized. The owner acts next to decide whether to authorize a new recovery scope: `/gsd-discuss-phase 23.1`. No next phase or milestone is selected. **The v0.4 remains open.** D-103's exact-final-head full-suite gate remains unfulfilled; no broad local suite and no third local lifecycle retest are permitted. The publication allowance is spent: no release retry and no tag/asset/rights action. Both automatic-advance flags remain false. The later `/gsd-audit-milestone v0.4` route remains owner-only, downstream of Phase 23.1 completion, and is not started. [Continuation](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/.continue-here.md), [Phase 23.1 review](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW.md), [Phase 23.1 security](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-SECURITY.md), [Phase 22 report](phases/GB-22-composition-and-microtest-evidence/22-VERIFICATION.md), [Phase 23 evidence](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md), [roadmap](ROADMAP.md), and [project](PROJECT.md) retain the evidence and limits.
+Phase 23.1 remains blocked after the D-196 review found two Critical correctness issues: an anchored YAML root alias can evade rejection, and Unicode separators can synthesize protected Markdown headings. The relevant security findings remain open; final phase verification was not run. D-196 permits no further correction or review under that scope. The owner acts next via `$gsd-discuss-phase 23.1` to define a new bounded recovery. The owner then directs `$gsd-autonomous --from 23.1` through the remaining v0.4 lifecycle once that scope is authorized, while preserving all explicit stops and budgets. No next phase or new milestone is selected now. **The v0.4 remains open.** D-103's exact-final-head full-suite gate remains unfulfilled; no broad local suite and no third local lifecycle retest are permitted. The publication allowance is spent: no release retry and no tag/asset/rights action. Both automatic-advance flags remain false. At milestone completion, reconcile reviewed work through the established PR/merge route, return to `main`, verify the expected merged head and clean status, then remove or close only a clean reconciled worktree. [Continuation](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/.continue-here.md), [Phase 23.1 review](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW.md), [Phase 23.1 security](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-SECURITY.md), [Phase 22 report](phases/GB-22-composition-and-microtest-evidence/22-VERIFICATION.md), [Phase 23 evidence](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md), [roadmap](ROADMAP.md), and [project](PROJECT.md) retain the evidence and limits.
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
 - Phase 23.1 inserted after Phase 23: Close v0.4 requirement and verification gaps (URGENT)
-- Phase 23.1 plan tasks and the one D-194 correction cycle completed; the independent review still found two Critical issues. No further cycle is authorized. Owner must decide whether to authorize a new recovery scope; `/gsd-discuss-phase 23.1`. The milestone audit remains downstream.
+- Phase 23.1 Task 5 and the sole D-196 review completed; two Critical checker issues remain open. Owner acts next with `$gsd-discuss-phase 23.1` to define bounded recovery, then `$gsd-autonomous --from 23.1` after scope authorization. The milestone remains open; finish on a clean `main` after approved reconciliation.
+- Phase 23.1 recovery-scoped: D-198 records one Task 6 and one independent review for CR-01/CR-02; next route is $gsd-autonomous --from 23.1.
 
 ## Performance Metrics
 
@@ -78,13 +79,13 @@ Phase 23.1's one D-194 correction cycle is consumed. Its independent review reco
 - [Phase 23.1]: D-195: one final same-plan CR-01/CR-02 recovery and independent review authorized; preserve all other stops; next route is $gsd-plan-phase 23.1 --skip-research. Use this corrected route; the immediately preceding note had a shell-expanded command.
 - [Phase 23.1]: D-196 authorizes exactly one same-plan Task 5 for the two D-195 findings, followed by one independent review of its committed candidate. The plan passed review; next: -execute-phase 23.1 (Task 5 only). Any unresolved Critical/correctness/security finding or new blocker stops the phase without further code, review, or phase verification.
 - [Phase 23.1]: D-196 route correction: an earlier state-entry attempt expanded the literal dollar sign. The exact current command is `$gsd-execute-phase 23.1`, resuming Task 5 only.
+- [Phase 23.1]: D-198 authorizes one same-plan Task 6 for the two D-196 Critical findings and one independent review; next: $gsd-autonomous --from 23.1.
 
 ## Session
 
-**Last session:** 2026-11-15T02:36:08.401Z
-**Stopped at:** D-196 authorized; Task 5 is next via $gsd-execute-phase 23.1
-**Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/.continue-here.md
+**Last session:** 2026-11-15T13:44:50.608Z
+**Stopped at:** D-198 recovery scope recorded; next: $gsd-autonomous --from 23.1
+**Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-CONTEXT.md
 
 ### Blockers
-
-- D-195 review at 88f851e found two Critical correctness issues: YAML-equivalent requirements root keys bypass duplicate detection, and multiline or unclosed HTML comments can satisfy visible-section checks. The sole D-195 fix/review cycle is consumed; do not run phase verification or another fix/review cycle. Owner acts next to decide whether to authorize a new recovery scope with $gsd-discuss-phase 23.1.
+None
