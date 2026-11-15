@@ -6,9 +6,9 @@ current_phase: "23.1"
 current_phase_name: Close v0.4 requirement and verification gaps (INSERTED)
 current_plan: 1 of 1
 status: blocked
-stopped_at: D-196 authorized; Task 5 is next via $gsd-execute-phase 23.1
-last_updated: "2026-11-15T03:58:11.140Z"
-state_head: 42be554c662182058d77152f026c80168e762e1d
+stopped_at: D-196 sole review complete; two Critical findings remain; owner acts next via $gsd-discuss-phase 23.1
+last_updated: "2026-11-15T04:40:44Z"
+state_head: fd4a005f7e97835e6d1ca822d472752263dc3f9c
 progress:
   total_phases: 5
   completed_phases: 4
@@ -25,10 +25,10 @@ last_activity: 2026-11-14
 **Current Phase:** 23.1
 **Current Phase Name:** Close v0.4 requirement and verification gaps (INSERTED)
 **Current Plan:** 1 of 1
-**Status:** blocked
+**Status:** Blocked
 **Progress:** [████████░░] 80%
 
-Completed stages: Phase 23 — Qualified v0.4.0 Release and the v0.4 milestone audit are complete. Phase 23.1 implementation and its sole D-195 review are complete; the review found two Critical blockers (YAML-equivalent requirements root spelling and hidden HTML-comment content). Phase 23.1 remains blocked and incomplete, no phase verification was run, and no further fix or review cycle is authorized.
+Completed stages: Phase 23 — Qualified v0.4.0 Release and the v0.4 milestone audit are complete. Phase 23.1 Task 5 and its sole D-196 independent review are complete; the review found two Critical checker gaps (anchored YAML root aliases and Unicode separators creating synthetic Markdown headings). Phase 23.1 remains blocked and incomplete, no phase verification was run, and no further source correction or review cycle is authorized. The owner acts next via $gsd-discuss-phase 23.1.
 
 ## Qualified Release
 
