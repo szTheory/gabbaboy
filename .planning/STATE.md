@@ -5,10 +5,10 @@ milestone_name: Evidence Floor
 current_phase: "23.1"
 current_phase_name: Close v0.4 requirement and verification gaps
 current_plan: 1
-status: D-200 Task 8 authorized; Phase 23.1 remains incomplete pending one correction and independent review
-stopped_at: "Phase 23.1 Task 8 planned and checked; next: $gsd-execute-phase 23.1 --no-transition via $gsd-autonomous --from 23.1"
-last_updated: "2026-11-15T18:53:27.087Z"
-state_head: 4fbc33d33105e8aaddc4a2920104a740cfbee1d8
+status: D-200 Task 8 checks passed at 9991327df736f668bd8c98f4fd9441a4c563905b; sole independent review pending; Phase 23.1 remains incomplete
+stopped_at: Phase 23.1 Task 8 checks passed at 9991327df736f668bd8c98f4fd9441a4c563905b; sole D-200 review pending before any phase verifier
+last_updated: "2026-11-15T19:28:57.054Z"
+state_head: 9991327df736f668bd8c98f4fd9441a4c563905b
 progress:
   total_phases: 5
   completed_phases: 4
@@ -25,10 +25,12 @@ last_activity: 2026-11-15
 **Current Phase:** 23.1
 **Current Phase Name:** Close v0.4 requirement and verification gaps
 **Current Plan:** 1
-**Status:** D-200 Task 8 authorized; Phase 23.1 remains incomplete pending one correction and independent review
+**Status:** D-200 Task 8 checks passed at `9991327df736f668bd8c98f4fd9441a4c563905b`; sole independent review pending; Phase 23.1 remains incomplete
 **Progress:** [████████░░] 80%
 
 Completed stages: Phase 23 release and the v0.4 gaps audit are recorded. Phase 23.1 Task 7 passed its bounded checks at source candidate 7fda5b2fb11d62a680dc4a7340eee7c85e2caf90; the sole D-199 review found a Critical Unicode whitespace bypass. Phase 23.1 remains incomplete and unverified; no verifier or further fix/review ran. The D-199 allowance is exhausted. Owner next: $gsd-discuss-phase 23.1.
+
+D-200 Task 8 corrected the YAML syntax-whitespace handling and passed all bounded checks at candidate `9991327df736f668bd8c98f4fd9441a4c563905b`. The D-199 review is preserved byte-for-byte; the one independent D-200 review is pending, and no phase verifier has run. Phase 23.1 remains incomplete until the review and normal phase gates pass.
 
 ## Qualified Release
 
@@ -56,6 +58,8 @@ Diagnostics remain metadata-only: 513 names, seven unresolved gates, admitted=0,
 Phase 23.1 remains incomplete. Task 6 corrected the D-196 findings at candidate `12fcb174885d7682cade9c88a5316c00fa4b0c0a`; its bounded controls and two named CTests passed. The sole D-198 review at `afc2f62` found a Critical: U+2028 inside a YAML block scalar can fabricate the required `requirements:` root map. D-199 Task 7's source candidate `7fda5b2fb11d62a680dc4a7340eee7c85e2caf90` passed its 314-control self-test, immutable report and handoff checks, 125/124 wrapper boundary, summary coverage, shared UAT closure, and only the two named CTests after configure-only generation. The sole independent D-199 review is pending; no phase verifier ran. D-199 authorizes exactly one same-plan Task 7 and one review; any Critical/correctness/security finding or new blocker stops Phase 23.1 before its verifier, with no further correction or review. v0.4 remains open, and FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remain Pending under their original owners. D-103's exact-final-head suite remains unfulfilled; no broad local suite, no third local lifecycle retest, no release retry, and no tag/asset/rights action is permitted. Both automatic-advance flags remain false. The owner-only audit route is `/gsd-audit-milestone v0.4`. No next phase or milestone is selected. At successful milestone closeout, reconcile reviewed work through the established PR/merge route, return to `main`, verify the expected merged head and clean status, and only then remove or close the clean worktree.
 
 The tested D-199 source candidate is `7fda5b2fb11d62a680dc4a7340eee7c85e2caf90`: the exact-candidate self-test passed with `controls=314`, the immutable report and handoff stages passed against original baseline `1d74b032d8106516b0fd22d6cd02ddaf916b2031`, the 125/124 wrapper boundary behaved as required, SUMMARY coverage and shared UAT closure passed, and only `plan_cap` plus `planning_hygiene_controls` passed after configure-only generation bound to that full candidate. The first handoff wording check failed; the required stop/route/phase terms were committed at `653ed2b3e501bc31c8a12e99ef800822889e08ff`, and the handoff recheck passed at the tested candidate. All bounded Task 7 checks are complete; the sole independent exact-candidate review remains pending. D-103's exact-final-head full-suite gate remains unfulfilled; no broad local suite, no third local lifecycle retest, no release retry, and no tag/asset/rights action is permitted. The owner-only audit route is `/gsd-audit-milestone v0.4`. Phase 23.1 and v0.4 remain open; the four requirements remain Pending, no phase verifier has run, and no next phase or milestone is selected.
+
+Current D-200 handoff: Task 8 checks passed at `9991327df736f668bd8c98f4fd9441a4c563905b`; the sole independent review of that exact candidate is next. If any Critical/correctness/security finding remains, a new blocker appears, or review is unavailable, stop before phase verification with no further correction or review. Keep the four original requirements Pending, v0.4 open, both automatic-advance flags false, and every D-193–D-200 limit in force. Continue through the already authorized `$gsd-autonomous --from 23.1` route; no user action is needed for this review handoff.
 
 ## Accumulated Context
 
@@ -90,10 +94,10 @@ The tested D-199 source candidate is `7fda5b2fb11d62a680dc4a7340eee7c85e2caf90`:
 
 ## Session
 
-**Last session:** 2026-11-15T18:53:22.456Z
-**Stopped at:** Phase 23.1 Task 8 planned and checked; next: $gsd-execute-phase 23.1 --no-transition via $gsd-autonomous --from 23.1
-**Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-CONTEXT.md
+**Last session:** 2026-11-15T19:28:56.845Z
+**Stopped at:** Phase 23.1 Task 8 checks passed at 9991327df736f668bd8c98f4fd9441a4c563905b; sole D-200 review pending before any phase verifier
+**Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/.continue-here.md
 
 ### Blockers
 
-- D-199 sole review found Critical CR-01 at exact candidate 7fda5b2fb11d62a680dc4a7340eee7c85e2caf90: Unicode-aware YAML whitespace normalization can fabricate required fields and root keys. D-199 allowance exhausted; Phase 23.1 stops before verification. Owner next: $gsd-discuss-phase 23.1.
+- D-200 independent review is pending at exact source candidate `9991327df736f668bd8c98f4fd9441a4c563905b`. Phase 23.1 remains incomplete and no phase verifier may run until the review closes every Critical and all normal phase gates pass.
