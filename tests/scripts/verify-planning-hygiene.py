@@ -1762,6 +1762,55 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         scalar_fields = "\n".join(scalars)
         return f"{frontmatter}\n{scalar_fields}\n---\n{body}"
 
+    def with_prefixed_root_scalar(document: str, separator: str, apparent_value: str) -> str:
+        frontmatter, closing, body = document.partition("\n---\n")
+        if not closing:
+            raise SystemExit("planning-hygiene self-test FAIL: fixture report has no closing frontmatter delimiter")
+        scalar_lines = apparent_value.rstrip("\n").split("\n")
+        content = [f"    {separator}{scalar_lines[0]}"]
+        content.extend(f"    {line}" for line in scalar_lines[1:])
+        scalar = "line_boundary_note: |-\n" + "\n".join(content)
+        return f"{frontmatter}\n{scalar}\n---\n{body}"
+
+    def with_nested_scalar_field(document: str, separator: str, field: str, value: str) -> str:
+        frontmatter, closing, body = document.partition("\n---\n")
+        if not closing:
+            raise SystemExit("planning-hygiene self-test FAIL: fixture report has no closing frontmatter delimiter")
+        target = f"    {field}: {value}\n"
+        apparent = f"    note: |-\n      {separator}{field}: {value}\n"
+        if target not in frontmatter:
+            raise SystemExit(f"planning-hygiene self-test FAIL: could not find disposition {field} fixture")
+        frontmatter = frontmatter.replace(target, apparent, 1)
+        return f"{frontmatter}\n---\n{body}"
+
+    def with_scalar_boundary_twins(document: str, separator: str) -> str:
+        frontmatter, closing, body = document.partition("\n---\n")
+        if not closing:
+            raise SystemExit("planning-hygiene self-test FAIL: fixture report has no closing frontmatter delimiter")
+        apparent_values = [
+            f"phase{separator}: GB-21-cgb-game-progress-and-scene-regressions",
+            f"phase: GB-21-cgb-game-progress-and-scene-regressions{separator}",
+            f"unresolved_gates:",
+            "  - scalar-only gate",
+            "requirements:",
+            "  FIXT-01: satisfied",
+            "requirement_dispositions:",
+            "  - id: FIXT-01",
+            "    status: Satisfied",
+            "    original_owner: Phase 99",
+        ]
+        scalar_lines = [f"  {separator}{apparent_values[0]}"]
+        scalar_lines.extend(f"  {line}" for line in apparent_values[1:])
+        root_scalar = "line_boundary_note: |-\n" + "\n".join(scalar_lines)
+        frontmatter = frontmatter.replace("unresolved_gates:\n", root_scalar + "\nunresolved_gates:\n", 1)
+        nested = (f"    note: |-\n      {separator}status: Satisfied\n"
+                  f"      {separator}original_owner: Phase 99\n")
+        target = "    status: Pending\n"
+        if target not in frontmatter:
+            raise SystemExit("planning-hygiene self-test FAIL: could not find disposition status fixture")
+        frontmatter = frontmatter.replace(target, target + nested, 1)
+        return f"{frontmatter}\n---\n{body}"
+
     line_boundary_cases = (
         ("\u2028", "U+2028"),
         ("\u0085", "NEL"),
@@ -1812,6 +1861,50 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         twin_rev = commit({report_path: twin},
                           f"accept combined {separator_name} scalar with {newline_name} frontmatter")
         cli_check("report", twin_rev)
+
+    boundary_root_cases = (
+        ("unresolved-gates sequence", gate_sequence,
+         "unresolved_gates:\n" + "\n".join(f"  - {gate}" for gate in V04_UNRESOLVED_GATES),
+         "v04-report-gates"),
+        ("requirement-dispositions objects", disposition_sequence,
+         "requirement_dispositions:\n" + "\n".join(
+             f"  - id: {requirement}\n    status: Pending\n    original_owner: {owner}"
+             for requirement, owner in V04_PENDING_OWNERS.items()),
+         "v04-report-requirements"),
+        ("requirements mapping", requirement_map, requirement_map, "v04-report-requirements"),
+    )
+    for separator, separator_name in line_boundary_cases:
+        phase_field = "phase: GB-22-composition-and-microtest-evidence"
+        malformed_key = report_content.replace(
+            phase_field, f"phase{separator}: GB-22-composition-and-microtest-evidence", 1)
+        malformed_key_rev = commit({report_path: malformed_key},
+                                   f"reject {separator_name} in required phase key")
+        cli_check("report", malformed_key_rev, "v04-report-field")
+
+        malformed_value = report_content.replace(phase_field, phase_field + separator, 1)
+        malformed_value_rev = commit({report_path: malformed_value},
+                                     f"reject {separator_name} in required phase value")
+        cli_check("report", malformed_value_rev, "v04-report-field")
+
+        for label, required_fragment, apparent_value, refusal in boundary_root_cases:
+            missing_value = report_content.replace(required_fragment, "", 1)
+            if missing_value == report_content:
+                raise SystemExit(f"planning-hygiene self-test FAIL: could not remove required {label} fixture value")
+            negative = with_prefixed_root_scalar(missing_value, separator, apparent_value)
+            negative_rev = commit({report_path: negative},
+                                  f"reject scalar {label} after {separator_name}")
+            cli_check("report", negative_rev, refusal)
+
+        for field, value in (("status", "Pending"), ("original_owner", "Phase 21")):
+            negative = with_nested_scalar_field(report_content, separator, field, value)
+            negative_rev = commit({report_path: negative},
+                                  f"reject scalar disposition {field} after {separator_name}")
+            cli_check("report", negative_rev, "v04-report-requirements")
+
+        scalar_positive = with_scalar_boundary_twins(report_content, separator)
+        scalar_positive_rev = commit({report_path: scalar_positive},
+                                     f"preserve {separator_name} apparent schema inside scalar content")
+        cli_check("report", scalar_positive_rev)
 
     cli_check("report", report_rev)
     matched_quote_requirements = report_content.replace(
