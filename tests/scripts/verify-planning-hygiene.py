@@ -375,12 +375,90 @@ def frontmatter_objects(text: str, key: str) -> list[dict[str, str]] | None:
     return entries
 
 
+def _decode_frontmatter_key(raw: str) -> str | None:
+    """Decode the small quoted-key subset needed to recognize requirements aliases."""
+    value = raw.strip(" \t")
+    if not value or value[0] not in "\"'":
+        return None
+    quote = value[0]
+    decoded: list[str] = []
+    index = 1
+    while index < len(value):
+        char = value[index]
+        if quote == "'":
+            if char == "'":
+                if index + 1 < len(value) and value[index + 1] == "'":
+                    decoded.append("'")
+                    index += 2
+                    continue
+                tail = value[index + 1:].strip(" \t")
+                return "".join(decoded) if not tail or tail.startswith(":") else None
+            decoded.append(char)
+            index += 1
+            continue
+        if char == '"':
+            tail = value[index + 1:].strip(" \t")
+            return "".join(decoded) if not tail or tail.startswith(":") else None
+        if char != "\\":
+            decoded.append(char)
+            index += 1
+            continue
+        index += 1
+        if index >= len(value):
+            return None
+        escaped = value[index]
+        simple = {
+            "0": "\0", "a": "\a", "b": "\b", "t": "\t", "n": "\n",
+            "v": "\v", "f": "\f", "r": "\r", "e": "\x1b", " ": " ",
+            '"': '"', "/": "/", "\\": "\\", "N": "\x85", "_": "\xa0",
+            "L": "\u2028", "P": "\u2029",
+        }
+        if escaped in simple:
+            decoded.append(simple[escaped])
+            index += 1
+            continue
+        width = {"x": 2, "u": 4, "U": 8}.get(escaped)
+        if width is None:
+            return None
+        digits = value[index + 1:index + 1 + width]
+        if len(digits) != width or re.fullmatch(r"[0-9A-Fa-f]+", digits) is None:
+            return None
+        try:
+            decoded.append(chr(int(digits, 16)))
+        except ValueError:
+            return None
+        index += width + 1
+    return None
+
+
+def _frontmatter_root_key_is_alias(line: str, key: str) -> bool:
+    """Recognize YAML-equivalent root spellings without normalizing them as accepted input."""
+    candidate = line.strip(" \t")
+    if candidate.startswith("?") and len(candidate) > 1 and candidate[1] in " \t":
+        candidate = candidate[1:].strip(" \t")
+    if not candidate:
+        return False
+    if candidate[0] in "\"'":
+        decoded = _decode_frontmatter_key(candidate)
+        if decoded == key:
+            return True
+        # Malformed quoted forms that visibly begin with this protected key also fail closed.
+        return decoded is None and candidate[1:].lstrip(" \\t").startswith(key)
+    colon = candidate.find(":")
+    plain = candidate[:colon] if colon >= 0 else candidate
+    plain = re.split(r"[ \t]+#", plain, maxsplit=1)[0].strip(" \t")
+    return plain == key
+
+
 def frontmatter_mapping_pairs(text: str, key: str) -> list[tuple[str, str]] | None:
-    """Read one root-level simple frontmatter map without erasing duplicate keys."""
+    """Read only one canonical root map while retaining pairs and rejecting YAML aliases."""
     match = GAP_FRONTMATTER.match(text.replace("\r\n", "\n"))
     if match is None:
         return None
     lines = match.group(1).splitlines()
+    for line in lines:
+        if line and not line[0].isspace() and line != f"{key}:" and _frontmatter_root_key_is_alias(line, key):
+            return None
     roots = [index for index, line in enumerate(lines) if line == f"{key}:"]
     if len(roots) != 1:
         return None
@@ -412,27 +490,104 @@ def frontmatter_mapping_pairs(text: str, key: str) -> list[tuple[str, str]] | No
 
 
 def visible_markdown_lines(text: str) -> list[str | None]:
-    """Keep visible Markdown lines and mask fenced or indented code without shifting boundaries."""
+    """Mask code and HTML comments in place so every Markdown contract sees the same lines."""
+    source_lines = text.replace("\r\n", "\n").splitlines()
     visible: list[str | None] = []
     fence: tuple[str, int] | None = None
-    for line in text.replace("\r\n", "\n").splitlines():
+    comment = False
+    inline_ticks = 0
+
+    def tick_run(line: str, start: int) -> int:
+        end = start
+        while end < len(line) and line[end] == "`":
+            end += 1
+        return end - start
+
+    def escaped(line: str, index: int) -> bool:
+        backslashes = 0
+        index -= 1
+        while index >= 0 and line[index] == "\\":
+            backslashes += 1
+            index -= 1
+        return backslashes % 2 == 1
+
+    def has_inline_close(line_index: int, start: int, length: int) -> bool:
+        for future_index in range(line_index, len(source_lines)):
+            future = source_lines[future_index]
+            if future_index > line_index and not future.strip():
+                return False
+            position = start if future_index == line_index else 0
+            while position < len(future):
+                if future[position] != "`":
+                    position += 1
+                    continue
+                run = tick_run(future, position)
+                if run == length:
+                    return True
+                position += run
+        return False
+
+    for line_index, line in enumerate(source_lines):
         if fence is not None:
             marker, length = fence
             visible.append(None)
+            inline_ticks = 0
             if re.fullmatch(r" {0,3}" + re.escape(marker) + "{" + str(length) + r",}[ \t]*", line):
                 fence = None
             continue
-        opening = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
-        if opening:
-            run, info = opening.groups()
-            if run[0] != "`" or "`" not in info:
-                fence = (run[0], len(run))
+
+        if not comment:
+            opening = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
+            if opening:
+                run, info = opening.groups()
+                if run[0] != "`" or "`" not in info:
+                    fence = (run[0], len(run))
+                    visible.append(None)
+                    inline_ticks = 0
+                    continue
+            if inline_ticks == 0 and (line.startswith("\t") or re.match(r"^ {4,}", line)):
                 visible.append(None)
                 continue
-        if line.startswith("\t") or re.match(r"^ {4,}", line):
-            visible.append(None)
-        else:
-            visible.append(line)
+
+        masked = list(line)
+        position = 0
+        while position < len(line):
+            if comment:
+                end = line.find("-->", position)
+                mask_end = len(line) if end < 0 else end + 3
+                for index in range(position, mask_end):
+                    masked[index] = " "
+                if end < 0:
+                    position = len(line)
+                    break
+                comment = False
+                position = mask_end
+                continue
+
+            if inline_ticks:
+                if line[position] == "`" and tick_run(line, position) == inline_ticks:
+                    position += inline_ticks
+                    inline_ticks = 0
+                else:
+                    position += 1
+                continue
+
+            if line.startswith("<!--", position) and not escaped(line, position):
+                comment = True
+                continue
+
+            if line[position] == "`" and not escaped(line, position):
+                run = tick_run(line, position)
+                if has_inline_close(line_index, position + run, run):
+                    inline_ticks = run
+                    position += run
+                    continue
+                position += run
+                continue
+
+            position += 1
+
+        visible.append("".join(masked))
     return visible
 
 
@@ -1491,6 +1646,46 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
     matched_quote_rev = commit({report_path: matched_quote_requirements}, "quote valid requirement scalars")
     cli_check("report", matched_quote_rev)
 
+    comment_code_positive = report_content.replace(
+        "This is a historical reconstruction",
+        "<!-- hidden same-line comment --> This is a historical reconstruction", 1)
+    comment_code_positive = comment_code_positive.replace(
+        "The metadata-only assessment",
+        "Literal `<!--` stays code; the matched span `first line\n<!-- stays literal\nlast line` spans lines.\n\n"
+        "```text\n<!-- a fenced code marker is literal\n```\n\n    <!-- an indented code marker is literal\n\n"
+        "<!-- hidden --> The metadata-only assessment", 1)
+    comment_code_positive_rev = commit({report_path: comment_code_positive},
+                                       "keep visible twins and code comment markers")
+    cli_check("report", comment_code_positive_rev)
+
+    comment_markers_inside_comment = report_content.replace(
+        "This is a historical reconstruction",
+        "<!--\n```text\n~~~\n-->\nThis is a historical reconstruction", 1)
+    comment_markers_inside_comment_rev = commit(
+        {report_path: comment_markers_inside_comment}, "ignore code markers within an active report comment")
+    cli_check("report", comment_markers_inside_comment_rev)
+
+    same_line_hidden_heading = report_content.replace(
+        "## Historical reconstruction scope",
+        "<!-- ## Historical reconstruction scope -->", 1)
+    same_line_hidden_heading_rev = commit({report_path: same_line_hidden_heading},
+                                          "hide report heading in a same-line comment")
+    cli_check("report", same_line_hidden_heading_rev, "v04-report-heading")
+
+    multiline_hidden_heading = report_content.replace(
+        "## Historical reconstruction scope",
+        "<!--\n## Historical reconstruction scope\n-->\n", 1)
+    multiline_hidden_heading_rev = commit({report_path: multiline_hidden_heading},
+                                          "hide report heading in a multiline comment")
+    cli_check("report", multiline_hidden_heading_rev, "v04-report-heading")
+
+    unclosed_hidden_heading = report_content.replace(
+        "## Requirement truth and preserved limits",
+        "<!--\n## Requirement truth and preserved limits", 1)
+    unclosed_hidden_heading_rev = commit({report_path: unclosed_hidden_heading},
+                                         "hide report heading with an unclosed comment")
+    cli_check("report", unclosed_hidden_heading_rev, "v04-report-heading")
+
     hidden_scope_heading = report_content.replace(
         "## Historical reconstruction scope", "```text\n## Historical reconstruction scope\n```\n", 1)
     hidden_scope_heading_rev = commit({report_path: hidden_scope_heading},
@@ -1503,6 +1698,11 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
     coded_scope_body = report_content[:scope_start] + "```text\n" + scope_body + "\n```" + report_content[scope_end:]
     coded_scope_body_rev = commit({report_path: coded_scope_body}, "hide report scope body in code")
     cli_check("report", coded_scope_body_rev, "v04-report-scope")
+
+    commented_scope_body = (report_content[:scope_start] + "<!--\n" + scope_body + "\n-->"
+                            + report_content[scope_end:])
+    commented_scope_body_rev = commit({report_path: commented_scope_body}, "hide report scope body in a comment")
+    cli_check("report", commented_scope_body_rev, "v04-report-scope")
 
     hidden_goal_heading = report_content.replace(
         "## Goal Achievement", "```text\n## Goal Achievement\n```\n", 1)
@@ -1521,6 +1721,10 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
     coded_goal_body = report_content[:goal_start] + "~~~text\n" + goal_body + "\n~~~" + report_content[goal_end:]
     coded_goal_body_rev = commit({report_path: coded_goal_body}, "hide report criteria body in tilde fence")
     cli_check("report", coded_goal_body_rev, "v04-report-criteria")
+
+    commented_goal_body = report_content[:goal_start] + "<!--\n" + goal_body + "\n-->" + report_content[goal_end:]
+    commented_goal_body_rev = commit({report_path: commented_goal_body}, "hide report criteria table in a comment")
+    cli_check("report", commented_goal_body_rev, "v04-report-criteria")
 
     no_go_start = report_content.index("## Exact game no-go facts\n\n") + len("## Exact game no-go facts\n\n")
     no_go_end = report_content.index("\n\n## Requirement truth and preserved limits", no_go_start)
@@ -1550,6 +1754,32 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
     hidden_report_boundary_rev = commit({report_path: hidden_report_boundary},
                                         "hide report heading duplicate and fake boundary")
     cli_check("report", hidden_report_boundary_rev)
+
+    hidden_comment_boundary = report_content.replace(
+        "## Exact game no-go facts\n\n",
+        "## Exact game no-go facts\n\n<!--\n## Exact game no-go facts\n"
+        "## Requirement truth and preserved limits\n-->\n\n", 1)
+    hidden_comment_boundary_rev = commit({report_path: hidden_comment_boundary},
+                                         "ignore hidden report duplicate and fake section boundary")
+    cli_check("report", hidden_comment_boundary_rev)
+
+    hidden_global_report_evidence = report_content.replace(
+        "482 protocol candidates remain blocked",
+        "<!-- 482 protocol candidates remain blocked -->")
+    hidden_global_report_evidence_rev = commit({report_path: hidden_global_report_evidence},
+                                               "hide report global evidence in comments")
+    cli_check("report", hidden_global_report_evidence_rev, "v04-report-evidence")
+
+    hidden_report_links = report_content.replace(
+        "[22-EVIDENCE.md](22-EVIDENCE.md)", "<!-- [22-EVIDENCE.md](22-EVIDENCE.md) -->")
+    hidden_report_links_rev = commit({report_path: hidden_report_links}, "hide required report links in comments")
+    cli_check("report", hidden_report_links_rev, "v04-report-links")
+
+    unclosed_report_comment = report_content.replace(
+        "## Requirement truth and preserved limits", "<!-- unclosed report comment\n## Requirement truth and preserved limits", 1)
+    unclosed_report_comment_rev = commit({report_path: unclosed_report_comment},
+                                         "mask report content after an unclosed comment")
+    cli_check("report", unclosed_report_comment_rev, "v04-report-heading")
 
     opposite_fence_close = report_content.replace(
         "## Goal Achievement\n\n",
@@ -1610,6 +1840,37 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
             "  DIAG-02: pending\nrequirement_dispositions:",
             "  DIAG-02: pending\nrequirements:\n  FIXT-01: pending\n  RIGHTS-01: pending\n  DIAG-01: pending\n  DIAG-02: pending\nrequirement_dispositions:", 1),
          "v04-report-frontmatter-duplicate"),
+        ("whitespace alias replacing canonical root", report_content.replace(
+            "requirements:\n", "requirements :\n", 1), "v04-report-requirements"),
+        ("whitespace alias before canonical root", report_content.replace(
+            "requirements:\n", "requirements :\n  FIXT-01: pending\n  RIGHTS-01: satisfied\n"
+            "  DIAG-01: pending\n  DIAG-02: pending\nrequirements:\n", 1),
+         "v04-report-requirements"),
+        ("whitespace alias after canonical root", report_content.replace(
+            "  DIAG-02: pending\nrequirement_dispositions:",
+            "  DIAG-02: pending\nrequirements :\n  FIXT-01: pending\n  RIGHTS-01: satisfied\n"
+            "  DIAG-01: pending\n  DIAG-02: pending\nrequirement_dispositions:", 1),
+         "v04-report-requirements"),
+        ("single-quoted root alias", report_content.replace(
+            "  DIAG-02: pending\nrequirement_dispositions:",
+            "  DIAG-02: pending\n'requirements' :\n  FIXT-01: pending\n  RIGHTS-01: satisfied\n"
+            "  DIAG-01: pending\n  DIAG-02: pending\nrequirement_dispositions:", 1),
+         "v04-report-requirements"),
+        ("double-quoted escaped root alias", report_content.replace(
+            "  DIAG-02: pending\nrequirement_dispositions:",
+            '  DIAG-02: pending\n"requirem\\u0065nts":\n  FIXT-01: pending\n  RIGHTS-01: satisfied\n'
+            "  DIAG-01: pending\n  DIAG-02: pending\nrequirement_dispositions:\n", 1),
+         "v04-report-requirements"),
+        ("tab before root alias colon", report_content.replace(
+            "  DIAG-02: pending\nrequirement_dispositions:",
+            "  DIAG-02: pending\nrequirements\t:\n  FIXT-01: pending\n  RIGHTS-01: satisfied\n"
+            "  DIAG-01: pending\n  DIAG-02: pending\nrequirement_dispositions:", 1),
+         "v04-report-requirements"),
+        ("explicit-key root alias", report_content.replace(
+            "  DIAG-02: pending\nrequirement_dispositions:",
+            "  DIAG-02: pending\n? requirements\n: {FIXT-01: pending, RIGHTS-01: satisfied, "
+            "DIAG-01: pending, DIAG-02: pending}\nrequirement_dispositions:", 1),
+         "v04-report-requirements"),
         ("mismatched requirement quote", report_content.replace(
             "  RIGHTS-01: pending", "  RIGHTS-01: 'pending\"", 1), "v04-report-requirements"),
         ("malformed nested requirement", report_content.replace("  DIAG-02: pending", "    DIAG-02: pending", 1),
@@ -1690,7 +1951,6 @@ The next command is owner-only: `/gsd-audit-milestone v0.4`. No next phase or mi
     handoff_files = {state_path: state_handoff, project_path: project_state, continuation_path: continuation}
     handoff_rev = commit(handoff_files, "reconcile current handoff")
     cli_check("handoff", handoff_rev)
-
     state_hidden_heading = state_handoff.replace(
         "## Owner Handoff\n", "```text\n## Owner Handoff\n```\n\n", 1)
     state_hidden_heading_rev = commit({state_path: state_hidden_heading}, "hide STATE handoff heading in code")
@@ -1706,6 +1966,55 @@ The next command is owner-only: `/gsd-audit-milestone v0.4`. No next phase or mi
     continuation_hidden_heading_rev = commit(
         {continuation_path: continuation_hidden_heading}, "hide continuation handoff heading in code")
     cli_check("handoff", continuation_hidden_heading_rev, "v04-handoff-heading")
+
+    git("checkout", "-q", handoff_rev)
+    handoff_comment_cases = (
+        ("STATE", state_path, state_handoff, "Owner Handoff", phase22_link_state,
+         "The v0.4 remains open.", "v04-handoff-open", "v04-handoff-stale"),
+        ("PROJECT", project_path, project_state, "Current State", phase22_link_project,
+         "The v0.4 remains open.", "v04-handoff-open", "v04-handoff-pending"),
+        ("continuation", continuation_path, continuation, "Owner Handoff", phase22_link_continuation,
+         "No next phase or milestone is selected or started.", "v04-handoff-phase", "v04-handoff-pending"),
+    )
+    for label, path, document, title, link_path, global_fact, global_error, body_error in handoff_comment_cases:
+        heading_line = f"## {title}\n"
+        positive_comment = document.replace(heading_line,
+                                            f"## {title} <!-- visible heading after comment close -->\n", 1)
+        positive_rev = commit({path: positive_comment}, f"keep {label} visible with trailing comment")
+        cli_check("handoff", positive_rev)
+        git("checkout", "-q", handoff_rev)
+
+        same_line_heading = document.replace(heading_line, f"<!-- ## {title} -->\n", 1)
+        same_line_heading_rev = commit({path: same_line_heading}, f"hide {label} heading on one line")
+        cli_check("handoff", same_line_heading_rev, "v04-handoff-heading")
+        git("checkout", "-q", handoff_rev)
+
+        multiline_heading = document.replace(heading_line, f"<!--\n## {title}\n-->\n", 1)
+        multiline_heading_rev = commit({path: multiline_heading}, f"hide {label} heading across lines")
+        cli_check("handoff", multiline_heading_rev, "v04-handoff-heading")
+        git("checkout", "-q", handoff_rev)
+
+        hidden_body = document.replace(f"## {title}\n\n", f"## {title}\n\n<!--\n", 1) + "\n-->\n"
+        hidden_body_rev = commit({path: hidden_body}, f"hide {label} handoff body in a comment")
+        cli_check("handoff", hidden_body_rev, body_error)
+        git("checkout", "-q", handoff_rev)
+
+        hidden_global = document.replace(global_fact, f"<!-- {global_fact} -->", 1)
+        hidden_global_rev = commit({path: hidden_global}, f"hide {label} global fact in a comment")
+        cli_check("handoff", hidden_global_rev, global_error)
+        git("checkout", "-q", handoff_rev)
+
+        link = f"[22-VERIFICATION.md]({link_path})"
+        hidden_link = document.replace(link, f"<!-- {link} -->", 1)
+        hidden_link_rev = commit({path: hidden_link}, f"hide {label} report link in a comment")
+        cli_check("handoff", hidden_link_rev, "v04-handoff-link")
+        git("checkout", "-q", handoff_rev)
+
+    unclosed_continuation = continuation.replace(
+        "## Owner Handoff", "<!-- unclosed continuation comment\n## Owner Handoff", 1)
+    unclosed_continuation_rev = commit({continuation_path: unclosed_continuation},
+                                      "mask continuation heading after unclosed comment")
+    cli_check("handoff", unclosed_continuation_rev, "v04-handoff-heading")
 
     git("checkout", "-q", handoff_rev)
     state_coded_body = state_handoff.replace("## Owner Handoff\n\n", "## Owner Handoff\n\n```text\n", 1) + "\n```\n"
