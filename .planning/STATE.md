@@ -3,12 +3,12 @@ gsd_state_version: "1.0"
 milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: "23.1"
-current_phase_name: Close v0.4 requirement and verification gaps (INSERTED)
+current_phase_name: Close v0.4 requirement and verification gaps
 current_plan: 1 of 1
 status: blocked
 stopped_at: "D-198 recovery scope recorded; next: $gsd-autonomous --from 23.1"
-last_updated: "2026-11-15T14:01:09.211Z"
-state_head: 007955bf7d6e30cb52e25de2e5b22367dc84a583
+last_updated: "2026-11-15T14:24:47.416Z"
+state_head: 4045cb5ebdc9784854fd1e9b36418400d1090050
 progress:
   total_phases: 5
   completed_phases: 4
