@@ -3,12 +3,12 @@ gsd_state_version: "1.0"
 milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: "23.1"
-current_phase_name: Close v0.4 Requirement and Verification Gaps
+current_phase_name: Close v0.4 requirement and verification gaps (INSERTED)
 current_plan: 1 of 1
-status: verifying
-stopped_at: Completed GB-23.1-01 plan; mandatory independent review and final phase verification pending
-last_updated: "2026-11-14T17:42:56.469Z"
-state_head: 80f0dceedd3ed4de2a94f04df015dbddfb96deac
+status: blocked
+stopped_at: Phase 23.1 blocked after the sole D-195 review found two Critical issues; owner decides whether to authorize a new recovery scope
+last_updated: "2026-11-15T02:37:59.712Z"
+state_head: 80d980ad165f840db4c7d180efb95668985d55f4
 progress:
   total_phases: 5
   completed_phases: 4
@@ -23,12 +23,12 @@ last_activity: 2026-11-14
 ## Current Position
 
 **Current Phase:** 23.1
-**Current Phase Name:** Close v0.4 Requirement and Verification Gaps
+**Current Phase Name:** Close v0.4 requirement and verification gaps (INSERTED)
 **Current Plan:** 1 of 1
-**Status:** Phase complete — ready for verification
+**Status:** blocked
 **Progress:** [████████░░] 80%
 
-Completed stages: **Phase 23 — Qualified v0.4.0 Release**, the **v0.4 milestone audit**, and the three tasks in **Phase 23.1 execution**. The authorized D-194 corrections for the nested requirements map, protected Setext headings, and planning-hygiene control floor are implemented; the checker self-test, immutable report contract, and 125/124 wrapper boundary pass. Phase 23.1 remains incomplete while its one mandatory independent review and final verification are pending. The prior review and per-finding disposition remain [23.1-REVIEW.md](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW.md) and [23.1-REVIEW-DISPOSITION.md](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW-DISPOSITION.md); no `23.1-VERIFICATION.md` was generated. The milestone audit remains [gaps_found](v0.4-MILESTONE-AUDIT.md); FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending.
+Completed stages: Phase 23 — Qualified v0.4.0 Release and the v0.4 milestone audit are complete. Phase 23.1 implementation and its sole D-195 review are complete; the review found two Critical blockers (YAML-equivalent requirements root spelling and hidden HTML-comment content). Phase 23.1 remains blocked and incomplete, no phase verification was run, and no further fix or review cycle is authorized.
 
 ## Qualified Release
 
@@ -53,14 +53,14 @@ The **v0.4 milestone audit remains open with gaps found**. Phase 22 now has a hi
 
 The diagnostic record remains metadata-only: 513 names, seven unresolved gates, admitted=0, executed=0; 482 protocol candidates remain blocked and the 31 initial exclusions do not complete suite accounting. Potion Panic stopped before a ref/commit was returned from its creator-linked repository, and its fork is not source authority. µCity 1.3's required source include has no identified grant/notice under the recorded scope. Neither outcome establishes permission or a license prohibition.
 
-Phase 23.1 — Close v0.4 requirement and verification gaps — has one D-194 correction cycle within its existing one-plan allocation. The three source corrections and focused direct checks pass; the enabled mandatory independent review and final phase verification are pending. The prior review findings remain the review input until that gate records its result. If a finding remains blocking or a new blocker is found, return to the owner; no further fix cycle is authorized. No next phase or milestone is selected. **The v0.4 remains open.** D-103's exact-final-head full-suite gate remains unfulfilled; no broad local suite and no third local lifecycle retest are permitted. The publication allowance is spent: no release retry and no tag/asset/rights action. Both automatic-advance flags remain false. The later `/gsd-audit-milestone v0.4` route remains owner-only, downstream of Phase 23.1 completion, and is not started. [Continuation](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/.continue-here.md), [Phase 23.1 review](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW.md), [Phase 22 report](phases/GB-22-composition-and-microtest-evidence/22-VERIFICATION.md), [Phase 23 evidence](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md), [roadmap](ROADMAP.md), and [project](PROJECT.md) retain the evidence and limits.
+Phase 23.1's one D-194 correction cycle is consumed. Its independent review records two Critical correctness blockers: the requirement map can be read from the wrong YAML parent, and ATX headings inside code blocks can satisfy protected sections. The relevant security threats are open; final phase verification was not run. No further fix or review cycle is authorized. The owner acts next to decide whether to authorize a new recovery scope: `/gsd-discuss-phase 23.1`. No next phase or milestone is selected. **The v0.4 remains open.** D-103's exact-final-head full-suite gate remains unfulfilled; no broad local suite and no third local lifecycle retest are permitted. The publication allowance is spent: no release retry and no tag/asset/rights action. Both automatic-advance flags remain false. The later `/gsd-audit-milestone v0.4` route remains owner-only, downstream of Phase 23.1 completion, and is not started. [Continuation](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/.continue-here.md), [Phase 23.1 review](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW.md), [Phase 23.1 security](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-SECURITY.md), [Phase 22 report](phases/GB-22-composition-and-microtest-evidence/22-VERIFICATION.md), [Phase 23 evidence](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md), [roadmap](ROADMAP.md), and [project](PROJECT.md) retain the evidence and limits.
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
 - Phase 23.1 inserted after Phase 23: Close v0.4 requirement and verification gaps (URGENT)
-- Phase 23.1 plan tasks completed, but final review left two Critical issues and one Warning after the allowed two fix rounds. Owner rescope decision pending; `/gsd-discuss-phase 23.1`. The milestone audit remains downstream.
+- Phase 23.1 plan tasks and the one D-194 correction cycle completed; the independent review still found two Critical issues. No further cycle is authorized. Owner must decide whether to authorize a new recovery scope; `/gsd-discuss-phase 23.1`. The milestone audit remains downstream.
 
 ## Performance Metrics
 
@@ -74,9 +74,15 @@ Phase 23.1 — Close v0.4 requirement and verification gaps — has one D-194 co
 - [Phase 23.1]: D-193 permits only the exact active v0.4 phase set and cap allocation; all normal caps remain unchanged.
 - [Phase 23.1]: D-141's historical synthetic-plus-metadata scope is documented without satisfying FIXT-01, RIGHTS-01, DIAG-01, or DIAG-02.
 - [Phase GB-23.1]: D-194 permits exactly one same-plan correction and independent review for CR-01, CR-02, and WR-01; all other D-193 stops remain.
+- [Phase 23.1]: D-195: one final same-plan CR-01/CR-02 recovery and independent review authorized; preserve all other stops; next route is -plan-phase 23.1 --skip-research.
+- [Phase 23.1]: D-195: one final same-plan CR-01/CR-02 recovery and independent review authorized; preserve all other stops; next route is $gsd-plan-phase 23.1 --skip-research. Use this corrected route; the immediately preceding note had a shell-expanded command.
 
 ## Session
 
-**Last session:** 2026-11-14T17:42:56.170Z
-**Stopped at:** Completed GB-23.1-01 plan; mandatory independent review and final phase verification pending
+**Last session:** 2026-11-15T02:36:08.401Z
+**Stopped at:** Phase 23.1 blocked after the sole D-195 review found two Critical issues; owner decides whether to authorize a new recovery scope
 **Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/.continue-here.md
+
+### Blockers
+
+- D-195 review at 88f851e found two Critical correctness issues: YAML-equivalent requirements root keys bypass duplicate detection, and multiline or unclosed HTML comments can satisfy visible-section checks. The sole D-195 fix/review cycle is consumed; do not run phase verification or another fix/review cycle. Owner acts next to decide whether to authorize a new recovery scope with $gsd-discuss-phase 23.1.
