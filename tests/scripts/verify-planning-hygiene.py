@@ -376,50 +376,43 @@ def frontmatter_objects(text: str, key: str) -> list[dict[str, str]] | None:
 
 
 def frontmatter_mapping_pairs(text: str, key: str) -> list[tuple[str, str]] | None:
-    """Read a simple nested frontmatter map without erasing duplicate keys."""
+    """Read one root-level simple frontmatter map without erasing duplicate keys."""
     match = GAP_FRONTMATTER.match(text.replace("\r\n", "\n"))
     if match is None:
         return None
     lines = match.group(1).splitlines()
-    start = next((index for index, line in enumerate(lines) if line.strip() == f"{key}:"), None)
-    if start is None:
+    roots = [index for index, line in enumerate(lines) if line == f"{key}:"]
+    if len(roots) != 1:
         return None
     pairs: list[tuple[str, str]] = []
-    for line in lines[start + 1:]:
+    for line in lines[roots[0] + 1:]:
         if not line.strip():
             continue
         if not line[0].isspace():
             break
-        entry = re.fullmatch(r" {2}([A-Za-z0-9_-]+):[ \t]*(.*?)\s*", line)
+        if not line.startswith("  ") or line.startswith("   "):
+            return None
+        entry = re.fullmatch(r" {2}([A-Za-z0-9_-]+):[ \t]*(.*)", line)
         if entry is None:
             return None
-        pairs.append((entry.group(1), entry.group(2).strip().strip("\"'")))
+        raw_value = entry.group(2).strip(" \t")
+        if not raw_value:
+            return None
+        if raw_value[0] in "\"'":
+            quote = raw_value[0]
+            if len(raw_value) < 2 or raw_value[-1] != quote:
+                return None
+            value = raw_value[1:-1]
+        else:
+            value = raw_value
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", value):
+            return None
+        pairs.append((entry.group(1), value))
     return pairs
 
 
-def markdown_section(text: str, title: str) -> str:
-    lines = text.splitlines()
-    heading_pattern = re.compile(r"^#{1,4}\s+" + re.escape(title) + r"(?:\s+#+)?\s*$", re.IGNORECASE)
-    start = next((index for index, line in enumerate(lines)
-                  if heading_pattern.match(line)), None)
-    if start is None:
-        return ""
-    next_heading_pattern = re.compile(r"^#{1,4}\s+.*?(?:\s+#+)?\s*$")
-    end = next((index for index in range(start + 1, len(lines))
-                if next_heading_pattern.match(lines[index])), len(lines))
-    return "\n".join(lines[start + 1:end])
-
-
-def markdown_heading_count(text: str, title: str) -> int:
-    """Count exact Markdown headings for a contract section, case-insensitively."""
-    pattern = re.compile(r"^#{1,6}\s+" + re.escape(title) + r"(?:\s+#+)?\s*$", re.IGNORECASE)
-    return sum(bool(pattern.match(line)) for line in text.splitlines())
-
-
-def protected_setext_headings(text: str, titles: tuple[str, ...]) -> list[str]:
-    """Find protected plain-text Setext titles outside fenced and indented code."""
-    normalize = lambda value: " ".join(value.lower().split())
-    protected = {normalize(title): title for title in titles}
+def visible_markdown_lines(text: str) -> list[str | None]:
+    """Keep visible Markdown lines and mask fenced or indented code without shifting boundaries."""
     visible: list[str | None] = []
     fence: tuple[str, int] | None = None
     for line in text.replace("\r\n", "\n").splitlines():
@@ -429,15 +422,44 @@ def protected_setext_headings(text: str, titles: tuple[str, ...]) -> list[str]:
             if re.fullmatch(r" {0,3}" + re.escape(marker) + "{" + str(length) + r",}[ \t]*", line):
                 fence = None
             continue
-        opening = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        opening = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
         if opening:
-            marker = opening.group(1)
-            fence = (marker[0], len(marker))
-            visible.append(None)
-        elif line.startswith("\t") or re.match(r"^ {4,}", line):
+            run, info = opening.groups()
+            if run[0] != "`" or "`" not in info:
+                fence = (run[0], len(run))
+                visible.append(None)
+                continue
+        if line.startswith("\t") or re.match(r"^ {4,}", line):
             visible.append(None)
         else:
             visible.append(line)
+    return visible
+
+
+def markdown_section(text: str, title: str) -> str:
+    lines = visible_markdown_lines(text)
+    heading_pattern = re.compile(r"^#{1,4}\s+" + re.escape(title) + r"(?:\s+#+)?\s*$", re.IGNORECASE)
+    start = next((index for index, line in enumerate(lines)
+                  if line is not None and heading_pattern.match(line)), None)
+    if start is None:
+        return ""
+    next_heading_pattern = re.compile(r"^#{1,4}\s+.*?(?:\s+#+)?\s*$")
+    end = next((index for index in range(start + 1, len(lines))
+                if lines[index] is not None and next_heading_pattern.match(lines[index])), len(lines))
+    return "\n".join(line if line is not None else "" for line in lines[start + 1:end])
+
+
+def markdown_heading_count(text: str, title: str) -> int:
+    """Count exact Markdown headings for a contract section, case-insensitively."""
+    pattern = re.compile(r"^#{1,6}\s+" + re.escape(title) + r"(?:\s+#+)?\s*$", re.IGNORECASE)
+    return sum(bool(line is not None and pattern.match(line)) for line in visible_markdown_lines(text))
+
+
+def protected_setext_headings(text: str, titles: tuple[str, ...]) -> list[str]:
+    """Find protected plain-text Setext titles outside fenced and indented code."""
+    normalize = lambda value: " ".join(value.lower().split())
+    protected = {normalize(title): title for title in titles}
+    visible = visible_markdown_lines(text)
 
     found: list[str] = []
     for index, line in enumerate(visible):
@@ -549,6 +571,8 @@ def check_v04_report(repo: Path, rev: str, baseline_rev: str,
         return "", errors + ["v04-report-missing: Phase 22 verification report cannot be read from --rev"]
     report = raw.decode("utf-8", errors="replace")
     fields, body = frontmatter_fields(report)
+    visible_body = "\n".join(line if line is not None else "" for line in visible_markdown_lines(body))
+    visible_body_norm = " ".join(visible_body.lower().split())
     duplicate_fields = frontmatter_duplicates(report)
     if duplicate_fields:
         errors.append("v04-report-frontmatter-duplicate: " + ", ".join(duplicate_fields))
@@ -582,11 +606,15 @@ def check_v04_report(repo: Path, rev: str, baseline_rev: str,
         errors.append("v04-report-requirements: four original requirements must remain Pending with their original owners")
     requirement_pairs = frontmatter_mapping_pairs(report, "requirements")
     expected_requirements = {key: "pending" for key in V04_PENDING_OWNERS}
-    if (requirement_pairs is None
-            or len(requirement_pairs) != len(expected_requirements)
-            or len({key for key, _ in requirement_pairs}) != len(requirement_pairs)
-            or dict(requirement_pairs) != expected_requirements
-            or set(dict(requirement_pairs)) != set(actual_dispositions)):
+    requirements_valid = (
+        requirement_pairs is not None
+        and len(requirement_pairs) == len(expected_requirements)
+        and len({key for key, _ in requirement_pairs}) == len(requirement_pairs)
+        and {key for key, _ in requirement_pairs} == set(expected_requirements)
+        and all(value == expected_requirements[key] for key, value in requirement_pairs)
+        and {key for key, _ in requirement_pairs} == set(actual_dispositions)
+    )
+    if not requirements_valid:
         errors.append("v04-report-requirements: nested requirements must exactly match the four Pending dispositions")
 
     implementation_tree = git_run(repo, "show", "-s", "--format=%T", V04_IMPLEMENTATION_HEAD)
@@ -617,9 +645,10 @@ def check_v04_report(repo: Path, rev: str, baseline_rev: str,
             key: (owner, "Pending") for key, owner in V04_PENDING_OWNERS.items()}:
         errors.append("v04-report-requirements: original Pending owners do not match REQUIREMENTS.md")
 
-    if "historical reconstruction scope" not in body.lower() or "synthetic" not in body.lower() or "metadata-only" not in body.lower():
+    if ("historical reconstruction scope" not in visible_body_norm
+            or "synthetic" not in visible_body_norm or "metadata-only" not in visible_body_norm):
         errors.append("v04-report-scope: report must identify the historical synthetic-plus-metadata reconstruction scope")
-    if "482 protocol candidates remain blocked" not in " ".join(body.lower().split()):
+    if "482 protocol candidates remain blocked" not in visible_body_norm:
         errors.append("v04-report-evidence: report must retain the blocked 482 protocol-candidate count")
     report_headings = ("Historical reconstruction scope", "Goal Achievement", "Exact game no-go facts",
                        "Requirement truth and preserved limits")
@@ -669,7 +698,8 @@ def check_v04_report(repo: Path, rev: str, baseline_rev: str,
     required_link_names = ("22-EVIDENCE.md", "22-SOURCE-AUDIT.md", *V04_PHASE22_SUMMARIES)
     required_link_paths = [phase_file(paths, "22", name) for name in required_link_names]
     if (not report_path or any(path is None for path in required_link_paths)
-            or any(not has_local_link(report, report_path, path) for path in required_link_paths if path is not None)):
+            or any(not has_local_link(visible_body, report_path, path)
+                   for path in required_link_paths if path is not None)):
         errors.append("v04-report-links: source, summary, and evidence key links must resolve in the immutable report revision")
     if evidence_paths is None or any(phase_file(evidence_paths, "22", name) is None for name in ("22-EVIDENCE.md", "22-SOURCE-AUDIT.md")):
         errors.append("v04-report-links: pinned evidence commit lacks its Phase 22 evidence or source audit")
@@ -682,7 +712,7 @@ def check_v04_report(repo: Path, rev: str, baseline_rev: str,
     limits = " ".join(markdown_section(body, "Requirement truth and preserved limits").lower().split())
     if not all(term in limits for term in ("license prohibition", "permission", "hardware", "perceptual", "timing", "linux", "steam deck", "playstead")):
         errors.append("v04-report-limits: software-model, rights, hardware, perception, timing, and platform limits are incomplete")
-    if "full milestone closure remains unsatisfied" not in " ".join(body.lower().split()):
+    if "full milestone closure remains unsatisfied" not in visible_body_norm:
         errors.append("v04-report-open: report must say full milestone closure remains unsatisfied")
     return "v04-reconciliation pass stage=report", errors
 
@@ -728,10 +758,10 @@ def check_v04_handoff(repo: Path, rev: str, baseline_rev: str,
 
     state_handoff = markdown_section(state, "Owner Handoff")
     project_state = markdown_section(project, "Current State")
-    current_handoff = markdown_section(continuation, "Owner Handoff") or continuation
+    current_handoff = markdown_section(continuation, "Owner Handoff")
     state_norm = " ".join(state_handoff.lower().split())
     project_norm = " ".join(project_state.lower().split())
-    continuation_norm = " ".join(continuation.lower().split())
+    continuation_norm = " ".join(current_handoff.lower().split())
     if not all(value in state_norm for value in ("phase 22", "historical verification", "phase 20", "stale", "phase 21", "stale")):
         errors.append("v04-handoff-stale: current state must mark Phase 20/21 reports stale and Phase 22 report historical")
     required_pending = ("FIXT-01", "RIGHTS-01", "DIAG-01", "DIAG-02")
@@ -750,14 +780,16 @@ def check_v04_handoff(repo: Path, rev: str, baseline_rev: str,
                                                "no third local lifecycle retest", "no release retry", "no tag/asset/rights action")):
         errors.append("v04-handoff-stops: preserved final-suite, lifecycle, publication, tag, asset, and rights stops are incomplete")
     route = "/gsd-audit-milestone v0.4"
-    if route not in state_handoff or route not in continuation or "owner-only" not in continuation_norm:
+    if route not in state_handoff or route not in current_handoff or "owner-only" not in continuation_norm:
         errors.append("v04-handoff-route: current handoff must preserve the owner-only audit route")
     if "no next phase or milestone is selected" not in continuation_norm or "phase 23.1" not in continuation_norm:
         errors.append("v04-handoff-phase: continuation must close Phase 23.1 without selecting or starting another phase")
     for path, text in ((state_path, state), (project_path, project), (continuation_path, continuation)):
-        if report_path and not has_local_link(text, path, report_path):
+        visible_text = "\n".join(line if line is not None else "" for line in visible_markdown_lines(text))
+        if report_path and not has_local_link(visible_text, path, report_path):
             errors.append(f"v04-handoff-link: {path.rsplit('/', 1)[-1]} does not link to the Phase 22 report")
-    if not report or "full milestone closure remains unsatisfied" not in " ".join(report.lower().split()):
+    visible_report = "\n".join(line if line is not None else "" for line in visible_markdown_lines(report))
+    if not report or "full milestone closure remains unsatisfied" not in " ".join(visible_report.lower().split()):
         errors.append("v04-handoff-report: current handoff report is missing or overstates milestone completion")
     return "v04-reconciliation pass stage=handoff", errors
 
@@ -1445,7 +1477,9 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         if expected_code is None:
             expected_line = f"v04-reconciliation pass stage={stage}"
             if result != 0 or output.getvalue().strip() != expected_line:
-                raise SystemExit(f"planning-hygiene self-test FAIL: {stage} CLI positive: {result} {output.getvalue()} {error.getvalue()}")
+                commit_message = git("show", "-s", "--format=%s", rev)
+                raise SystemExit(f"planning-hygiene self-test FAIL: {stage} CLI positive at {rev}: "
+                                 f"{commit_message}: {result} {output.getvalue()} {error.getvalue()}")
         elif result != 1 or expected_code not in error.getvalue():
             raise SystemExit(f"planning-hygiene self-test FAIL: {stage} CLI negative wanted {expected_code}: {result} {output.getvalue()} {error.getvalue()}")
         controls += 1
@@ -1456,6 +1490,19 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         "  FIXT-01: 'pending'\n  RIGHTS-01: \"pending\"\n  DIAG-01: pending\n  DIAG-02: pending", 1)
     matched_quote_rev = commit({report_path: matched_quote_requirements}, "quote valid requirement scalars")
     cli_check("report", matched_quote_rev)
+
+    hidden_scope_heading = report_content.replace(
+        "## Historical reconstruction scope", "```text\n## Historical reconstruction scope\n```\n", 1)
+    hidden_scope_heading_rev = commit({report_path: hidden_scope_heading},
+                                      "hide historical report scope heading in code")
+    cli_check("report", hidden_scope_heading_rev, "v04-report-heading")
+
+    scope_start = report_content.index("## Historical reconstruction scope\n\n") + len("## Historical reconstruction scope\n\n")
+    scope_end = report_content.index("\n\n## Goal Achievement", scope_start)
+    scope_body = report_content[scope_start:scope_end]
+    coded_scope_body = report_content[:scope_start] + "```text\n" + scope_body + "\n```" + report_content[scope_end:]
+    coded_scope_body_rev = commit({report_path: coded_scope_body}, "hide report scope body in code")
+    cli_check("report", coded_scope_body_rev, "v04-report-scope")
 
     hidden_goal_heading = report_content.replace(
         "## Goal Achievement", "```text\n## Goal Achievement\n```\n", 1)
@@ -1483,6 +1530,20 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
     coded_no_go_body_rev = commit({report_path: coded_no_go_body}, "indent report no-go facts as code")
     cli_check("report", coded_no_go_body_rev, "v04-report-no-go")
 
+    hidden_limits_heading = report_content.replace(
+        "## Requirement truth and preserved limits",
+        "~~~text\n## Requirement truth and preserved limits\n~~~\n", 1)
+    hidden_limits_heading_rev = commit({report_path: hidden_limits_heading},
+                                       "hide report limits heading in code")
+    cli_check("report", hidden_limits_heading_rev, "v04-report-heading")
+
+    limits_start = report_content.index("## Requirement truth and preserved limits\n\n") + len(
+        "## Requirement truth and preserved limits\n\n")
+    limits_body = report_content[limits_start:]
+    coded_limits_body = report_content[:limits_start] + "~~~text\n" + limits_body + "\n~~~\n"
+    coded_limits_body_rev = commit({report_path: coded_limits_body}, "hide report limits body in code")
+    cli_check("report", coded_limits_body_rev, "v04-report-limits")
+
     hidden_report_boundary = report_content.replace(
         "## Exact game no-go facts\n\n",
         "## Exact game no-go facts\n\n```text\n## Requirement truth and preserved limits\n```\n\n", 1)
@@ -1492,14 +1553,14 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
 
     opposite_fence_close = report_content.replace(
         "## Goal Achievement\n\n",
-        "## Goal Achievement\n\n```text\n~~~\n## Goal Achievement\n```\n\n", 1)
+        "## Goal Achievement\n\n```text\n~~~\n## Goal Achievement\n```  \n\n", 1)
     opposite_fence_close_rev = commit({report_path: opposite_fence_close},
                                       "keep opposite fence marker inside code")
     cli_check("report", opposite_fence_close_rev)
 
     shorter_fence_close = report_content.replace(
         "## Goal Achievement\n\n",
-        "## Goal Achievement\n\n````text\n```\n## Goal Achievement\n````\n\n", 1)
+        "## Goal Achievement\n\n````text\n```\n## Goal Achievement\n````  \n\n", 1)
     shorter_fence_close_rev = commit({report_path: shorter_fence_close},
                                      "keep shorter fence marker inside code")
     cli_check("report", shorter_fence_close_rev)
@@ -1661,6 +1722,7 @@ The next command is owner-only: `/gsd-audit-milestone v0.4`. No next phase or mi
                                          "hide continuation handoff body in code")
     cli_check("handoff", continuation_coded_body_rev, "v04-handoff-pending")
 
+    git("checkout", "-q", handoff_rev)
     for label, path, document, title in (
             ("STATE", state_path, state_handoff, "Owner Handoff"),
             ("PROJECT", project_path, project_state, "Current State"),
