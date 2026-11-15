@@ -190,7 +190,7 @@ The [source coverage and dependency audit](phases/GB-23-qualified-v0-4-0-release
 **Plans:** The single plan's original tasks, D-194/D-195 recovery history, D-196 Task 5 and D-198 Task 6 are recorded in its SUMMARY. D-198 source candidate `12fcb174885d7682cade9c88a5316c00fa4b0c0a` passed its 287-control self-test, immutable report/handoff checks, 125/124 wrapper boundary, summary/UAT closure, and two named CTests after configure-only generation. The sole D-198 review found a Critical issue: U+2028 inside a YAML block scalar can fabricate the required root map, and the production CLI accepts the malformed report. D-199's bounded Task 7 checks passed at source candidate `7fda5b2fb11d62a680dc4a7340eee7c85e2caf90`; the sole independent review remains pending. Phase 23.1 remains incomplete; no phase verifier ran. Resume with `$gsd-autonomous --from 23.1`; if review finds a Critical or new blocker, stop before verification. Preserve D-103's suite and all other explicit stops. Finish at `main` only after an approved clean reconciliation.
 
 Plans:
-- [ ] 23.1-01-PLAN.md — Enforce the exact cap exception, reconstruct Phase 22 verification from immutable evidence, and reconcile the open-milestone handoff with automated closure; D-199 bounded checks pass and the sole independent review remains pending.
+- [x] 23.1-01-PLAN.md — Enforce the exact cap exception, reconstruct Phase 22 verification from immutable evidence, and reconcile the open-milestone handoff with automated closure; D-199 bounded checks pass and the sole independent review remains pending.
 
 ## Requirement Coverage
 

@@ -5,10 +5,10 @@ milestone_name: Evidence Floor
 current_phase: "23.1"
 current_phase_name: Close v0.4 requirement and verification gaps
 current_plan: 1
-status: In progress — D-199 recovery authorized; Critical finding remains open
-stopped_at: "Phase 23.1 D-199 rescope captured; next: $gsd-autonomous --from 23.1"
-last_updated: "2026-11-15T16:07:04.086Z"
-state_head: afc2f62a78e6e5b77ee4f2869de238c851b2968f
+status: Blocked — D-199 sole review found a Critical YAML scalar-boundary bypass; Phase 23.1 remains incomplete and unverified
+stopped_at: "Phase 23.1 D-199 blocked by Critical review finding; owner next: $gsd-discuss-phase 23.1"
+last_updated: "2026-11-15T17:41:03.784Z"
+state_head: b111cb822426c0f2733580e600054aa8bc4ff0d1
 progress:
   total_phases: 5
   completed_phases: 4
@@ -25,10 +25,10 @@ last_activity: 2026-11-15
 **Current Phase:** 23.1
 **Current Phase Name:** Close v0.4 requirement and verification gaps
 **Current Plan:** 1
-**Status:** In progress — D-199 recovery authorized; Critical finding remains open
+**Status:** Blocked — D-199 sole review found a Critical YAML scalar-boundary bypass; Phase 23.1 remains incomplete and unverified
 **Progress:** [████████░░] 80%
 
-Completed stages: Phase 23 release and the v0.4 gaps audit are recorded. D-198 Task 6 passed its bounded checks, but the sole review found a Critical YAML block-scalar U+2028 bypass. D-199 authorizes one final same-plan Task 7 and one independent review. Next work: Phase 23.1 — Close v0.4 requirement and verification gaps. Resume with $gsd-autonomous --from 23.1.
+Completed stages: Phase 23 release and the v0.4 gaps audit are recorded. Phase 23.1 Task 7 passed its bounded checks at source candidate 7fda5b2fb11d62a680dc4a7340eee7c85e2caf90; the sole D-199 review found a Critical Unicode whitespace bypass. Phase 23.1 remains incomplete and unverified; no verifier or further fix/review ran. The D-199 allowance is exhausted. Owner next: $gsd-discuss-phase 23.1.
 
 ## Qualified Release
 
@@ -89,9 +89,10 @@ The tested D-199 source candidate is `7fda5b2fb11d62a680dc4a7340eee7c85e2caf90`:
 
 ## Session
 
-**Last session:** 2026-11-15T16:00:29.576Z
-**Stopped at:** Phase 23.1 D-199 rescope captured; next: $gsd-autonomous --from 23.1
-**Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-CONTEXT.md
+**Last session:** 2026-11-15T17:41:03.643Z
+**Stopped at:** Phase 23.1 D-199 blocked by Critical review finding; owner next: $gsd-discuss-phase 23.1
+**Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/.continue-here.md
 
 ### Blockers
-None
+
+- D-199 sole review found Critical CR-01 at exact candidate 7fda5b2fb11d62a680dc4a7340eee7c85e2caf90: Unicode-aware YAML whitespace normalization can fabricate required fields and root keys. D-199 allowance exhausted; Phase 23.1 stops before verification. Owner next: $gsd-discuss-phase 23.1.
