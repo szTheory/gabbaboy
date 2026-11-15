@@ -81,7 +81,7 @@ V04_APPROVED_PHASE_CAPS = {"20": 9, "21": 8, "22": 12, "23": 10, "23.1": 1}
 V04_EXCEPTION_TEXT = "one exact exception for the active v0.4 phase set 20/21/22/23/23.1"
 
 PHASE_HEADING = re.compile(r"^### Phase (\d+(?:\.\d+)?):")
-CAP_LINE = re.compile(r"^\*\*Plan cap\*\*: (\d+)\s*$")
+CAP_LINE = re.compile(r"^\*\*Plan cap\*\*: (\d+)[ \t]*$")
 # A plan is any NN-<digit-led id>-PLAN*.md file: the canonical NN-NN-PLAN.md and suffixed forms such as NN-NNa-PLAN.md or
 # NN-NN-PLAN-extra.md count too, so a plan cannot dodge the cap by its name. NN-PLAN-CHECK.md (no id) is not a plan.
 PLAN_FILE = re.compile(r"^(\d+(?:\.\d+)?)-\d[^/\\]*-PLAN[^/\\]*\.md$", re.IGNORECASE)
@@ -94,14 +94,25 @@ LESSON_HEADING = re.compile(r"^### ([A-Z0-9]+(?:-[A-Z0-9]+)+) / ")
 DATA = Path(__file__).resolve().parents[1] / "data" / "planning-hygiene"
 
 
+def markdown_source_lines(text: str) -> list[str]:
+    """Normalize Markdown line endings and split only on CommonMark line endings."""
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    if not normalized:
+        return []
+    lines = normalized.split("\n")
+    if lines[-1] == "":
+        lines.pop()
+    return lines
+
+
 def phase_details(roadmap: str) -> list[str] | None:
     """The lines of the '## Phase Details' section, or None when it is absent."""
-    lines = roadmap.splitlines()
+    lines = markdown_source_lines(roadmap)
     for start, line in enumerate(lines):
-        if line.strip() == "## Phase Details":
+        if re.fullmatch(r" {0,3}##[ \t]+Phase Details[ \t]*", line):
             end = len(lines)
             for stop in range(start + 1, len(lines)):
-                if lines[stop].startswith("## "):
+                if re.match(r"^ {0,3}##[ \t]+", lines[stop]):
                     end = stop
                     break
             return lines[start + 1:end]
@@ -434,10 +445,20 @@ def _decode_frontmatter_key(raw: str) -> str | None:
 def _frontmatter_root_key_is_alias(line: str, key: str) -> bool:
     """Recognize YAML-equivalent root spellings without normalizing them as accepted input."""
     candidate = line.strip(" \t")
+    # YAML node properties may precede a key in either order. This schema needs no tagged or
+    # anchored root key, so strip only enough property syntax to fail closed on its protected key.
+    while True:
+        property_prefix = re.match(r"^(?:&[^\s\[\]{},]+|!(?:<[^>]*>|[^\s\[\]{},]+))[ \t]+(.+)$",
+                                   candidate)
+        if property_prefix is None:
+            break
+        candidate = property_prefix.group(1).strip(" \t")
     if candidate.startswith("?") and len(candidate) > 1 and candidate[1] in " \t":
         candidate = candidate[1:].strip(" \t")
     if not candidate:
         return False
+    if re.match(r"^\*" + re.escape(key) + r"(?:[ \t]*:|[ \t]+:)", candidate):
+        return True
     if candidate[0] in "\"'":
         decoded = _decode_frontmatter_key(candidate)
         if decoded == key:
@@ -491,7 +512,7 @@ def frontmatter_mapping_pairs(text: str, key: str) -> list[tuple[str, str]] | No
 
 def visible_markdown_lines(text: str) -> list[str | None]:
     """Mask code and HTML comments in place so every Markdown contract sees the same lines."""
-    source_lines = text.replace("\r\n", "\n").splitlines()
+    source_lines = markdown_source_lines(text)
     visible: list[str | None] = []
     fence: tuple[str, int] | None = None
     comment = False
@@ -593,12 +614,13 @@ def visible_markdown_lines(text: str) -> list[str | None]:
 
 def markdown_section(text: str, title: str) -> str:
     lines = visible_markdown_lines(text)
-    heading_pattern = re.compile(r"^#{1,4}\s+" + re.escape(title) + r"(?:\s+#+)?\s*$", re.IGNORECASE)
+    heading_pattern = re.compile(r"^#{1,4}[ \t]+" + re.escape(title)
+                                 + r"(?:[ \t]+#+)?[ \t]*$", re.IGNORECASE)
     start = next((index for index, line in enumerate(lines)
                   if line is not None and heading_pattern.match(line)), None)
     if start is None:
         return ""
-    next_heading_pattern = re.compile(r"^#{1,4}\s+.*?(?:\s+#+)?\s*$")
+    next_heading_pattern = re.compile(r"^#{1,4}[ \t]+.*?(?:[ \t]+#+)?[ \t]*$")
     end = next((index for index in range(start + 1, len(lines))
                 if lines[index] is not None and next_heading_pattern.match(lines[index])), len(lines))
     return "\n".join(line if line is not None else "" for line in lines[start + 1:end])
@@ -606,13 +628,14 @@ def markdown_section(text: str, title: str) -> str:
 
 def markdown_heading_count(text: str, title: str) -> int:
     """Count exact Markdown headings for a contract section, case-insensitively."""
-    pattern = re.compile(r"^#{1,6}\s+" + re.escape(title) + r"(?:\s+#+)?\s*$", re.IGNORECASE)
+    pattern = re.compile(r"^#{1,6}[ \t]+" + re.escape(title)
+                         + r"(?:[ \t]+#+)?[ \t]*$", re.IGNORECASE)
     return sum(bool(line is not None and pattern.match(line)) for line in visible_markdown_lines(text))
 
 
 def protected_setext_headings(text: str, titles: tuple[str, ...]) -> list[str]:
     """Find protected plain-text Setext titles outside fenced and indented code."""
-    normalize = lambda value: " ".join(value.lower().split())
+    normalize = lambda value: re.sub(r"[ \t]+", " ", value.lower()).strip(" \t")
     protected = {normalize(title): title for title in titles}
     visible = visible_markdown_lines(text)
 
@@ -625,7 +648,7 @@ def protected_setext_headings(text: str, titles: tuple[str, ...]) -> list[str]:
         while previous >= 0:
             candidate = visible[previous]
             if (candidate is None or not candidate.strip()
-                    or re.match(r"^ {0,3}#", candidate)
+                    or re.match(r"^ {0,3}#{1,6}(?:[ \t]+|$)", candidate)
                     or re.fullmatch(r" {0,3}(?:=+|-+)[ \t]*", candidate)):
                 break
             title_lines.insert(0, candidate.strip())
@@ -637,10 +660,10 @@ def protected_setext_headings(text: str, titles: tuple[str, ...]) -> list[str]:
 
 
 def markdown_table_cells(line: str) -> list[str] | None:
-    stripped = line.strip()
+    stripped = line.strip(" \t")
     if not stripped.startswith("|") or not stripped.endswith("|"):
         return None
-    cells = [cell.strip() for cell in stripped[1:-1].split("|")]
+    cells = [cell.strip(" \t") for cell in stripped[1:-1].split("|")]
     if cells and all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
         return None
     return cells
@@ -659,8 +682,10 @@ def has_local_link(text: str, source_path: str, target_path: str) -> bool:
 def requirement_traceability(text: str) -> dict[str, tuple[str, str]]:
     section = markdown_section(text, "Traceability")
     rows: dict[str, tuple[str, str]] = {}
-    for line in section.splitlines():
-        match = re.match(r"\|\s*(FIXT-01|RIGHTS-01|DIAG-01|DIAG-02)\s*\|\s*(Phase\s+\d+(?:\.\d+)?)\s*\|\s*(Pending|Complete|Satisfied)\s*\|", line, re.IGNORECASE)
+    for line in markdown_source_lines(section):
+        match = re.match(r"\|[ \t]*(FIXT-01|RIGHTS-01|DIAG-01|DIAG-02)[ \t]*\|[ \t]*"
+                         r"(Phase[ \t]+\d+(?:\.\d+)?)[ \t]*\|[ \t]*"
+                         r"(Pending|Complete|Satisfied)[ \t]*\|", line, re.IGNORECASE)
         if match:
             rows[match.group(1).upper()] = (" ".join(match.group(2).split()), match.group(3).capitalize())
     return rows
@@ -814,15 +839,16 @@ def check_v04_report(repo: Path, rev: str, baseline_rev: str,
         if markdown_heading_count(body, heading) != 1:
             errors.append(f"v04-report-heading: {heading} must appear exactly once")
     goal = markdown_section(body, "Goal Achievement") or markdown_section(body, "Goal achievement")
-    table = [cells for line in goal.splitlines() if (cells := markdown_table_cells(line)) is not None]
+    goal_lines = markdown_source_lines(goal)
+    table = [cells for line in goal_lines if (cells := markdown_table_cells(line)) is not None]
     status_columns = [index for index, title in enumerate(table[0] if table else [])
                       if title.strip().lower() in ("status", "historical status", "result", "result status")]
     criterion_rows: list[tuple[int, list[str], str]] = []
-    for line in goal.splitlines():
+    for line in goal_lines:
         cells = markdown_table_cells(line)
         if not cells:
             continue
-        criterion = re.match(r"^(\d+)\s*[.)]\s*", cells[0])
+        criterion = re.match(r"^(\d+)[ \t]*[.)][ \t]*", cells[0])
         if criterion:
             criterion_rows.append((int(criterion.group(1)), cells, line))
     criterion_ids = [number for number, _, _ in criterion_rows]
@@ -925,8 +951,9 @@ def check_v04_handoff(repo: Path, rev: str, baseline_rev: str,
         if "pending" not in normalized or not all(req.lower() in normalized for req in required_pending):
             errors.append(f"v04-handoff-pending: {document_name} must preserve all four Pending requirements")
     for req, owner in V04_PENDING_OWNERS.items():
-        line_found = any(req in line and owner.lower() in line.lower() and "pending" in line.lower()
-                         for line in state_handoff.splitlines())
+        line_found = any(re.match(r"^[ \t]*[-*+][ \t]+", line)
+                         and req in line and owner.lower() in line.lower() and "pending" in line.lower()
+                         for line in markdown_source_lines(state_handoff))
         if not line_found:
             errors.append(f"v04-handoff-owner: current STATE handoff must retain {req} as Pending under {owner}")
     if "v0.4 remains open" not in state_norm or "v0.4 remains open" not in project_norm:
