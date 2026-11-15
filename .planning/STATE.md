@@ -5,10 +5,10 @@ milestone_name: Evidence Floor
 current_phase: "23.1"
 current_phase_name: Close v0.4 requirement and verification gaps
 current_plan: 1
-status: Blocked — D-199 sole review found a Critical YAML scalar-boundary bypass; Phase 23.1 remains incomplete and unverified
-stopped_at: "Phase 23.1 context gathered; D-200 recovery authorized; next: -autonomous --from 23.1"
-last_updated: "2026-11-15T18:23:39.719Z"
-state_head: 3f30d6df5e9cc7689962328b5dea691e39ee5513
+status: D-200 Task 8 authorized; Phase 23.1 remains incomplete pending one correction and independent review
+stopped_at: "Phase 23.1 Task 8 planned and checked; next: $gsd-execute-phase 23.1 --no-transition via $gsd-autonomous --from 23.1"
+last_updated: "2026-11-15T18:53:27.087Z"
+state_head: 4fbc33d33105e8aaddc4a2920104a740cfbee1d8
 progress:
   total_phases: 5
   completed_phases: 4
@@ -25,7 +25,7 @@ last_activity: 2026-11-15
 **Current Phase:** 23.1
 **Current Phase Name:** Close v0.4 requirement and verification gaps
 **Current Plan:** 1
-**Status:** Blocked — D-199 sole review found a Critical YAML scalar-boundary bypass; Phase 23.1 remains incomplete and unverified
+**Status:** D-200 Task 8 authorized; Phase 23.1 remains incomplete pending one correction and independent review
 **Progress:** [████████░░] 80%
 
 Completed stages: Phase 23 release and the v0.4 gaps audit are recorded. Phase 23.1 Task 7 passed its bounded checks at source candidate 7fda5b2fb11d62a680dc4a7340eee7c85e2caf90; the sole D-199 review found a Critical Unicode whitespace bypass. Phase 23.1 remains incomplete and unverified; no verifier or further fix/review ran. The D-199 allowance is exhausted. Owner next: $gsd-discuss-phase 23.1.
@@ -66,6 +66,7 @@ The tested D-199 source candidate is `7fda5b2fb11d62a680dc4a7340eee7c85e2caf90`:
 - Phase 23.1 recovery-scoped: D-198 records one Task 6 and one independent review for CR-01/CR-02; next route is $gsd-autonomous --from 23.1.
 - Phase 23.1 D-198 Task 6 and its sole review completed. The review found a Critical YAML block-scalar U+2028 bypass; the cap is exhausted, Phase 23.1 is incomplete, and no verifier ran. Owner next runs `$gsd-discuss-phase 23.1` to decide on a new scope; no next phase/milestone is selected.
 - Phase 23.1 recovery scope authorized: D-199 completes the recovery discussion and authorizes exactly one final same-plan Task 7 plus one independent review for the D-198 YAML block-scalar bypass. Resume with $gsd-autonomous --from 23.1; if the review finds a Critical or new blocker, stop before phase verification.
+- Phase 23.1 D-200 recovery authorized: One same-plan Task 8 and one exact-candidate review; plan 4fbc33d passed static plan checks. Task 8 implementation has not started; next: $gsd-autonomous --from 23.1.
 
 ## Performance Metrics
 
@@ -89,8 +90,8 @@ The tested D-199 source candidate is `7fda5b2fb11d62a680dc4a7340eee7c85e2caf90`:
 
 ## Session
 
-**Last session:** 2026-11-15T18:23:39.498Z
-**Stopped at:** Phase 23.1 context gathered; D-200 recovery authorized; next: -autonomous --from 23.1
+**Last session:** 2026-11-15T18:53:22.456Z
+**Stopped at:** Phase 23.1 Task 8 planned and checked; next: $gsd-execute-phase 23.1 --no-transition via $gsd-autonomous --from 23.1
 **Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-CONTEXT.md
 
 ### Blockers
