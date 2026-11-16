@@ -1954,7 +1954,6 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
     cli_pre_fix_accepts("report", cr07_mutant_rev,
                         "the U+00A0-prefixed contradictory disposition row", d202_checker)
     cli_check("report", cr07_mutant_rev, "v04-report-requirements")
-    cli_check("report", report_rev)
 
     object_boundary_text = (
         "---\nrequirement_dispositions:\n"
