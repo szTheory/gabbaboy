@@ -2341,7 +2341,7 @@ def self_test_plan_cap_rev(base: Path, source_repo: Path, source_rev: str | None
     controls += 1
     renewed_path_roadmap = d205_roadmap.replace(
         V04_D205_PHASE24_PLAN_LINE, "**Plans:** Phase 24 has one plan plus a renewed gap reserve.", 1)
-    _, errors = check_plan_cap(renewed_path_roadmap, d205_phases)
+    _, errors = check_plan_cap(renewed_path_roadmap, d205_phases, d205_decisions)
     if "plan-cap-d205-reserve" not in codes(errors):
         raise SystemExit(f"planning-hygiene self-test FAIL: path-based D-205 reserve renewal was accepted: {errors}")
     controls += 1
@@ -2498,6 +2498,7 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
         report_path,
         V04_GAP_REQUIREMENTS_PATH,
         V04_GAP_AUDIT_PATH,
+        ".planning/context/DECISIONS.md",
         ".planning/ROADMAP.md",
         ".planning/phases/GB-20-fixture-admission-tune-up/20-VERIFICATION.md",
         ".planning/phases/GB-21-cgb-game-progress-and-scene-regressions/21-VERIFICATION.md",
@@ -2688,7 +2689,8 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
         if source_blob is None:
             raise SystemExit(f"planning-hygiene self-test FAIL: cannot seed missing-source input without {source_path}")
         missing_input_files[source_path] = source_blob
-    missing_input = commit(missing_input_files, "remove required immutable input source", stage_new=True)
+    missing_input = commit(missing_input_files, "remove required immutable input source",
+                           delete=(".planning/context/DECISIONS.md",), stage_new=True)
     altered_report = report_text().replace(f"assessment_input_commit: {V04_GAP_INPUT_REV}",
                                            f"assessment_input_commit: {missing_input}", 1)
     missing_source_candidate = commit({report_path: altered_report}, "point assessment at source-missing input")
