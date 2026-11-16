@@ -104,7 +104,6 @@ CAP_LINE = re.compile(r"^\*\*Plan cap\*\*: (\d+)[ \t]*$")
 # NN-NN-PLAN-extra.md count too, so a plan cannot dodge the cap by its name. NN-PLAN-CHECK.md (no id) is not a plan.
 PLAN_FILE = re.compile(r"^(\d+(?:\.\d+)?)-\d[^/\\]*-PLAN[^/\\]*\.md$", re.IGNORECASE)
 GAP_FRONTMATTER = re.compile(r"\A---\n(.*?)\n---(?:\n|\Z)", re.DOTALL)
-GAP_LINE = re.compile(r"(?m)^gap_closure:\s*true\s*$")
 V04_GAP_HANDOFF_SUMMARY_KEYS = frozenset((
     "phase", "plan", "subsystem", "tags", "requires", "provides", "affects", "actuals",
     "plan_head_before", "plan_head_after", "tech-stack", "key-files", "key-decisions",
@@ -173,9 +172,33 @@ DEFERRAL_PINS = (
 
 
 def is_gap_plan(text: str) -> bool:
-    """A plan that declares `gap_closure: true` in its frontmatter is the phase's gap-round plan."""
-    match = GAP_FRONTMATTER.match(text.replace("\r\n", "\n"))
-    return match is not None and GAP_LINE.search(match.group(1)) is not None
+    """Parse the one supported root boolean; fail closed on aliases or malformed declarations."""
+    normalized, _ = yaml_source_lines(text)
+    match = GAP_FRONTMATTER.match(normalized)
+    if match is None:
+        return False
+    declaration: str | None = None
+    _, lines = yaml_source_lines(match.group(1))
+    for line in lines:
+        if not line or line[0] in " \t" or line.startswith("#"):
+            continue
+        key = parse_frontmatter_plain_key(line)
+        alias = _frontmatter_root_key_is_alias(line, "gap_closure")
+        if key != "gap_closure" and not alias:
+            if key is None and re.search(r"(?<![A-Za-z0-9_-])gap_closure(?![A-Za-z0-9_-])", line):
+                return True
+            continue
+        if key != "gap_closure" or not line.startswith("gap_closure:") or declaration is not None:
+            return True
+        declaration = line[len("gap_closure:"):]
+    if declaration is None:
+        return False
+    value = yaml_horizontal_strip(declaration)
+    if re.fullmatch(r"true(?:[ \t]+#.*)?", value, re.IGNORECASE):
+        return True
+    if re.fullmatch(r"false(?:[ \t]+#.*)?", value, re.IGNORECASE):
+        return False
+    return True
 
 
 def tree_from_dir(phases_dir: Path) -> PlanTree | None:
@@ -2420,6 +2443,14 @@ def self_test_plan_cap_rev(base: Path, source_repo: Path, source_rev: str | None
         "plan-cap-d205-phase24-plan")
     d205_variant("Phase 24 gap plan", {
         ".planning/phases/GB-24-some-title/24-01-PLAN.md": GAP_FRONTMATTER_TEXT}, "plan-cap-d205-phase24-gap")
+    quoted_gap_key = GAP_FRONTMATTER_TEXT.replace("gap_closure: true", '"gap_closure": true', 1)
+    if quoted_gap_key == GAP_FRONTMATTER_TEXT:
+        raise SystemExit("planning-hygiene self-test FAIL: quoted Phase 24 gap key mutant was not seeded")
+    d205_variant("Phase 24 quoted gap_closure key", {
+        ".planning/phases/GB-24-some-title/24-01-PLAN.md": quoted_gap_key}, "plan-cap-d205-phase24-gap")
+    flow_gap_key = "---\n{phase: x, gap_closure: true}\n---\n\n# Gap plan\n"
+    d205_variant("Phase 24 flow-map gap_closure key", {
+        ".planning/phases/GB-24-some-title/24-01-PLAN.md": flow_gap_key}, "plan-cap-d205-phase24-gap")
     d205_variant("attempted reserve renewal", {".planning/ROADMAP.md": renewed_path_roadmap}, "plan-cap-d205-reserve")
     return controls
 
