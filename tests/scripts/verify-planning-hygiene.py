@@ -309,6 +309,34 @@ def yaml_horizontal_strip(value: str) -> str:
     return value.strip(" \t")
 
 
+def parse_frontmatter_plain_key(line: str) -> str | None:
+    """Read the fixed schema's plain key spelling before an optional spaced colon."""
+    match = re.match(r"^([A-Za-z0-9_-]+)[ \t]*:", line)
+    return match.group(1) if match is not None else None
+
+
+def decode_frontmatter_scalar(raw: str) -> str | None:
+    """Decode exact plain text or the supported, unescaped matching quote subset."""
+    value = yaml_horizontal_strip(raw)
+    starts_quoted = bool(value) and value[0] in "\"'"
+    ends_quoted = bool(value) and value[-1] in "\"'"
+    if not starts_quoted and not ends_quoted:
+        return value
+    # A quote at the end of an otherwise plain scalar is content (and must not
+    # disappear into the expected value); quoted syntax begins only at column 1.
+    if not starts_quoted:
+        return value
+    if not ends_quoted or value[0] != value[-1]:
+        return None
+    quote = value[0]
+    inner = value[1:-1]
+    if quote in inner:
+        return None
+    if quote == '"' and "\\" in inner:
+        return None
+    return inner
+
+
 def frontmatter_fields(text: str) -> tuple[dict[str, str], str]:
     normalized, _ = yaml_source_lines(text)
     match = GAP_FRONTMATTER.match(normalized)
@@ -316,10 +344,16 @@ def frontmatter_fields(text: str) -> tuple[dict[str, str], str]:
         return {}, normalized
     fields: dict[str, str] = {}
     _, lines = yaml_source_lines(match.group(1))
+    # Never collapse duplicate root pairs into a dict before the validator sees them.
+    if frontmatter_duplicates(text):
+        return fields, normalized[match.end():]
     for line in lines:
-        if line and line[0] not in " \t" and ":" in line:
-            key, value = line.split(":", 1)
-            fields[yaml_horizontal_strip(key)] = yaml_horizontal_strip(value).strip("\"'")
+        key = parse_frontmatter_plain_key(line)
+        if key is not None:
+            colon = line.find(":")
+            value = decode_frontmatter_scalar(line[colon + 1:])
+            if value is not None:
+                fields[key] = value
     return fields, normalized[match.end():]
 
 
@@ -338,20 +372,19 @@ def frontmatter_duplicates(text: str) -> list[str]:
             continue
         if line[0] not in " \t":
             item_fields = None
-            top = re.match(r"^([A-Za-z0-9_-]+):", line)
-            if top:
-                key = top.group(1)
+            key = parse_frontmatter_plain_key(line)
+            if key is not None:
                 if key in top_level:
                     duplicates.append(f"top-level key '{key}'")
                 top_level.add(key)
             continue
-        item = re.match(r"^[ \t]*-[ \t]+([A-Za-z0-9_-]+):", line)
+        item = re.match(r"^[ \t]*-[ \t]+([A-Za-z0-9_-]+)[ \t]*:", line)
         if item:
             item_fields = {item.group(1)}
             continue
-        nested = re.match(r"^[ \t]+([A-Za-z0-9_-]+):", line)
-        if nested and item_fields is not None:
-            key = nested.group(1)
+        nested_key = parse_frontmatter_plain_key(line.lstrip(" \t"))
+        if nested_key is not None and item_fields is not None:
+            key = nested_key
             if key in item_fields:
                 duplicates.append(f"nested field '{key}'")
             item_fields.add(key)
@@ -364,6 +397,8 @@ def frontmatter_sequence(text: str, key: str) -> list[str] | None:
     if match is None:
         return None
     _, lines = yaml_source_lines(match.group(1))
+    if frontmatter_duplicates(text):
+        return None
     for index, line in enumerate(lines):
         if line != f"{key}:":
             continue
@@ -375,7 +410,10 @@ def frontmatter_sequence(text: str, key: str) -> list[str] | None:
                 break
             value = re.match(r"^[ \t]+-[ \t]+(.+?)[ \t]*$", item)
             if value:
-                values.append(yaml_horizontal_strip(value.group(1)).strip("\"'"))
+                decoded = decode_frontmatter_scalar(value.group(1))
+                if decoded is None:
+                    return None
+                values.append(decoded)
         return values
     return None
 
@@ -386,6 +424,8 @@ def frontmatter_objects(text: str, key: str) -> list[dict[str, str]] | None:
     if match is None:
         return None
     _, lines = yaml_source_lines(match.group(1))
+    if frontmatter_duplicates(text):
+        return None
     start = next((index for index, line in enumerate(lines) if line == f"{key}:"), None)
     if start is None:
         return None
@@ -398,11 +438,17 @@ def frontmatter_objects(text: str, key: str) -> list[dict[str, str]] | None:
         if item:
             if current is not None:
                 entries.append(current)
-            current = {item.group(1): yaml_horizontal_strip(item.group(2)).strip("\"'")}
+            decoded = decode_frontmatter_scalar(item.group(2))
+            if decoded is None:
+                return None
+            current = {item.group(1): decoded}
             continue
         field = re.match(r"^[ \t]+([A-Za-z0-9_-]+):[ \t]*(.*?)[ \t]*$", line)
         if field and current is not None:
-            current[field.group(1)] = yaml_horizontal_strip(field.group(2)).strip("\"'")
+            decoded = decode_frontmatter_scalar(field.group(2))
+            if decoded is None:
+                return None
+            current[field.group(1)] = decoded
     if current is not None:
         entries.append(current)
     return entries
@@ -487,6 +533,9 @@ def _frontmatter_root_key_is_alias(line: str, key: str) -> bool:
             return True
         # Malformed quoted forms that visibly begin with this protected key also fail closed.
         return decoded is None and candidate[1:].lstrip(" \\t").startswith(key)
+    plain_key = parse_frontmatter_plain_key(candidate)
+    if plain_key == key:
+        return True
     colon = candidate.find(":")
     plain = candidate[:colon] if colon >= 0 else candidate
     plain = yaml_horizontal_strip(re.split(r"[ \t]+#", plain, maxsplit=1)[0])
@@ -500,6 +549,8 @@ def frontmatter_mapping_pairs(text: str, key: str) -> list[tuple[str, str]] | No
     if match is None:
         return None
     _, lines = yaml_source_lines(match.group(1))
+    if frontmatter_duplicates(text):
+        return None
     for line in lines:
         if line and line[0] not in " \t" and line != f"{key}:" and _frontmatter_root_key_is_alias(line, key):
             return None
@@ -520,13 +571,9 @@ def frontmatter_mapping_pairs(text: str, key: str) -> list[tuple[str, str]] | No
         raw_value = entry.group(2).strip(" \t")
         if not raw_value:
             return None
-        if raw_value[0] in "\"'":
-            quote = raw_value[0]
-            if len(raw_value) < 2 or raw_value[-1] != quote:
-                return None
-            value = raw_value[1:-1]
-        else:
-            value = raw_value
+        value = decode_frontmatter_scalar(raw_value)
+        if value is None:
+            return None
         if not re.fullmatch(r"[A-Za-z0-9_-]+", value):
             return None
         pairs.append((entry.group(1), value))
@@ -1563,6 +1610,44 @@ def self_test_v04_reconciliation(base: Path, source_repo: Path) -> int:
                              f"{actual_text!r} {actual_lines!r} != {expected_text!r} {expected_lines!r}")
         controls += 1
 
+    plain_key_cases = (
+        ("phase: value", "phase"),
+        ("phase : value", "phase"),
+        ("phase\t: value", "phase"),
+        ("phase \t : value", "phase"),
+        (" phase: value", None),
+        ("phase value", None),
+        ("phase name: value", None),
+        ("phase\u00a0: value", None),
+    )
+    for source, expected_key in plain_key_cases:
+        actual_key = parse_frontmatter_plain_key(source)
+        if actual_key != expected_key:
+            raise SystemExit(f"planning-hygiene self-test FAIL: plain root key {source!r}: "
+                             f"{actual_key!r} != {expected_key!r}")
+        controls += 1
+
+    scalar_cases = (
+        ("pending", "pending"),
+        (" 'pending' \t", "pending"),
+        ('"pending"', "pending"),
+        ("pending'", "pending'"),
+        ('pending"', 'pending"'),
+        ("'pending", None),
+        ('"pending', None),
+        ("'pending\"", None),
+        ('"pending\'', None),
+        ("''pending''", None),
+        ('""pending""', None),
+        ('"pen\\ding"', None),
+    )
+    for source, expected_value in scalar_cases:
+        actual_value = decode_frontmatter_scalar(source)
+        if actual_value != expected_value:
+            raise SystemExit(f"planning-hygiene self-test FAIL: scalar decoder {source!r}: "
+                             f"{actual_value!r} != {expected_value!r}")
+        controls += 1
+
     source_repo = source_repo.resolve()
     object_result = git_run(source_repo, "rev-parse", "--git-path", "objects")
     if object_result.returncode != 0:
@@ -1726,6 +1811,151 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         elif result != 1 or expected_code not in error.getvalue():
             raise SystemExit(f"planning-hygiene self-test FAIL: {stage} CLI negative wanted {expected_code}: {result} {output.getvalue()} {error.getvalue()}")
         controls += 1
+
+    def cli_pre_fix_accepts(stage: str, rev: str, label: str) -> None:
+        nonlocal controls
+        result = subprocess.run(
+            ["python3", "-I", str(pre_fix_checker), "--check", "v04-reconciliation",
+             "--stage", stage, "--rev", rev, "--baseline-rev", baseline_rev,
+             "--repo", str(repo)], capture_output=True, text=True, check=False, env=env, timeout=60)
+        expected = f"v04-reconciliation pass stage={stage}"
+        if result.returncode != 0 or result.stdout.strip() != expected:
+            raise SystemExit(f"planning-hygiene self-test FAIL: D-200 checker did not causally accept {label}: "
+                             f"{result.returncode} {result.stdout} {result.stderr}")
+        controls += 1
+
+    # These committed-source controls prove the prior implementation accepted
+    # representative mutants when every unrelated report fact was valid.
+    d200_source_rev = "9991327df736f668bd8c98f4fd9441a4c563905b"
+    d200_source = git_run(source_repo, "show",
+                          f"{d200_source_rev}:tests/scripts/verify-planning-hygiene.py")
+    if d200_source.returncode != 0:
+        raise SystemExit("planning-hygiene self-test FAIL: D-200 checker source is unavailable")
+    pre_fix_checker = base / "verify-planning-hygiene-d200.py"
+    pre_fix_checker.write_bytes(d200_source.stdout)
+    phase_field = "phase: GB-22-composition-and-microtest-evidence\n"
+    cr03_pre_fix = report_content.replace(
+        phase_field,
+        "phase: GB-21-cgb-game-progress-and-scene-regressions\n"
+        "phase : GB-22-composition-and-microtest-evidence\n", 1)
+    cr03_pre_fix_rev = commit({report_path: cr03_pre_fix}, "reproduce D-200 spaced duplicate-key acceptance")
+    cli_pre_fix_accepts("report", cr03_pre_fix_rev, "a spaced duplicate root key")
+    cr04_pre_fix = report_content.replace("status: passed\n", 'status: "passed\n', 1)
+    cr04_pre_fix_rev = commit({report_path: cr04_pre_fix}, "reproduce D-200 unmatched quote acceptance")
+    cli_pre_fix_accepts("report", cr04_pre_fix_rev, "an unmatched leading scalar quote")
+
+    # The root lexer retains both spellings before any dict conversion; both
+    # conflict orders and both permitted horizontal spaces are present here.
+    phase_conflicts = report_content.replace(
+        phase_field,
+        "phase: GB-21-cgb-game-progress-and-scene-regressions\n"
+        "phase : GB-22-composition-and-microtest-evidence\n"
+        "phase: GB-22-composition-and-microtest-evidence\n"
+        "phase\t: GB-21-cgb-game-progress-and-scene-regressions\n", 1)
+    phase_conflicts_rev = commit({report_path: phase_conflicts},
+                                 "reject spaced and tabbed duplicate root keys in both orders")
+    cli_check("report", phase_conflicts_rev, "v04-report-frontmatter-duplicate")
+
+    # Protected sequence/object roots must be singular and canonical, even when
+    # the contradictory alias appears on either side of the accepted block.
+    sequence_alias_before = "unresolved_gates :\n  - contradictory gate before\n"
+    sequence_alias_after = "unresolved_gates\t:\n  - contradictory gate after\n"
+    sequence_conflicts = report_content.replace(
+        "unresolved_gates:\n", sequence_alias_before + "unresolved_gates:\n", 1)
+    sequence_conflicts = sequence_conflicts.replace(
+        "requirements_satisfied: []\n", sequence_alias_after + "requirements_satisfied: []\n", 1)
+    object_alias_before = "requirement_dispositions\t:\n  - id: FIXT-01\n    status: Satisfied\n    original_owner: Phase 99\n"
+    object_alias_after = "requirement_dispositions :\n  - id: FIXT-01\n    status: Satisfied\n    original_owner: Phase 99\n"
+    sequence_conflicts = sequence_conflicts.replace(
+        "requirement_dispositions:\n", object_alias_before + "requirement_dispositions:\n", 1)
+    sequence_conflicts = sequence_conflicts.replace(
+        "\n---\n", "\n" + object_alias_after + "---\n", 1)
+    sequence_conflicts_rev = commit({report_path: sequence_conflicts},
+                                    "reject contradictory sequence and object aliases before and after roots")
+    cli_check("report", sequence_conflicts_rev, "v04-report-frontmatter-duplicate")
+
+    sequence_alias_only = report_content.replace("unresolved_gates:\n", "unresolved_gates :\n", 1)
+    sequence_alias_only_rev = commit({report_path: sequence_alias_only},
+                                     "reject lone whitespace sequence root")
+    cli_check("report", sequence_alias_only_rev, "v04-report-gates")
+    object_alias_only = report_content.replace("requirement_dispositions:\n",
+                                               "requirement_dispositions\t:\n", 1)
+    object_alias_only_rev = commit({report_path: object_alias_only}, "reject lone tabbed object root")
+    cli_check("report", object_alias_only_rev, "v04-report-requirements")
+
+    # Direct controls exercise every existing scalar reader across unmatched,
+    # mixed and repeated quote edges, plus canonical and supported quoted twins.
+    scalar_readers = (
+        ("field", lambda raw: frontmatter_fields(f"---\nphase: {raw}\n---\n")[0].get("phase")),
+        ("sequence", lambda raw: frontmatter_sequence(f"---\nunresolved_gates:\n  - {raw}\n---\n", "unresolved_gates")),
+        ("id", lambda raw: frontmatter_objects(
+            f"---\nrequirement_dispositions:\n  - id: {raw}\n    status: Pending\n    original_owner: Phase 21\n---\n",
+            "requirement_dispositions")),
+        ("status", lambda raw: frontmatter_objects(
+            f"---\nrequirement_dispositions:\n  - id: FIXT-01\n    status: {raw}\n    original_owner: Phase 21\n---\n",
+            "requirement_dispositions")),
+        ("original_owner", lambda raw: frontmatter_objects(
+            f"---\nrequirement_dispositions:\n  - id: FIXT-01\n    status: Pending\n    original_owner: {raw}\n---\n",
+            "requirement_dispositions")),
+        ("map", lambda raw: frontmatter_mapping_pairs(
+            f"---\nrequirements:\n  FIXT-01: {raw}\n---\n", "requirements")),
+    )
+    for reader_name, reader in scalar_readers:
+        for raw, decoded in scalar_cases:
+            actual = reader(raw)
+            if reader_name == "sequence":
+                expected = None if decoded is None else [decoded]
+            elif reader_name in ("id", "status", "original_owner"):
+                expected = None if decoded is None else [{
+                    "id": decoded if reader_name == "id" else "FIXT-01",
+                    "status": decoded if reader_name == "status" else "Pending",
+                    "original_owner": decoded if reader_name == "original_owner" else "Phase 21",
+                }]
+            elif reader_name == "map":
+                expected = [("FIXT-01", decoded)] if decoded is not None and re.fullmatch(
+                    r"[A-Za-z0-9_-]+", decoded) else None
+            else:
+                expected = decoded
+            if actual != expected:
+                raise SystemExit(f"planning-hygiene self-test FAIL: {reader_name} scalar {raw!r}: "
+                                 f"{actual!r} != {expected!r}")
+            controls += 1
+
+    # Each malformed scalar class also traverses its real report consumer so
+    # the stable CLI refusal family, not merely the helper return value, is pinned.
+    quoted_twins = report_content.replace(phase_field, 'phase: "GB-22-composition-and-microtest-evidence"\n', 1)
+    quoted_twins = quoted_twins.replace(
+        "unresolved_gates:\n" + gates,
+        "unresolved_gates:\n" + "\n".join(f"  - '{gate}'" for gate in V04_UNRESOLVED_GATES), 1)
+    quoted_twins = quoted_twins.replace(
+        "requirement_dispositions:\n" + dispositions,
+        "requirement_dispositions:\n" + "\n".join(
+            f"  - id: '{requirement}'\n    status: \"Pending\"\n    original_owner: '{owner}'"
+            for requirement, owner in V04_PENDING_OWNERS.items()), 1)
+    quoted_twins = quoted_twins.replace(
+        "requirements:\n  FIXT-01: pending\n  RIGHTS-01: pending\n  DIAG-01: pending\n  DIAG-02: pending",
+        "requirements:\n  FIXT-01: \"pending\"\n  RIGHTS-01: 'pending'\n  DIAG-01: \"pending\"\n  DIAG-02: 'pending'", 1)
+    quoted_twins_rev = commit({report_path: quoted_twins},
+                              "accept supported matched scalar quote pairs through report CLI")
+    cli_check("report", quoted_twins_rev)
+
+    malformed_scalar_cases = (
+        ("field", report_content.replace(phase_field, 'phase: "GB-22-composition-and-microtest-evidence\n', 1),
+         "v04-report-field"),
+        ("sequence", report_content.replace(V04_UNRESOLVED_GATES[0], '"' + V04_UNRESOLVED_GATES[0], 1),
+         "v04-report-gates"),
+        ("disposition id", report_content.replace("id: FIXT-01", "id: 'FIXT-01", 1),
+         "v04-report-requirements"),
+        ("disposition status", report_content.replace("status: Pending", "status: Pending'", 1),
+         "v04-report-requirements"),
+        ("disposition owner", report_content.replace("original_owner: Phase 21", 'original_owner: "Phase 21', 1),
+         "v04-report-requirements"),
+        ("requirements map", report_content.replace("  FIXT-01: pending", '  FIXT-01: "pending', 1),
+         "v04-report-requirements"),
+    )
+    for label, malformed, refusal in malformed_scalar_cases:
+        malformed_rev = commit({report_path: malformed}, f"reject malformed {label} scalar quoting")
+        cli_check("report", malformed_rev, refusal)
 
     def with_markdown_newline(document: str, newline: str) -> str:
         if document.startswith("---\n"):
