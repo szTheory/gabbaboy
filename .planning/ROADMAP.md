@@ -240,7 +240,7 @@ Phase 20 completed with no admitted fixture; RIGHTS-01 remains pending. Phase 21
   3. The existing planning-hygiene CLI accepts canonical committed evidence and causally refuses false requirement completion, owner drift, freshness promotion, source substitution, milestone closure and excess plan capacity; no dependency, checker, CTest or CI identity is added.
   4. Only the existing plan_cap and planning_hygiene_controls CTests run after cheap syntax/direct controls, retaining the existing timeout; shared SUMMARY/UAT closure validates this assessed deliverable without satisfying the four Pending requirements or closing v0.4.
 **Plan cap**: 1
-**Plans:** 1 plan
+**Plans:** Exactly one ordinary plan (`24-01-PLAN.md`); no Phase 24 gap reserve.
 
 **D-205 bounded exception:** The owner approved only the exact active v0.4 phase set 20/21/22/23/23.1/24. See D-205. This supersedes the earlier sixth-phase prohibition only for Phase 24 and preserves historical caps 9/8/12/10/1. Phase 24 has one ordinary plan and no new gap reserve; independently enforce no more than 40 actual plan files. The extra declared allowance does not authorize 41 actual plans, a changed historical cap, another sixth/seventh phase, or renewed review/gap/test/lifecycle/release/fixture/rights capacity. The earlier D-193 five-phase statement above is historical to that boundary and is superseded only on this exact point.
 

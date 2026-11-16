@@ -37,6 +37,10 @@ error-code prefixes, so a control can pin the failure class instead of "some err
       Historical Phase 20/21 reports, the audit snapshot, requirements and Phase 22 source artifacts must
       match the execution-start baseline; the Phase 22 facts are read from their pinned evidence commit.
       Prints "v04-reconciliation pass stage=report|handoff".
+  --check v04-gap-assessment --stage report|handoff --rev COMMIT --baseline-rev COMMIT [--repo DIR]
+      Checks the additive Phase 24 eight-requirement assessment and pending-verification handoff from commits.
+      The input, protected Phase 20/21 history, and later containing candidates are distinct identities.
+      Prints "v04-gap-assessment pass stage=report|handoff".
 
   --self-test   runs every rule against generated and committed fixtures and prints
                 "planning-hygiene self-test pass controls=N" once; --rev/--repo select the
@@ -56,6 +60,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -79,6 +84,8 @@ PHASE_COUNT_MAX = 4
 GAP_RESERVE = 1
 V04_APPROVED_PHASE_CAPS = {"20": 9, "21": 8, "22": 12, "23": 10, "23.1": 1}
 V04_EXCEPTION_TEXT = "one exact exception for the active v0.4 phase set 20/21/22/23/23.1"
+V04_D205_PHASE_CAPS = {**V04_APPROVED_PHASE_CAPS, "24": 1}
+V04_D205_EXCEPTION_TEXT = "the owner approved only the exact active v0.4 phase set 20/21/22/23/23.1/24"
 
 PHASE_HEADING = re.compile(r"^### Phase (\d+(?:\.\d+)?):")
 CAP_LINE = re.compile(r"^\*\*Plan cap\*\*: (\d+)[ \t]*$")
@@ -106,8 +113,9 @@ def markdown_source_lines(text: str) -> list[str]:
 
 
 def phase_details(roadmap: str) -> list[str] | None:
-    """The lines of the '## Phase Details' section, or None when it is absent."""
+    """Active phase lines, including the D-205 Phase 24 block appended to the approval boundary."""
     lines = markdown_source_lines(roadmap)
+    active: list[str] | None = None
     for start, line in enumerate(lines):
         if re.fullmatch(r" {0,3}##[ \t]+Phase Details[ \t]*", line):
             end = len(lines)
@@ -115,8 +123,21 @@ def phase_details(roadmap: str) -> list[str] | None:
                 if re.match(r"^ {0,3}##[ \t]+", lines[stop]):
                     end = stop
                     break
-            return lines[start + 1:end]
-    return None
+            active = lines[start + 1:end]
+            break
+    if active is None:
+        return None
+    # Phase 24's reviewed one-plan record currently sits below the planning/approval
+    # boundary. Include active headings there so the immutable cap check sees D-205's
+    # sixth phase instead of silently treating its plans as orphaned.
+    boundary = next((index for index, line in enumerate(lines)
+                     if re.fullmatch(r" {0,3}##[ \t]+Planning and Approval Boundary[ \t]*", line)), None)
+    if boundary is not None:
+        extra_start = next((index for index in range(boundary + 1, len(lines))
+                            if PHASE_HEADING.match(lines[index])), None)
+        if extra_start is not None:
+            active.extend(lines[extra_start:])
+    return active
 
 
 PlanTree = dict[str, dict[str, Callable[[], str]]]
@@ -219,6 +240,60 @@ V04_IMPLEMENTATION_TREE = "e768b7ec26d7c07542d6aa29aef53ae8fc826c5e"
 V04_EVIDENCE_HEAD = "d18db4c56d2a79e6138df37a9d16e3d346a86e13"
 V04_PENDING_OWNERS = {"FIXT-01": "Phase 21", "RIGHTS-01": "Phase 20",
                       "DIAG-01": "Phase 22", "DIAG-02": "Phase 22"}
+V04_GAP_INPUT_REV = "f511baa8c0330f5cd90d56da55d79dbc873b0559"
+V04_GAP_REPORT_PATH = ".planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-EVIDENCE.md"
+V04_GAP_AUDIT_PATH = ".planning/v0.4-MILESTONE-AUDIT.md"
+V04_GAP_REQUIREMENTS_PATH = ".planning/REQUIREMENTS.md"
+V04_GAP_SOURCE_PATHS = (
+    V04_GAP_REQUIREMENTS_PATH,
+    V04_GAP_AUDIT_PATH,
+    ".planning/context/DECISIONS.md",
+    ".planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md",
+    ".planning/phases/GB-20-fixture-admission-tune-up/20-VERIFICATION.md",
+    ".planning/phases/GB-21-cgb-game-progress-and-scene-regressions/21-VERIFICATION.md",
+    ".planning/phases/GB-22-composition-and-microtest-evidence/22-VERIFICATION.md",
+    ".planning/phases/GB-23-qualified-v0-4-0-release/23-VERIFICATION.md",
+    ".planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-VERIFICATION.md",
+)
+V04_GAP_REQUIREMENT_FIELDS = frozenset((
+    "id", "original_criterion", "original_owner", "tracker_status", "milestone_audit_status",
+    "historical_report_path", "historical_report_status", "historical_requirement_result",
+    "current_freshness", "evidence_boundary", "remaining_gate",
+))
+V04_GAP_PHASE_FIELDS = frozenset((
+    "phase", "historical_report_path", "historical_report_status", "historical_source_identity",
+    "current_audit_observation", "changed_covered_file_categories", "outstanding_full_verification_gate",
+))
+V04_GAP_EXPECTED = {
+    "GAME-01": ("Phase 21", "Complete", "partial", "runner satisfaction", "stale",
+                "Fresh full Phase 21 verification remains outside this assessment; the audit stays partial."),
+    "GAME-02": ("Phase 21", "Complete", "partial", "harness-only satisfaction", "stale",
+                "Fresh full Phase 21 verification remains outside this assessment; the audit stays partial."),
+    "FIXT-01": ("Phase 21", "Pending", "unsatisfied", "bounded no-go override", "stale",
+                "Separately authorized work must establish exact source/build, ROM digest, cartridge header, native CGB mode, and the bounded candidate outcome."),
+    "RIGHTS-01": ("Phase 20", "Pending", "unsatisfied", "admission-boundary pass with no admitted fixture", "stale",
+                  "Separate authorization is required for component-specific repository/public-CI redistribution and admission authority."),
+    "DIAG-01": ("Phase 22", "Pending", "unsatisfied", "approved metadata-only scope passed; no derivative admitted", "not_evaluated",
+                "Separately authorized work must establish admitted derivative composition, source/build provenance, and rights."),
+    "DIAG-02": ("Phase 22", "Pending", "unsatisfied", "approved metadata-only scope passed; no case executed", "not_evaluated",
+                "Separately authorized work must establish exact eligible case source/bytes, terms, model applicability, and eligible/executed/excluded accounting."),
+    "FEED-01": ("Phase 21", "Complete", "partial", "workflow-contract satisfaction", "stale",
+                "Fresh full Phase 21 verification remains outside this assessment; the audit stays partial."),
+    "REL-01": ("Phase 23", "Complete", "satisfied", "release verification passed", "passed",
+               "No requirement-specific gate is recorded; D-103 remains an independent milestone gate."),
+}
+V04_GAP_HISTORICAL_REPORTS = {
+    "GAME-01": ".planning/phases/GB-21-cgb-game-progress-and-scene-regressions/21-VERIFICATION.md",
+    "GAME-02": ".planning/phases/GB-21-cgb-game-progress-and-scene-regressions/21-VERIFICATION.md",
+    "FIXT-01": ".planning/phases/GB-21-cgb-game-progress-and-scene-regressions/21-VERIFICATION.md",
+    "RIGHTS-01": ".planning/phases/GB-20-fixture-admission-tune-up/20-VERIFICATION.md",
+    "DIAG-01": ".planning/phases/GB-22-composition-and-microtest-evidence/22-VERIFICATION.md",
+    "DIAG-02": ".planning/phases/GB-22-composition-and-microtest-evidence/22-VERIFICATION.md",
+    "FEED-01": ".planning/phases/GB-21-cgb-game-progress-and-scene-regressions/21-VERIFICATION.md",
+    "REL-01": ".planning/phases/GB-23-qualified-v0-4-0-release/23-VERIFICATION.md",
+}
+V04_GAP_PHASE_IDENTITY_FIELDS = {"20": ("source_head", "verification_head"),
+                                 "21": ("verified", "covered_digest")}
 V04_REPORT_EXPECTED_FIELDS = {
     "phase": "GB-22-composition-and-microtest-evidence",
     "source_head": V04_EVIDENCE_HEAD,
@@ -235,7 +310,11 @@ V04_REPORT_EXPECTED_FIELDS = {
     "requirements_satisfied": "[]",
 }
 V04_PROTECTED_ROOT_KEYS = frozenset(V04_REPORT_EXPECTED_FIELDS) | frozenset(
-    ("unresolved_gates", "requirement_dispositions", "requirements"))
+    ("unresolved_gates", "requirement_dispositions", "requirements", "report_kind",
+     "assessment_input_commit", "baseline_commit", "milestone", "milestone_status",
+     "milestone_audit_status", "phase_completion_scope", "requirements_satisfied_by_phase",
+     "refreshes_phase20_21", "satisfies_d103", "source_records", "requirement_assessments",
+     "phase_assessments"))
 V04_UNRESOLVED_GATES = (
     "acid2_derivative_build_reproducibility",
     "acid2_component_rights_and_output_scope",
@@ -1117,6 +1196,437 @@ def check_v04_reconciliation(repo: Path, stage: str, rev: str, baseline_rev: str
     return check_v04_handoff(repo, rev, baseline_rev, paths, baseline_paths)
 
 
+def frontmatter_root_keys(text: str) -> list[str] | None:
+    """Return simple root keys for a fixed-schema report, refusing unsupported root syntax."""
+    normalized, _ = yaml_source_lines(text)
+    match = GAP_FRONTMATTER.match(normalized)
+    if match is None:
+        return None
+    keys: list[str] = []
+    _, lines = yaml_source_lines(match.group(1))
+    for line in lines:
+        if not line or line[0] in " \t" or line.startswith("#"):
+            continue
+        key = parse_frontmatter_plain_key(line)
+        if key is None:
+            return None
+        keys.append(key)
+    return keys
+
+
+def all_requirement_traceability(text: str) -> dict[str, tuple[str, str]]:
+    """Read the eight v0.4 owner/status rows without changing the legacy Pending-only reader."""
+    section = markdown_section(text, "Traceability")
+    rows: dict[str, tuple[str, str]] = {}
+    for line in markdown_source_lines(section):
+        cells = markdown_table_cells(line)
+        if cells is None or len(cells) < 3 or cells[0] not in V04_GAP_EXPECTED:
+            continue
+        if re.fullmatch(r"Phase[ \t]+\d+(?:\.\d+)?", cells[1]) and cells[2] in ("Complete", "Pending"):
+            rows[cells[0]] = (" ".join(cells[1].split()), cells[2])
+    return rows
+
+
+def v04_gap_requirement_definitions(text: str) -> dict[str, str]:
+    definitions: dict[str, str] = {}
+    for line in markdown_source_lines(text):
+        match = re.match(r"^- \[[ xX]\] \*\*([A-Z0-9-]+)\*\*: (.+)$", line)
+        if match and match.group(1) in V04_GAP_EXPECTED:
+            definitions[match.group(1)] = match.group(2)
+    return definitions
+
+
+def v04_gap_audit_requirements(text: str) -> dict[str, tuple[str, str]]:
+    section = markdown_section(text, "Requirements Coverage")
+    rows: dict[str, tuple[str, str]] = {}
+    for line in markdown_source_lines(section):
+        cells = markdown_table_cells(line)
+        if cells is None or len(cells) < 6 or cells[0] not in V04_GAP_EXPECTED:
+            continue
+        owner = " ".join(cells[1].split())
+        result = cells[-1].strip().lower()
+        status = next((known for prefix, known in (("partial", "partial"),
+                                                     ("unsatisfied", "unsatisfied"),
+                                                     ("satisfied", "satisfied"))
+                       if result.startswith(prefix)), "")
+        if status:
+            rows[cells[0]] = (owner, status)
+    return rows
+
+
+def v04_gap_audit_phase_statuses(text: str) -> dict[str, tuple[str, str]]:
+    section = markdown_section(text, "Phase Verification Status")
+    rows: dict[str, tuple[str, str]] = {}
+    for line in markdown_source_lines(section):
+        cells = markdown_table_cells(line)
+        if cells is None or len(cells) < 4:
+            continue
+        match = re.match(r"^(\d+)\b", cells[0])
+        if match:
+            rows[match.group(1)] = (cells[2].strip().lower(), cells[-1].strip())
+    return rows
+
+
+def v04_gap_sha(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+def v04_gap_evidence_boundary(input_rev: str, report_path: str, report_raw: bytes,
+                              requirements_raw: bytes, audit_raw: bytes) -> str:
+    return (f"input_commit={input_rev};report_path={report_path};report_blob_sha256={v04_gap_sha(report_raw)};"
+            f"requirements_path={V04_GAP_REQUIREMENTS_PATH};requirements_blob_sha256={v04_gap_sha(requirements_raw)};"
+            f"audit_path={V04_GAP_AUDIT_PATH};audit_blob_sha256={v04_gap_sha(audit_raw)}")
+
+
+def check_v04_gap_assessment(repo: Path, stage: str, rev: str,
+                             baseline_rev: str) -> tuple[str, list[str]]:
+    """Validate the Phase 24 evidence and pending-verification handoff from immutable commits."""
+    if stage not in ("report", "handoff"):
+        return "", ["v04-gap-assessment-stage: stage must be report or handoff"]
+    errors: list[str] = []
+    if not FULL_COMMIT.fullmatch(rev):
+        return "", ["v04-gap-assessment-rev: --rev must be a full 40-hex commit id"]
+    if not FULL_COMMIT.fullmatch(baseline_rev):
+        return "", ["v04-gap-assessment-baseline: --baseline-rev must be a full 40-hex commit id"]
+    if rev == V04_GAP_INPUT_REV:
+        return "", ["v04-gap-assessment-input: report-containing revision must differ from its assessment input"]
+    paths, error = commit_paths(repo, rev)
+    if error:
+        return "", [error.replace("v04-reconciliation", "v04-gap-assessment")]
+    baseline_paths, error = commit_paths(repo, baseline_rev)
+    if error:
+        return "", ["v04-gap-assessment-baseline: --baseline-rev is not a readable commit"]
+    input_paths, error = commit_paths(repo, V04_GAP_INPUT_REV)
+    if error:
+        return "", ["v04-gap-assessment-input: required assessment input is not a readable full commit"]
+    assert paths is not None and baseline_paths is not None and input_paths is not None
+
+    report_path = phase_file(paths, "24", "24-EVIDENCE.md")
+    if report_path != V04_GAP_REPORT_PATH:
+        return "", ["v04-gap-assessment-report: canonical Phase 24 evidence report is missing or moved"]
+    report_raw = commit_file(repo, rev, report_path)
+    input_requirements_raw = commit_file(repo, V04_GAP_INPUT_REV, V04_GAP_REQUIREMENTS_PATH)
+    input_audit_raw = commit_file(repo, V04_GAP_INPUT_REV, V04_GAP_AUDIT_PATH)
+    requirements_raw = commit_file(repo, rev, V04_GAP_REQUIREMENTS_PATH)
+    audit_raw = commit_file(repo, rev, V04_GAP_AUDIT_PATH)
+    if None in (report_raw, input_requirements_raw, input_audit_raw, requirements_raw, audit_raw):
+        return "", ["v04-gap-assessment-input: report, requirements, or audit blob is missing from its pinned commit"]
+    assert report_raw is not None and input_requirements_raw is not None and input_audit_raw is not None
+    assert requirements_raw is not None and audit_raw is not None
+    report = report_raw.decode("utf-8", errors="strict")
+    requirements = requirements_raw.decode("utf-8", errors="strict")
+    audit = audit_raw.decode("utf-8", errors="strict")
+    input_requirements = input_requirements_raw.decode("utf-8", errors="strict")
+    input_audit = input_audit_raw.decode("utf-8", errors="strict")
+    fields, body = frontmatter_fields(report)
+    duplicates = frontmatter_duplicates(report)
+    if duplicates:
+        errors.append("v04-gap-assessment-frontmatter: duplicate or aliased protected keys: " + ", ".join(duplicates))
+    root_keys = frontmatter_root_keys(report)
+    expected_root_keys = {
+        "phase", "report_kind", "assessment_input_commit", "baseline_commit", "milestone",
+        "milestone_status", "milestone_audit_status", "phase_completion_scope",
+        "requirements_satisfied_by_phase", "refreshes_phase20_21", "satisfies_d103",
+        "source_records", "requirement_assessments", "phase_assessments",
+    }
+    if root_keys is None or len(root_keys) != len(expected_root_keys) or set(root_keys) != expected_root_keys:
+        errors.append("v04-gap-assessment-frontmatter: unsupported or unexpected root fields")
+    expected_fields = {
+        "phase": "GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps",
+        "report_kind": "point_in_time_gap_assessment",
+        "assessment_input_commit": V04_GAP_INPUT_REV,
+        "baseline_commit": baseline_rev,
+        "milestone": "v0.4",
+        "milestone_status": "open",
+        "milestone_audit_status": "gaps_found",
+        "phase_completion_scope": "evidence_map_only",
+        "requirements_satisfied_by_phase": "[]",
+        "refreshes_phase20_21": "false",
+        "satisfies_d103": "false",
+    }
+    for key, expected in expected_fields.items():
+        if fields.get(key) != expected:
+            code = "v04-gap-assessment-input" if key in ("assessment_input_commit", "baseline_commit") else "v04-gap-assessment-field"
+            errors.append(f"{code}: {key} must be {expected}")
+    if fields.get("assessment_input_commit") == rev:
+        errors.append("v04-gap-assessment-input: report cannot assess its own containing revision")
+    if baseline_rev == V04_GAP_INPUT_REV:
+        errors.append("v04-gap-assessment-baseline: baseline and assessment input must be distinct commits")
+
+    source_records = frontmatter_objects(report, "source_records") or []
+    source_rows = [(item.get("path", ""), item.get("sha256", "")) for item in source_records]
+    if any(set(item) != {"path", "sha256"} for item in source_records) or \
+            [path for path, _ in source_rows] != list(V04_GAP_SOURCE_PATHS):
+        errors.append("v04-gap-assessment-source-records: source records must list the exact canonical input paths in order")
+    source_raw: dict[str, bytes] = {}
+    for path in V04_GAP_SOURCE_PATHS:
+        raw = commit_file(repo, V04_GAP_INPUT_REV, path)
+        if raw is None:
+            errors.append(f"v04-gap-assessment-source-records: required source blob is missing at input: {path}")
+            continue
+        source_raw[path] = raw
+    expected_records = [(path, v04_gap_sha(source_raw[path])) for path in V04_GAP_SOURCE_PATHS if path in source_raw]
+    if source_rows != expected_records:
+        errors.append("v04-gap-assessment-source-records: recorded SHA-256 identities do not match the immutable input blobs")
+    if any(not re.fullmatch(r"[0-9a-f]{64}", digest) for _, digest in source_rows):
+        errors.append("v04-gap-assessment-source-records: every blob identity must be a full lowercase SHA-256")
+    input_decisions = source_raw.get(".planning/context/DECISIONS.md", b"").decode("utf-8", errors="replace")
+    if "D-204" not in input_decisions or "D-205" not in input_decisions:
+        errors.append("v04-gap-assessment-input: pinned decisions do not contain the current D-204/D-205 authorization")
+
+    for number in ("20", "21"):
+        name = f"{number}-VERIFICATION.md"
+        target_path = phase_file(paths, number, name)
+        baseline_path = phase_file(baseline_paths, number, name)
+        input_path = phase_file(input_paths, number, name)
+        if target_path is None or target_path != baseline_path or target_path != input_path:
+            errors.append(f"v04-gap-assessment-history: Phase {number} report path is missing or moved from baseline")
+            continue
+        before = commit_file(repo, baseline_rev, baseline_path)
+        at_input = commit_file(repo, V04_GAP_INPUT_REV, input_path)
+        at_target = commit_file(repo, rev, target_path)
+        if before is None or at_input is None or at_target is None or before != at_input or before != at_target:
+            errors.append(f"v04-gap-assessment-history: Phase {number} report bytes must remain identical to baseline")
+            continue
+        base_fields, _ = frontmatter_fields(before.decode("utf-8", errors="strict"))
+        input_fields, _ = frontmatter_fields(at_input.decode("utf-8", errors="strict"))
+        target_fields, _ = frontmatter_fields(at_target.decode("utf-8", errors="strict"))
+        identity_fields = V04_GAP_PHASE_IDENTITY_FIELDS[number]
+        if any(not base_fields.get(key) or base_fields.get(key) != input_fields.get(key)
+               or base_fields.get(key) != target_fields.get(key) for key in identity_fields):
+            errors.append(f"v04-gap-assessment-history: Phase {number} report source identity fields differ from baseline")
+
+    requirements_target_fields = all_requirement_traceability(requirements)
+    input_tracker_fields = all_requirement_traceability(input_requirements)
+    if requirements_raw != input_requirements_raw or requirements_target_fields != input_tracker_fields:
+        errors.append("v04-gap-assessment-requirements: REQUIREMENTS.md must preserve the assessed input tracker")
+    expected_tracker = {key: (value[0], value[1]) for key, value in V04_GAP_EXPECTED.items()}
+    if requirements_target_fields != expected_tracker:
+        errors.append("v04-gap-assessment-requirements: the eight original tracker owners and statuses must be preserved")
+    definitions = v04_gap_requirement_definitions(input_requirements)
+    if set(definitions) != set(V04_GAP_EXPECTED):
+        errors.append("v04-gap-assessment-requirements: REQUIREMENTS.md must define exactly the eight v0.4 criteria")
+
+    audit_fields, _ = frontmatter_fields(audit)
+    input_audit_fields, _ = frontmatter_fields(input_audit)
+    if audit_raw != input_audit_raw or audit_fields.get("milestone") != "v0.4" or \
+            audit_fields.get("status") != "gaps_found" or input_audit_fields.get("status") != "gaps_found":
+        errors.append("v04-gap-assessment-audit: target audit must preserve the pinned open gaps_found audit")
+    audit_requirements = v04_gap_audit_requirements(audit)
+    expected_audit = {key: (values[0], values[2]) for key, values in V04_GAP_EXPECTED.items()}
+    if audit_requirements != expected_audit:
+        errors.append("v04-gap-assessment-audit: all eight milestone audit dispositions and original owners must match")
+    audit_date = audit_fields.get("audited", "")[:10]
+    if not re.fullmatch(r"20\d\d-\d\d-\d\d", audit_date):
+        errors.append("v04-gap-assessment-audit: dated audit observation is missing")
+    phase_statuses = v04_gap_audit_phase_statuses(audit)
+    if phase_statuses.get("20", ("", ""))[0] != "stale" or phase_statuses.get("21", ("", ""))[0] != "stale":
+        errors.append("v04-gap-assessment-audit: Phase 20 and Phase 21 must remain stale")
+
+    requirement_rows = frontmatter_objects(report, "requirement_assessments") or []
+    row_ids = [item.get("id", "") for item in requirement_rows]
+    if len(row_ids) != len(set(row_ids)) or set(row_ids) != set(V04_GAP_EXPECTED):
+        errors.append("v04-gap-assessment-requirements: exactly eight unique original requirement rows are required")
+    if any(set(item) != V04_GAP_REQUIREMENT_FIELDS for item in requirement_rows):
+        errors.append("v04-gap-assessment-requirements: assessment row fields must match the exact schema")
+    rows_by_id = {item.get("id", ""): item for item in requirement_rows}
+    requirements_hash = v04_gap_sha(input_requirements_raw)
+    audit_hash = v04_gap_sha(input_audit_raw)
+    for requirement, expected in V04_GAP_EXPECTED.items():
+        row = rows_by_id.get(requirement)
+        report_source = V04_GAP_HISTORICAL_REPORTS[requirement]
+        source_report_raw = source_raw.get(report_source)
+        if row is None or source_report_raw is None or requirement not in definitions:
+            continue
+        source_report = source_report_raw.decode("utf-8", errors="strict")
+        report_fields, _ = frontmatter_fields(source_report)
+        owner, tracker_status, audit_status, historical_result, freshness_kind, remaining_gate = expected
+        expected_freshness = {
+            "stale": f"stale at dated {audit_date} audit; no Phase 24 refresh",
+            "not_evaluated": f"historical runtime freshness not_evaluated; dated {audit_date} audit passed for metadata-only scope only",
+            "passed": f"passed in dated {audit_date} milestone audit; D-103 remains separate",
+        }[freshness_kind]
+        expected_boundary = v04_gap_evidence_boundary(
+            V04_GAP_INPUT_REV, report_source, source_report_raw, input_requirements_raw, input_audit_raw)
+        expected_row = {
+            "id": requirement,
+            "original_criterion": definitions[requirement],
+            "original_owner": owner,
+            "tracker_status": tracker_status,
+            "milestone_audit_status": audit_status,
+            "historical_report_path": report_source,
+            "historical_report_status": report_fields.get("status", ""),
+            "historical_requirement_result": historical_result,
+            "current_freshness": expected_freshness,
+            "evidence_boundary": expected_boundary,
+            "remaining_gate": remaining_gate,
+        }
+        if row != expected_row:
+            errors.append(f"v04-gap-assessment-requirements: {requirement} must keep criterion, owner, statuses, history, freshness, evidence, and gate distinct")
+        if report_fields.get("status") != "passed":
+            errors.append(f"v04-gap-assessment-history: {requirement} historical report status must be passed")
+        history_text = " ".join(source_report.lower().split())
+        result_terms = {
+            "GAME-01": ("game-01", "satisfied"),
+            "GAME-02": ("game-02", "harness-only", "satisfied"),
+            "FIXT-01": ("fixt-01", "passed (override)", "pending"),
+            "RIGHTS-01": ("rights-01 remains pending", "no candidate was admitted"),
+            "DIAG-01": ("diag-01", "pending", "metadata-only"),
+            "DIAG-02": ("diag-02", "513", "metadata-only"),
+            "FEED-01": ("feed-01", "workflow contract", "satisfied"),
+            "REL-01": ("rel-01", "verified"),
+        }[requirement]
+        if any(term not in history_text for term in result_terms):
+            errors.append(f"v04-gap-assessment-history: {requirement} interpretation lacks support in its pinned historical report")
+        if requirement in ("DIAG-01", "DIAG-02") and report_fields.get("current_freshness") != "not_evaluated":
+            errors.append(f"v04-gap-assessment-history: {requirement} must preserve historical runtime freshness as not_evaluated")
+
+    phase_rows = frontmatter_objects(report, "phase_assessments") or []
+    phase_ids = [item.get("phase", "") for item in phase_rows]
+    if len(phase_ids) != len(set(phase_ids)) or set(phase_ids) != {"20", "21"}:
+        errors.append("v04-gap-assessment-phase: exactly the Phase 20 and Phase 21 freshness assessments are required")
+    if any(set(item) != V04_GAP_PHASE_FIELDS for item in phase_rows):
+        errors.append("v04-gap-assessment-phase: freshness row fields must match the exact schema")
+    phase_rows_by_id = {item.get("phase", ""): item for item in phase_rows}
+    expected_categories = {"20": "workflow, CMake, and admission files",
+                           "21": "CMake, documentation, and test files"}
+    for number in ("20", "21"):
+        row = phase_rows_by_id.get(number)
+        report_source = f".planning/phases/GB-{number}-" + (
+            "fixture-admission-tune-up/20-VERIFICATION.md" if number == "20" else
+            "cgb-game-progress-and-scene-regressions/21-VERIFICATION.md")
+        source_report_raw = source_raw.get(report_source)
+        if row is None or source_report_raw is None:
+            continue
+        source_report = source_report_raw.decode("utf-8", errors="strict")
+        report_fields, _ = frontmatter_fields(source_report)
+        identity_fields = V04_GAP_PHASE_IDENTITY_FIELDS[number]
+        historical_identity = "; ".join(f"{key}={report_fields[key]}" for key in identity_fields)
+        expected_row = {
+            "phase": number,
+            "historical_report_path": report_source,
+            "historical_report_status": report_fields.get("status", ""),
+            "historical_source_identity": historical_identity,
+            "current_audit_observation": f"stale at dated {audit_date} audit",
+            "changed_covered_file_categories": expected_categories[number],
+            "outstanding_full_verification_gate": f"Fresh full Phase {number} verification remains outstanding; Phase 24 checks do not refresh it.",
+        }
+        if row != expected_row or report_fields.get("status") != "passed":
+            errors.append(f"v04-gap-assessment-phase: Phase {number} must preserve its historical identity and stale audit boundary")
+        audit_phase = phase_statuses.get(number, ("", ""))[1].lower()
+        if any(term.lower() not in audit_phase for term in expected_categories[number].replace(",", "").replace("and", "").split()):
+            errors.append(f"v04-gap-assessment-phase: Phase {number} changed-file categories must match the dated audit")
+
+    visible_body = "\n".join(line if line is not None else "" for line in visible_markdown_lines(body))
+    visible_norm = " ".join(visible_body.lower().split())
+    if any(term not in visible_norm for term in (
+            "point-in-time", "does not refresh phase 20/21", "does not satisfy d-103",
+            "does not satisfy the four pending requirements", "v0.4 remains open", "gaps_found",
+            "no rights determination", "no permission is inferred", "513", "seven unresolved gates",
+            "admitted=0", "executed=0", "482 blocked candidates", "31 initial exclusions")):
+        errors.append("v04-gap-assessment-body: scope, counts, freshness, and rights limits must remain explicit")
+    context_text = source_raw.get(V04_GAP_SOURCE_PATHS[3], b"").decode("utf-8", errors="replace")
+    context_norm = " ".join(context_text.lower().split())
+    source_observations = (
+        "2026-11-16", "https://deved.itch.io/potion-panic", "https://codeberg.org/deved/potion-panic",
+        "https://github.com/antoniond/ucity", "https://github.com/antoniond/ucity/releases/tag/v1.3",
+        "https://codeberg.org/skylyrac/ucity", "dmg-acid2/blob/v1.0/readme.md",
+        "cgb-acid2/blob/v1.1/readme.md", "gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/README.md",
+        "could not fetch", "do not infer",
+    )
+    if any(term not in context_norm for term in source_observations):
+        errors.append("v04-gap-assessment-source-observations: existing first-party metadata and access failures must remain attributed without rights inference")
+    if any(not has_local_link(visible_body, report_path, path) for path in V04_GAP_SOURCE_PATHS):
+        errors.append("v04-gap-assessment-links: every immutable source record must have a valid local link")
+
+    if stage == "report":
+        return "v04-gap-assessment pass stage=report", errors
+    return check_v04_gap_handoff(repo, rev, baseline_rev, paths, report_path, errors)
+
+
+def check_v04_gap_handoff(repo: Path, rev: str, baseline_rev: str, paths: list[str],
+                          report_path: str, errors: list[str]) -> tuple[str, list[str]]:
+    """Check the committed assessment closure without converting it into phase verification."""
+    phase_dir = ".planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps"
+    expected_paths = {
+        "summary": f"{phase_dir}/24-01-SUMMARY.md",
+        "validation": f"{phase_dir}/24-VALIDATION.md",
+        "continuation": f"{phase_dir}/.continue-here.md",
+        "uat": f"{phase_dir}/24-UAT.md",
+        "state": ".planning/STATE.md",
+    }
+    documents: dict[str, str] = {}
+    for label, path in expected_paths.items():
+        if path not in paths:
+            errors.append(f"v04-gap-assessment-handoff: missing {label} at committed handoff revision")
+            continue
+        raw = commit_file(repo, rev, path)
+        if raw is None:
+            errors.append(f"v04-gap-assessment-handoff: cannot read {label} from committed handoff revision")
+        else:
+            documents[label] = raw.decode("utf-8", errors="strict")
+    summary = documents.get("summary", "")
+    validation = documents.get("validation", "")
+    continuation = documents.get("continuation", "")
+    state = documents.get("state", "")
+    summary_fields, summary_body = frontmatter_fields(summary)
+    if summary_fields.get("status") != "complete" or summary_fields.get("requirements-completed") != "[]":
+        errors.append("v04-gap-assessment-handoff: summary must complete the assessment plan with requirements-completed: []")
+    if summary_fields.get("phase") != "GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps" or summary_fields.get("plan") != "01":
+        errors.append("v04-gap-assessment-handoff: summary must identify the Phase 24 plan")
+
+    summary_norm = " ".join(summary_body.lower().split())
+    validation_norm = " ".join(validation.lower().split())
+    continuation_norm = " ".join(continuation.lower().split())
+    state_norm = " ".join(state.lower().split())
+    current_marker = "current handoff:"
+    current_start = state_norm.rfind(current_marker)
+    current_end = state_norm.find("## accumulated context", current_start)
+    state_handoff = state_norm[current_start:current_end if current_end >= 0 else None] if current_start >= 0 else ""
+    for label, text in (("summary", summary_norm), ("continuation", continuation_norm), ("STATE current handoff", state_handoff)):
+        requirements = ("fixt-01", "rights-01", "diag-01", "diag-02", "pending", "v0.4", "gaps_found",
+                        "phase 20", "phase 21", "stale", "d-103", "unfulfilled", "$gsd-verify-work 24",
+                        "no broad local suite", "no third local lifecycle retest", "no release retry",
+                        "no tag/asset/rights action", "no fixture admission")
+        if any(term not in text for term in requirements):
+            errors.append(f"v04-gap-assessment-handoff: {label} must preserve Pending owners, stale phases, open audit, D-103, and every scoped stop")
+    if any(term not in summary_norm for term in (
+            "phase 24 execution/automated closure complete", "phase verification pending",
+            "orchestrator is the next actor", "assessment input", "protected baseline",
+            "tested checker/report candidate", V04_GAP_INPUT_REV.lower(), baseline_rev.lower())):
+        errors.append("v04-gap-assessment-handoff: summary must separate execution, phase verification, and the three commit boundaries")
+    check_candidate_match = re.search(r"tested checker/report candidate[:` ]+([0-9a-f]{40})", summary_norm)
+    if check_candidate_match is None:
+        errors.append("v04-gap-assessment-handoff: the full tested checker/report candidate must be recorded")
+    elif check_candidate_match.group(1) in (rev, V04_GAP_INPUT_REV):
+        errors.append("v04-gap-assessment-handoff: tested candidate must differ from input and later handoff-containing commits")
+    if rev == V04_GAP_INPUT_REV:
+        errors.append("v04-gap-assessment-handoff: committed handoff cannot equal its assessment input")
+    if "requirements-completed: []" not in summary_norm:
+        errors.append("v04-gap-assessment-handoff: summary must keep requirements-completed empty")
+    if "$gsd-verify-work 24" not in continuation_norm or "orchestrator" not in continuation_norm:
+        errors.append("v04-gap-assessment-handoff: continuation must route the orchestrator to Phase 24 verification")
+    if "planning-hygiene" not in validation_norm or "24-01-t1-map" not in validation_norm or \
+            "24-01-t2-controls" not in validation_norm or "24-01-t3-closure" not in validation_norm:
+        errors.append("v04-gap-assessment-handoff: validation map must retain all three plan task IDs")
+    required_links = {
+        "summary": (expected_paths["report"] if "report" in expected_paths else report_path,
+                    expected_paths["validation"], expected_paths["uat"], expected_paths["continuation"]),
+        "continuation": (report_path, expected_paths["summary"], expected_paths["validation"], expected_paths["uat"]),
+        "state": (report_path, expected_paths["summary"], expected_paths["validation"], expected_paths["uat"]),
+    }
+    for label, targets in required_links.items():
+        source_path = expected_paths[label]
+        text = documents.get(label, "")
+        if any(not has_local_link(text, source_path, target) for target in targets):
+            errors.append(f"v04-gap-assessment-handoff: {label} must link to its local immutable evidence artifacts")
+    roadmap, tree = read_rev(repo, rev)
+    _, plan_cap_errors = check_plan_tree(roadmap, tree, rev)
+    if plan_cap_errors:
+        errors.extend(f"v04-gap-assessment-handoff: {error}" for error in plan_cap_errors)
+    return "v04-gap-assessment pass stage=handoff", errors
+
+
 def read_deferrals(repo: Path, rev: str) -> str:
     """Read FUTURE-MILESTONES.md from one full commit id; never consult the working tree."""
     if not FULL_COMMIT.fullmatch(rev):
@@ -1160,22 +1670,29 @@ def check_plan_tree(roadmap: str, tree: PlanTree | None, where: str) -> tuple[st
     if not caps:
         return "", ["plan-cap-vacuous: ROADMAP lists no active phase headings"]
     roadmap_contract = " ".join(roadmap.lower().split())
-    approved_v04_exception = (
+    approved_v04_d193 = (
         caps == V04_APPROVED_PHASE_CAPS
         and V04_EXCEPTION_TEXT in roadmap_contract
         and "see d-193" in roadmap_contract
     )
+    approved_v04_d205 = (
+        caps == V04_D205_PHASE_CAPS
+        and V04_D205_EXCEPTION_TEXT in roadmap_contract
+        and "see d-205" in roadmap_contract
+        and "phase 24 has one ordinary plan and no new gap reserve" in roadmap_contract
+    )
+    approved_v04_exception = approved_v04_d193 or approved_v04_d205
     if len(caps) > PHASE_COUNT_MAX and not approved_v04_exception:
         errors.append(f"plan-cap-phase-count: the active milestone lists {len(caps)} phases, above {PHASE_COUNT_MAX}")
-        if set(caps) == set(V04_APPROVED_PHASE_CAPS):
-            errors.append("plan-cap-approved-exception: the Phase 23.1 exception requires the exact D-193 phase set, caps, and roadmap approval")
+    if set(caps) in (set(V04_APPROVED_PHASE_CAPS), set(V04_D205_PHASE_CAPS)) and not approved_v04_exception:
+        errors.append("plan-cap-approved-exception: the active v0.4 exception requires the exact phase set, caps, and roadmap approval")
     for number, cap in caps.items():
         if cap is None:
             errors.append(f"plan-cap-missing: Phase {number} has no '**Plan cap**: N' line")
         elif cap > PLAN_CAP_MAX:
             errors.append(f"plan-cap-too-large: Phase {number} cap {cap} is above {PLAN_CAP_MAX}")
     total = sum(cap for cap in caps.values() if cap is not None)
-    if total > PLAN_CAP_SUM_MAX:
+    if total > PLAN_CAP_SUM_MAX and not approved_v04_d205:
         errors.append(f"plan-cap-sum: caps sum to {total}, above {PLAN_CAP_SUM_MAX}")
 
     counts = {number: 0 for number in caps}
@@ -1200,9 +1717,22 @@ def check_plan_tree(roadmap: str, tree: PlanTree | None, where: str) -> tuple[st
             continue
         if counts[number] > cap:
             errors.append(f"plan-cap-exceeded: Phase {number} has {counts[number]} plans, cap is {cap}")
+        elif number == "24" and approved_v04_d205:
+            pass  # D-205 grants this one ordinary plan without opening a gap reserve.
         elif primary[number] > cap - GAP_RESERVE:
             errors.append(f"plan-cap-gap-reserve: Phase {number} has {primary[number]} plans that are not gap_closure plans; "
                           f"cap {cap} reserves {GAP_RESERVE} slot for the single gap round")
+    if approved_v04_d205:
+        phase24_dirs = [name for name in tree or {}
+                        if (match := PHASE_DIR.match(name)) is not None and match.group(1) == "24"]
+        phase24_names = sorted(name for directory in phase24_dirs for name in tree[directory])
+        if len(phase24_dirs) != 1 or phase24_names != ["24-01-PLAN.md"]:
+            errors.append("plan-cap-d205-phase24-plan: Phase 24 must contain exactly one ordinary 24-01-PLAN.md")
+        elif is_gap_plan(tree[phase24_dirs[0]]["24-01-PLAN.md"]()):
+            errors.append("plan-cap-d205-phase24-gap: Phase 24 must not use a gap_closure plan or reserve")
+        actual_total = sum(counts.values())
+        if actual_total > PLAN_CAP_SUM_MAX:
+            errors.append(f"plan-cap-actual-total: the active milestone has {actual_total} actual plan files, above {PLAN_CAP_SUM_MAX}")
     return f"plan-cap pass phases={len(caps)} plans={sum(counts.values())}", errors
 
 
@@ -3070,12 +3600,13 @@ The next command is owner-only: `/gsd-audit-milestone v0.4`. No next phase or mi
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--check", choices=("plan-cap", "lessons-ids", "state-size", "playstead-docs", "deferrals", "v04-reconciliation"))
+    parser.add_argument("--check", choices=("plan-cap", "lessons-ids", "state-size", "playstead-docs", "deferrals",
+                                              "v04-reconciliation", "v04-gap-assessment"))
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--roadmap")
     parser.add_argument("--phases-dir")
     parser.add_argument("--rev", help="a full immutable commit id to read")
-    parser.add_argument("--stage", choices=("report", "handoff"), help="v04-reconciliation stage to check")
+    parser.add_argument("--stage", choices=("report", "handoff"), help="immutable assessment stage to check")
     parser.add_argument("--baseline-rev", help="execution-start commit used to protect historical planning evidence")
     parser.add_argument("--repo", default=".", help="repository for an immutable --rev read (default: current directory)")
     parser.add_argument("--lessons")
@@ -3113,6 +3644,10 @@ def main(argv: list[str] | None = None) -> int:
             if not args.stage or not args.rev or not args.baseline_rev:
                 parser.error("v04-reconciliation needs --stage report|handoff --rev COMMIT --baseline-rev COMMIT")
             summary, errors = check_v04_reconciliation(Path(args.repo), args.stage, args.rev, args.baseline_rev)
+        elif args.check == "v04-gap-assessment":
+            if not args.stage or not args.rev or not args.baseline_rev:
+                parser.error("v04-gap-assessment needs --stage report|handoff --rev COMMIT --baseline-rev COMMIT")
+            summary, errors = check_v04_gap_assessment(Path(args.repo), args.stage, args.rev, args.baseline_rev)
         else:
             if not args.root:
                 parser.error("playstead-docs needs --root")
