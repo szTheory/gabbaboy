@@ -135,7 +135,7 @@ status: complete
 - Tested checker/report candidate: `a1e8067500016158347e92522934b9af45d78386`.
 - **Checked handoff candidate (`PHASE24_HANDOFF_REV`):** pending the final evidence-document commit and its direct report/handoff stage checks.
 
-Phase 24 execution/automated closure complete. The corrected candidate passed its bounded checks; the fresh independent review is pending. After review acceptance and the configured regression hook, the orchestrator runs `$gsd-verify-work 24`.
+Phase 24 execution/automated closure complete. Phase verification pending. The orchestrator is the next actor; after the fresh independent review is accepted and the configured regression hook passes, it runs `$gsd-verify-work 24`.
 
 The assessed plan keeps `requirements-completed: []`; all eight requirement IDs here describe assessment coverage only.
 

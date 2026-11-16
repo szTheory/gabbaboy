@@ -2,8 +2,8 @@
 status: complete
 phase: GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps
 source: 24-01-SUMMARY.md
-started: 2026-11-16T23:23:01.632436+00:00
-updated: 2026-11-16T23:23:01.632436+00:00
+started: 2026-11-16T23:25:43.538299+00:00
+updated: 2026-11-16T23:25:43.538299+00:00
 ---
 
 ## Automated Evidence
@@ -16,7 +16,7 @@ updated: 2026-11-16T23:23:01.632436+00:00
 
 The immutable assessment input is `f511baa8c0330f5cd90d56da55d79dbc873b0559`; the protected baseline is `f6fe166a7c2a3668f5a412a82b648dd062329d3c`; the corrected checker/report candidate is `a1e8067500016158347e92522934b9af45d78386`. Its 628-control self-test, six-phase/40-plan cap check, and immutable report and handoff stages passed. Only the existing focused CTests `plan_cap` and `planning_hygiene_controls` ran at this candidate; both passed, with the existing 30-second timeout and 125-control floor. The documentation handoff commit still needs its own report/handoff stage checks; do not attribute CTest results to that later commit.
 
-FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending under their original owners. Phase 20/21 remain stale; v0.4 remains open with `gaps_found`; D-103 is unfulfilled. Do not run a broad suite, lifecycle retry, fixture or rights action, release operation, milestone close, archival, or cleanup. No phase or milestone completion is claimed yet.
+FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending under their original owners. Phase 20/21 remain stale; v0.4 remains open with `gaps_found`; D-103 is unfulfilled. No broad local suite, no third local lifecycle retest, no release retry, no tag/asset/rights action, and no fixture admission. Do not run a milestone close, archival, or cleanup. No phase or milestone completion is claimed yet.
 
 FIXT-01 — Pending, original owner Phase 21. RIGHTS-01 — Pending, original owner Phase 20. DIAG-01 — Pending, original owner Phase 22. DIAG-02 — Pending, original owner Phase 22. Preserve the 40-plan ceiling and all existing test, lifecycle, release, fixture, rights, and milestone boundaries.
 
