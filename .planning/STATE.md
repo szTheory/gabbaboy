@@ -5,10 +5,10 @@ milestone_name: Evidence Floor
 current_phase: "23.1"
 current_phase_name: Close v0.4 requirement and verification gaps
 current_plan: 1
-status: D-200 sole review found Critical CR-03 and CR-04; Phase 23.1 is blocked, incomplete and unverified.
-stopped_at: "Phase 23.1 stopped after sole D-200 review found Critical CR-03/CR-04; no verifier or further fix/review; owner next: $gsd-discuss-phase 23.1"
-last_updated: "2026-11-15T19:54:18.193Z"
-state_head: 6d4227a1dd56471f743c21aa3ae904b129d53c81
+status: D-201 rescope authorized for CR-03/CR-04; Phase 23.1 remains incomplete and unverified pending one correction task and one independent review.
+stopped_at: "Phase 23.1 D-201 rescope authorized; next: $gsd-autonomous --from 23.1"
+last_updated: "2026-11-16T02:22:26.896Z"
+state_head: 0c2719201e25effd54736094771d1150160ce56e
 progress:
   total_phases: 5
   completed_phases: 4
@@ -25,7 +25,7 @@ last_activity: 2026-11-15
 **Current Phase:** 23.1
 **Current Phase Name:** Close v0.4 requirement and verification gaps
 **Current Plan:** 1
-**Status:** D-200 sole review found Critical CR-03 and CR-04; Phase 23.1 is blocked, incomplete and unverified.
+**Status:** D-201 rescope authorized for CR-03/CR-04; Phase 23.1 remains incomplete and unverified pending one correction task and one independent review.
 **Progress:** [████████░░] 80%
 
 Completed stages: Phase 23 release and the v0.4 gaps audit are recorded. Phase 23.1 Task 7 passed its bounded checks at source candidate 7fda5b2fb11d62a680dc4a7340eee7c85e2caf90; the sole D-199 review found a Critical Unicode whitespace bypass. Phase 23.1 remains incomplete and unverified; no verifier or further fix/review ran. The D-199 allowance is exhausted. Owner next: $gsd-discuss-phase 23.1.
@@ -92,13 +92,13 @@ Current D-200 handoff: Task 8 checks passed at `9991327df736f668bd8c98f4fd9441a4
 - [Phase 23.1]: D-198 authorizes one same-plan Task 6 for the two D-196 Critical findings and one independent review; next: $gsd-autonomous --from 23.1.
 - [Phase 23.1]: D-198 Task 6 checks passed, but the sole review at `12fcb174885d7682cade9c88a5316c00fa4b0c0a` found a Critical YAML block-scalar U+2028 bypass. The review cap is exhausted; no fix or verifier follows. Owner next: `$gsd-discuss-phase 23.1`.
 - [Phase 23.1]: D-199 authorizes exactly one same-plan Task 7 for the D-198 YAML block-scalar bypass and one independent review. The current Critical remains open; next: $gsd-autonomous --from 23.1. Stop before phase verification if review finds any Critical or new blocker. — This preserves the one-plan cap and all D-193–D-198 limits while allowing the owner-directed v0.4 continuation. At milestone closeout, reconcile reviewed work to main and verify a clean worktree.
+- [Phase 23.1]: D-201 authorizes one formal rescope of the existing plan for CR-03/CR-04, with one correction task and one independent review. — Keep the fixed Phase 22 report contract and standard-library checker; preserve every unrelated D-193–D-200 limit and stop before verification if any Critical remains.
 
 ## Session
 
-**Last session:** 2026-11-15T19:52:03.491Z
-**Stopped at:** Phase 23.1 stopped after sole D-200 review found Critical CR-03/CR-04; no verifier or further fix/review; owner next: $gsd-discuss-phase 23.1
-**Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/.continue-here.md
+**Last session:** 2026-11-16T02:22:26.737Z
+**Stopped at:** Phase 23.1 D-201 rescope authorized; next: $gsd-autonomous --from 23.1
+**Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-CONTEXT.md
 
 ### Blockers
-
-- D-200 sole review of source candidate 9991327df736f668bd8c98f4fd9441a4c563905b found Critical CR-03 (ASCII-spaced duplicate keys evade validation) and CR-04 (unpaired or mixed quotes normalize scalar values). D-200 is exhausted; no phase verifier, further source correction, or review is authorized. Owner acts next: $gsd-discuss-phase 23.1.
+None
