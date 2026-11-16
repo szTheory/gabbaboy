@@ -5,17 +5,17 @@ milestone_name: Evidence Floor
 current_phase: "23.1"
 current_phase_name: Close v0.4 requirement and verification gaps (INSERTED)
 current_plan: 1 of 1
-status: "Phase 23.1 remains blocked, incomplete, and unverified. D-202 authorizes one same-plan Task 10 for CR-05/CR-06 and one independent review of its exact committed candidate. No implementation has run. Next internal step: -execute-phase 23.1 --no-transition. Stop before verification if any Critical/new blocker remains or review is unavailable."
-stopped_at: Phase 23.1 D-202 Task 10 pre-dispatch
-last_updated: "2026-11-16T05:21:23.157Z"
-state_head: c2db1743336a893aa08fe1d55b0d17328203ca37
+status: "Phase 23.1 remains blocked, incomplete, and unverified. D-202 review of candidate af36fa2 found Critical CR-07: a non-ASCII-indented disposition row can be silently ignored. CR-05/CR-06 and carried CR-01/CR-02/CR-03/CR-04/WR-01 are closed without regression. Stop before phase verification, further source correction, or another review. Owner next: $gsd-discuss-phase 23.1."
+stopped_at: Phase 23.1 D-202 sole review blocked on CR-07; owner acts next with $gsd-discuss-phase 23.1.
+last_updated: "2026-11-16T06:15:13.312Z"
+state_head: cb4bf5685fe5145bf3bd9b3cd088ed84af067a2d
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 32
   completed_plans: 31
   percent: 80
-last_activity: 2026-11-15
+last_activity: 2026-11-16
 ---
 
 # Project State
@@ -25,7 +25,7 @@ last_activity: 2026-11-15
 **Current Phase:** 23.1
 **Current Phase Name:** Close v0.4 requirement and verification gaps
 **Current Plan:** 1 of 1
-**Status:** Phase 23.1 remains blocked, incomplete, and unverified. D-202 authorizes one same-plan Task 10 for CR-05/CR-06 and one independent review of its exact committed candidate. No implementation has run. Next internal step: -execute-phase 23.1 --no-transition. Stop before verification if any Critical/new blocker remains or review is unavailable.
+**Status:** Phase 23.1 remains blocked, incomplete, and unverified. D-202 review of candidate af36fa2 found Critical CR-07: a non-ASCII-indented disposition row can be silently ignored. CR-05/CR-06 and carried CR-01/CR-02/CR-03/CR-04/WR-01 are closed without regression. Stop before phase verification, further source correction, or another review. Owner next: $gsd-discuss-phase 23.1.
 **Progress:** [████████░░] 80%
 
 Completed stages: Phase 23 release and the v0.4 gaps audit are recorded. Phase 23.1 Tasks 1–9 and the D-201 review are historical; D-202 Task 10 is planned but not executed. No phase verifier has run.
@@ -59,7 +59,7 @@ Phase 23.1 remains incomplete. Task 6 corrected the D-196 findings at candidate 
 
 The tested D-199 source candidate is `7fda5b2fb11d62a680dc4a7340eee7c85e2caf90`: the exact-candidate self-test passed with `controls=314`, the immutable report and handoff stages passed against original baseline `1d74b032d8106516b0fd22d6cd02ddaf916b2031`, the 125/124 wrapper boundary behaved as required, SUMMARY coverage and shared UAT closure passed, and only `plan_cap` plus `planning_hygiene_controls` passed after configure-only generation bound to that full candidate. The first handoff wording check failed; the required stop/route/phase terms were committed at `653ed2b3e501bc31c8a12e99ef800822889e08ff`, and the handoff recheck passed at the tested candidate. All bounded Task 7 checks are complete; the sole independent exact-candidate review remains pending. D-103's exact-final-head full-suite gate remains unfulfilled; no broad local suite, no third local lifecycle retest, no release retry, and no tag/asset/rights action is permitted. The owner-only audit route is `/gsd-audit-milestone v0.4`. Phase 23.1 and v0.4 remain open; the four requirements remain Pending, no phase verifier has run, and no next phase or milestone is selected.
 
-Current D-200 handoff: D-202 authorizes one same-plan Task 10 for CR-05/CR-06 and one exact-candidate independent review. Task 10 has not run. Next: $gsd-execute-phase 23.1 --no-transition through $gsd-autonomous --from 23.1. Stop before verification if any Critical, new blocker, or unavailable review remains; no further correction or review.
+Current D-200 handoff: D-202 sole review completed at candidate af36fa2. CR-05 and CR-06 are fixed, carried CR-01/CR-02/CR-03/CR-04/WR-01 did not regress, and Critical CR-07 remains. Phase 23.1 is blocked before verification; owner next: $gsd-discuss-phase 23.1.
 
 ## Accumulated Context
 
@@ -97,10 +97,10 @@ Current D-200 handoff: D-202 authorizes one same-plan Task 10 for CR-05/CR-06 an
 
 ## Session
 
-**Last session:** 2026-11-16T05:21:23.016Z
-**Stopped at:** Phase 23.1 D-202 Task 10 pre-dispatch
-**Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-CONTEXT.md
+**Last session:** 2026-11-16T06:14:40.133Z
+**Stopped at:** Phase 23.1 D-202 sole review blocked on CR-07; owner acts next with $gsd-discuss-phase 23.1.
+**Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/.continue-here.md
 
 ### Blockers
 
-- D-202 Task 10 is authorized but has not run. CR-05/CR-06 remain open, so Phase 23.1 stays blocked and no verifier may run unless the sole exact-candidate review clears all Criticals and blockers. Next internal action: $gsd-execute-phase 23.1 --no-transition; no additional correction or review is authorized.
+- Critical CR-07 remains after the sole D-202 exact-candidate review: a non-ASCII-indented disposition row can disappear before the exact four-entry comparison. Phase 23.1 remains incomplete and unverified. No phase verification, further source correction, or another review is authorized. Owner next: $gsd-discuss-phase 23.1.
