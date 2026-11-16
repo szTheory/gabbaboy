@@ -1,9 +1,9 @@
 ---
 phase: "24"
 slug: "resolve-remaining-v0-4-evidence-and-verification-gaps"
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-11-16"
 ---
 
@@ -32,7 +32,7 @@ created: "2026-11-16"
 |---------|------|------|----------|------------|-----------------|-----------|-------------------|-------------|--------|
 | 24-01-T1-map | 01 | 1 | Eight-row point-in-time map and exact D-205 cap | T-24-01, T-24-02, T-24-04 | Reads committed inputs; keeps criteria/owner, tracker, audit, history, freshness, boundaries and gates separate; preserves at most 40 actual plans | integration | `python3 -I tests/scripts/verify-planning-hygiene.py --check v04-gap-assessment --stage report --rev "$PHASE24_CHECK_REV" --baseline-rev "$PHASE24_BASELINE_REV" --repo .` | Report stage passed at `883fdbba160b0afcd2b35d8c0363b2cba598c016`; the plan-cap controls also accept the exact 40-plan D-205 fixture | ✅ pass |
 | 24-01-T2-controls | 01 | 1 | Causal report/handoff/cap negatives | T-24-01, T-24-02, T-24-03, T-24-04, T-24-05 | Canonical committed positives pass; false completion, owner drift, freshness promotion, closure, source substitution and extra plan capacity refuse for intended reasons | integration | `python3 -I tests/scripts/verify-planning-hygiene.py --self-test --rev "$PHASE24_CHECK_REV" --repo .` | Self-test passed with 621 controls against committed checker/report candidate `a7d49bb4b7dbf9d0088cfe6800f3f19ddddc6d39` | ✅ pass |
-| 24-01-T3-closure | 01 | 1 | Bounded regression, block-style summary and shared generated closure | T-24-02, T-24-03, T-24-04, T-24-05 | Runs only the two approved CTests, records their actual checked commit, then generates and checks automated UAT without requirement/milestone completion | integration / other | Focused CTest command above, then shared summary/UAT commands below and committed handoff stage | Existing CTests and shared scripts | ⬜ pending |
+| 24-01-T3-closure | 01 | 1 | Bounded regression, block-style summary and shared generated closure | T-24-02, T-24-03, T-24-04, T-24-05 | Runs only the two approved CTests, records their actual checked commit, then generates and checks automated UAT without requirement/milestone completion | integration / other | Focused CTest command above, then shared summary/UAT commands below and committed handoff stage | Existing CTests and shared scripts | ✅ pass |
 
 Every runnable plan command must state a causal `<fails_when>` condition. The immutable report check must use full commit IDs for the assessment input and any historical comparison baseline; it must not read current source facts from a moving branch or dirty worktree.
 
@@ -40,7 +40,12 @@ Every runnable plan command must state a causal `<fails_when>` condition. The im
 
 - The committed report candidate passed the immutable report stage against input `f511baa8c0330f5cd90d56da55d79dbc873b0559` and baseline `f6fe166a7c2a3668f5a412a82b648dd062329d3c`.
 - The direct self-test passed all 621 existing and Phase 24 controls at checker/report candidate `a7d49bb4b7dbf9d0088cfe6800f3f19ddddc6d39`. This validates the semantic mutation families and immutable fixture behavior; it is not a result from either CTest.
-- Task 3 remains pending. The focused CTests have not run yet.
+- The direct immutable report-stage check passed at `5f496299165e5df89e90d27ad51e997bceec822f`, the configure-time candidate. The checker source and assessment report are unchanged from the T2-tested `a7d49bb4b7dbf9d0088cfe6800f3f19ddddc6d39`; this docs-only commit was selected because CMake pins `git rev-parse HEAD`.
+- Configure-only generation selected exactly the existing `plan_cap` and `planning_hygiene_controls` identities. Both wrapped commands used full revision `5f496299165e5df89e90d27ad51e997bceec822f`; both retained `TIMEOUT=30`; `planning_hygiene_controls` retained `GBB_EXPECT_MIN_VALUE=125`.
+- The focused CTest filter passed `2/2`: `plan_cap` in 0.46 seconds and `planning_hygiene_controls` in 18.81 seconds; total CTest time was 19.31 seconds. No emulator build was run.
+- The actual SUMMARY passed the supported block-style coverage schema with 6 entries; `verify-summary-coverage.py --self-test` passed with 12 mutation controls.
+- The shared generator wrote `24-UAT.md` with 6 automated items and 0 human checkpoints. The generated closure passed with 6/6 items and 0 gaps; its self-test passed with 21 mutation controls. These checks close only the Phase 24 assessment deliverables.
+- The committed handoff report and handoff stages will be checked at the separate `PHASE24_HANDOFF_REV`; those results are recorded after the Task 3 documentation commit.
 
 ### Causal Failure Conditions
 
@@ -88,11 +93,11 @@ None. Source-page access outcomes are recorded only when supported by existing f
 
 ## Validation Sign-Off
 
-- [ ] Every task has an automated pass and failure condition.
-- [ ] The point-in-time evidence map rejects false completion, owner transfer, freshness promotion, and milestone closure.
-- [ ] Historical Phase 20/21 reports and source identities remain unchanged.
-- [ ] Only `plan_cap` and `planning_hygiene_controls` CTests run.
-- [ ] All four requirements remain Pending under original owners and v0.4 remains open.
-- [ ] Phase completion is not represented as requirement or milestone completion.
+- [x] Every task has an automated pass and failure condition.
+- [x] The point-in-time evidence map rejects false completion, owner transfer, freshness promotion, and milestone closure.
+- [x] Historical Phase 20/21 reports and source identities remain unchanged.
+- [x] Only `plan_cap` and `planning_hygiene_controls` CTests run.
+- [x] All four requirements remain Pending under original owners and v0.4 remains open.
+- [x] Phase completion is not represented as requirement or milestone completion.
 
-Planning only: no tests have run and no validation outcome is marked passing. All three task IDs match 24-01-PLAN.md; shared closure belongs to T3 rather than a fourth task.
+Plan 24-01 execution checks are recorded above. Phase verification, independent code/security review, and the owner-controlled milestone audit remain separate workflow gates. All three task IDs match 24-01-PLAN.md; shared closure belongs to T3 rather than a fourth task.
