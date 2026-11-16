@@ -59,21 +59,21 @@ coverage:
     human_judgment: false
     verification:
       - kind: integration
-        ref: "verify-planning-hygiene.py --self-test; 621 controls passed at a7d49bb4b7dbf9d0088cfe6800f3f19ddddc6d39"
+        ref: "verify-planning-hygiene.py --self-test; 628 controls passed at a1e8067500016158347e92522934b9af45d78386"
         status: pass
   - id: D4
     description: "The exact D-205 allowance preserves one ordinary Phase 24 plan and the actual 40-plan ceiling."
     human_judgment: false
     verification:
       - kind: integration
-        ref: "plan_cap passed at configure-time candidate 5f496299165e5df89e90d27ad51e997bceec822f"
+        ref: "plan_cap passed at candidate a1e8067500016158347e92522934b9af45d78386"
         status: pass
   - id: D5
     description: "Only the two authorized focused CTests pass at the full configured candidate with their original timeout and control floor."
     human_judgment: false
     verification:
       - kind: integration
-        ref: "24-VALIDATION.md; plan_cap and planning_hygiene_controls passed 2/2 at 5f496299165e5df89e90d27ad51e997bceec822f"
+        ref: "24-VALIDATION.md; plan_cap and planning_hygiene_controls passed 2/2 at a1e8067500016158347e92522934b9af45d78386"
         status: pass
   - id: D6
     description: "The assessment summary uses the shared block-style coverage contract consumed by the existing automated closure workflow."
@@ -115,11 +115,12 @@ status: complete
 ## Verification Results
 
 - The report stage passed at `883fdbba160b0afcd2b35d8c0363b2cba598c016` against immutable assessment input `f511baa8c0330f5cd90d56da55d79dbc873b0559` and historical baseline `f6fe166a7c2a3668f5a412a82b648dd062329d3c`.
-- The direct production self-test passed all 621 controls at checker/report candidate `a7d49bb4b7dbf9d0088cfe6800f3f19ddddc6d39`.
-- The direct report-stage check passed at configure-time candidate `5f496299165e5df89e90d27ad51e997bceec822f`; the checker/report source was unchanged from the T2 candidate. Configure-only inventory selected exactly `plan_cap` and `planning_hygiene_controls`, both with `TIMEOUT=30` and the expected 125-control floor. Both tests passed, `2/2`, in 19.31 seconds total.
+- The post-review-fix direct production self-test passed all 628 controls at candidate `a1e8067500016158347e92522934b9af45d78386`.
+- At candidate `a1e8067500016158347e92522934b9af45d78386`, the immutable plan-cap check passed with six phases and 40 plans; the immutable report and handoff stages also passed against assessment input `f511baa8c0330f5cd90d56da55d79dbc873b0559` and protected baseline `f6fe166a7c2a3668f5a412a82b648dd062329d3c`.
+- Configure-only inventory selected exactly `plan_cap` and `planning_hygiene_controls`, both with `TIMEOUT=30`; `planning_hygiene_controls` retained the 125-control floor. Both focused tests passed, `2/2`, at candidate `a1e8067500016158347e92522934b9af45d78386` (`plan_cap` 0.46 seconds; `planning_hygiene_controls` 22.04 seconds). No emulator build was run.
 - The actual SUMMARY passed the supported block-style coverage schema with 6 entries; its checker self-test passed with 12 mutation controls. The shared generator wrote `24-UAT.md` with 6 automated items and 0 human checkpoints; closure verification passed with 6/6 and 0 gaps, and the closure self-test passed with 21 mutation controls.
 - The configured run selected only the two authorized CTests. CMake's existing configure-time repository/protocol checks reported their status; it did not build or run emulator fixtures, and no fixture was admitted.
-- The direct immutable report and handoff stages both passed at full committed handoff candidate `45fd1846610733a02cdcd34dcef4db9783d75189`. This later documentation candidate remains distinct from the tested checker/report candidate.
+- The direct immutable report and handoff stages also passed at the post-review-fix candidate `a1e8067500016158347e92522934b9af45d78386`; the final documentation handoff candidate will be recorded separately after its commit.
 
 ## Decisions Made
 
@@ -131,10 +132,10 @@ status: complete
 
 - **Assessment input:** `f511baa8c0330f5cd90d56da55d79dbc873b0559`.
 - **Protected baseline:** `f6fe166a7c2a3668f5a412a82b648dd062329d3c`.
-- Tested checker/report candidate: `5f496299165e5df89e90d27ad51e997bceec822f`.
-- **Checked handoff candidate (`PHASE24_HANDOFF_REV`):** `45fd1846610733a02cdcd34dcef4db9783d75189`; direct report and handoff stages both passed there.
+- Tested checker/report candidate: `a1e8067500016158347e92522934b9af45d78386`.
+- **Checked handoff candidate (`PHASE24_HANDOFF_REV`):** pending the final evidence-document commit and its direct report/handoff stage checks.
 
-Phase 24 execution/automated closure complete. Phase verification pending. The orchestrator is the next actor; after the configured independent reviews it runs `$gsd-verify-work 24`.
+Phase 24 execution/automated closure complete. The corrected candidate passed its bounded checks; the fresh independent review is pending. After review acceptance and the configured regression hook, the orchestrator runs `$gsd-verify-work 24`.
 
 The assessed plan keeps `requirements-completed: []`; all eight requirement IDs here describe assessment coverage only.
 
@@ -152,7 +153,7 @@ Evidence links: [24-EVIDENCE.md](24-EVIDENCE.md), [24-VALIDATION.md](24-VALIDATI
 - **Fix:** Extended the existing parser to recognize active phase entries across both current roadmap sections and added a production-control regression for the actual six-phase/40-plan shape.
 - **Files modified:** `tests/scripts/verify-planning-hygiene.py`
 - **Commit:** `883fdbb`
-- **Verification:** Exact 40-plan D-205 case passed; extra phase/plan mutations are refused by the 621-control self-test.
+- **Verification:** Exact 40-plan D-205 case passed; extra phase/plan mutations are refused by the 628-control self-test at `a1e8067500016158347e92522934b9af45d78386`.
 
 **2. [Rule 3 - Blocking] Make the committed pending-verification handoff satisfy its immutable contract**
 - **Found during:** Task 3
@@ -160,11 +161,11 @@ Evidence links: [24-EVIDENCE.md](24-EVIDENCE.md), [24-VALIDATION.md](24-VALIDATI
 - **Fix:** Added the exact Pending-owner facts, open/stale/D-103 stops, commit-boundary identities, local evidence links, and the explicit Phase 24 verification route to the summary, continuation, and current STATE handoff.
 - **Files modified:** `.planning/STATE.md`, `.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-SUMMARY.md`, `.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md`
 - **Commits:** `c661e4e`, `45fd184`.
-- **Verification:** The committed report and handoff stages both passed at `45fd1846610733a02cdcd34dcef4db9783d75189`.
+- **Verification:** The committed report and handoff stages passed at `45fd1846610733a02cdcd34dcef4db9783d75189`; the corrected checker/report/handoff candidate also passed both stages at `a1e8067500016158347e92522934b9af45d78386`.
 
 ## TDD Evidence
 
-The D-205 path-renewal control was committed RED as `9d3eb7b`; direct self-test failed with the intended message `path-based D-205 reserve renewal was accepted: []`. The production cap/report/handoff controls then passed in the committed checker candidate `a7d49bb4b7dbf9d0088cfe6800f3f19ddddc6d39`.
+The D-205 path-renewal control was committed RED as `9d3eb7b`; direct self-test failed with the intended message `path-based D-205 reserve renewal was accepted: []`. The original production cap/report/handoff controls passed in checker candidate `a7d49bb4b7dbf9d0088cfe6800f3f19ddddc6d39`; after the review fixes, all 628 controls and the immutable plan-cap/report/handoff stages passed at `a1e8067500016158347e92522934b9af45d78386`.
 
 ## Shared Automated Closure
 
@@ -176,7 +177,7 @@ None found in files created or modified by this plan. The historical, stale, rig
 
 ## Next Phase Readiness
 
-Plan 24-01 and its automated assessment closure are complete. The orchestrator still owns the configured independent code/security reviews and Phase 24 verification. After those review gates, the next command is `$gsd-verify-work 24`. v0.4 remains open with `gaps_found`; all four requirements remain Pending, Phase 20/21 remain stale, and the separate D-103 exact-final-head milestone gate remains unfulfilled.
+Plan 24-01 and its automated assessment closure are complete. The orchestrator still owns the fresh independent code review and Phase 24 verification. After review acceptance and the configured regression hook, the next command is `$gsd-verify-work 24`. v0.4 remains open with `gaps_found`; all four requirements remain Pending, Phase 20/21 remain stale, and the separate D-103 exact-final-head milestone gate remains unfulfilled.
 
 ## Self-Check: PASSED
 
