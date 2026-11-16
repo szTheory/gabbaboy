@@ -217,7 +217,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 | 21. CGB Game Progress and Scene Regressions | 8/8 | Complete; PR #140 passed exact-head checks and merged as `bef2cfbd` | 2026-11-02 |
 | 22. Synthetic Composition and Diagnostic Gate Assessment | 5/5 | Complete; exact-head qualification and merge passed; DIAG-01/02 and RIGHTS-01 remain pending | 2026-11-03 |
 | 23. Qualified v0.4.0 Release | 9/9 | Complete    | 2026-11-13 |
-| 23.1. Close v0.4 requirement and verification gaps | 0/1 | D-200 Task 8 checks pass at `9991327`; sole independent review pending | — |
+| 23.1. Close v0.4 requirement and verification gaps | 1/1 | D-200 Task 8 checks pass at `9991327`; sole independent review pending | — |
 
 ## Planning and Approval Boundary
 
