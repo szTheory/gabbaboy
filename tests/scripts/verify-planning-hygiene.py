@@ -1812,10 +1812,10 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
             raise SystemExit(f"planning-hygiene self-test FAIL: {stage} CLI negative wanted {expected_code}: {result} {output.getvalue()} {error.getvalue()}")
         controls += 1
 
-    def cli_pre_fix_accepts(stage: str, rev: str, label: str) -> None:
+    def cli_pre_fix_accepts(stage: str, rev: str, label: str, checker: Path | None = None) -> None:
         nonlocal controls
         result = subprocess.run(
-            ["python3", "-I", str(pre_fix_checker), "--check", "v04-reconciliation",
+            ["python3", "-I", str(checker or pre_fix_checker), "--check", "v04-reconciliation",
              "--stage", stage, "--rev", rev, "--baseline-rev", baseline_rev,
              "--repo", str(repo)], capture_output=True, text=True, check=False, env=env, timeout=60)
         expected = f"v04-reconciliation pass stage={stage}"
@@ -1843,6 +1843,32 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
     cr04_pre_fix = report_content.replace("status: passed\n", 'status: "passed\n', 1)
     cr04_pre_fix_rev = commit({report_path: cr04_pre_fix}, "reproduce D-200 unmatched quote acceptance")
     cli_pre_fix_accepts("report", cr04_pre_fix_rev, "an unmatched leading scalar quote")
+
+    # D-201 still accepts both newly reviewed D-202 mutants through the real CLI.
+    # Keep these RED fixtures valid in every unrelated report and provenance field.
+    d201_source_rev = "6df11f34ce19ee54c4b3270ed6214c61dbdd7927"
+    d201_source = git_run(source_repo, "show",
+                          f"{d201_source_rev}:tests/scripts/verify-planning-hygiene.py")
+    if d201_source.returncode != 0:
+        raise SystemExit("planning-hygiene self-test FAIL: D-201 checker source is unavailable")
+    d201_checker = base / "verify-planning-hygiene-d201.py"
+    d201_checker.write_bytes(d201_source.stdout)
+    cr05_pre_fix = report_content.replace(
+        phase_field,
+        '"phase": GB-21-cgb-game-progress-and-scene-regressions\n' + phase_field, 1)
+    cr05_pre_fix_rev = commit({report_path: cr05_pre_fix},
+                              "reproduce D-201 quoted phase-root alias acceptance")
+    cli_pre_fix_accepts("report", cr05_pre_fix_rev,
+                        "a conflicting quoted protected phase root", d201_checker)
+    cr06_extra_row = ("  - id : EXTRA-01\n    status: Satisfied\n"
+                      "    original_owner: Phase 99\n")
+    cr06_pre_fix = report_content.replace(
+        "requirement_dispositions:\n" + dispositions,
+        "requirement_dispositions:\n" + cr06_extra_row + dispositions, 1)
+    cr06_pre_fix_rev = commit({report_path: cr06_pre_fix},
+                              "reproduce D-201 spaced disposition-row acceptance")
+    cli_pre_fix_accepts("report", cr06_pre_fix_rev,
+                        "a complete contradictory disposition row with a spaced item key", d201_checker)
 
     # The root lexer retains both spellings before any dict conversion; both
     # conflict orders and both permitted horizontal spaces are present here.
@@ -1882,6 +1908,101 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
                                                "requirement_dispositions\t:\n", 1)
     object_alias_only_rev = commit({report_path: object_alias_only}, "reject lone tabbed object root")
     cli_check("report", object_alias_only_rev, "v04-report-requirements")
+
+    def root_alias_form(root: str, form: str) -> str:
+        if form == "single-quoted":
+            return f"'{root}':"
+        if form == "double-quoted escaped":
+            return '"' + root.replace("e", "\\u0065", 1) + '":'
+        if form == "tag then anchor":
+            return f"!custom &d202_anchor {root}:"
+        if form == "anchor then tag":
+            return f"&d202_anchor !custom {root}:"
+        if form == "same-line explicit key":
+            return f"? {root}\n:"
+        if form == "multiline explicit key":
+            return f"?\n  {root}\n:"
+        if form == "arbitrary alias name":
+            return f"&d202_arbitrary {root}:\n*d202_arbitrary:"
+        raise SystemExit(f"planning-hygiene self-test FAIL: unknown protected-root form {form!r}")
+
+    def root_alias_block(root: str, form: str) -> str:
+        header = root_alias_form(root, form)
+        if root == "phase":
+            return header + " GB-21-cgb-game-progress-and-scene-regressions\n"
+        if root == "unresolved_gates":
+            row = "  - d202_contradictory_gate\n"
+        else:
+            row = ("  - id: RIGHTS-01\n    status: Satisfied\n"
+                   "    original_owner: Phase 99\n")
+        if form == "arbitrary alias name":
+            anchor_header, alias_header = header.split("\n", 1)
+            return anchor_header + "\n" + row + alias_header + "\n" + row
+        return header + "\n" + row
+
+    canonical_root_blocks = {
+        "phase": "phase: GB-22-composition-and-microtest-evidence\n",
+        "unresolved_gates": "unresolved_gates:\n" + gates + "\n",
+        "requirement_dispositions": "requirement_dispositions:\n" + dispositions + "\n",
+    }
+
+    def mutate_protected_root(document: str, root: str, alias_block: str, position: str) -> str:
+        canonical = canonical_root_blocks[root]
+        if position == "alias only":
+            replacement = alias_block
+        elif position == "before canonical":
+            replacement = alias_block + canonical
+        elif position == "after canonical":
+            replacement = canonical + alias_block
+        else:
+            raise SystemExit(f"planning-hygiene self-test FAIL: unknown root position {position!r}")
+        mutated = document.replace(canonical, replacement, 1)
+        if mutated == document:
+            raise SystemExit(f"planning-hygiene self-test FAIL: could not seed {root} {position} fixture")
+        return mutated
+
+    root_forms = (
+        "single-quoted", "double-quoted escaped", "tag then anchor", "anchor then tag",
+        "arbitrary alias name", "same-line explicit key", "multiline explicit key",
+    )
+    root_refusals = {
+        "phase": ("v04-report-frontmatter-duplicate", "v04-report-field"),
+        "unresolved_gates": ("v04-report-frontmatter-duplicate", "v04-report-gates"),
+        "requirement_dispositions": ("v04-report-frontmatter-duplicate", "v04-report-requirements"),
+    }
+    for protected_root in canonical_root_blocks:
+        duplicate_refusal, missing_root_refusal = root_refusals[protected_root]
+        for form in root_forms:
+            alias_block = root_alias_block(protected_root, form)
+            for position in ("before canonical", "after canonical"):
+                mutated = mutate_protected_root(report_content, protected_root, alias_block, position)
+                mutant_rev = commit({report_path: mutated},
+                                    f"reject {form} {protected_root} root {position}")
+                cli_check("report", mutant_rev, duplicate_refusal)
+            only_alias = mutate_protected_root(report_content, protected_root, alias_block, "alias only")
+            only_alias_rev = commit({report_path: only_alias},
+                                   f"reject {form} {protected_root} root without canonical spelling")
+            cli_check("report", only_alias_rev, missing_root_refusal)
+        # The paired canonical fixture demonstrates that the refusal comes from the alias.
+        cli_check("report", report_rev)
+
+    # Exercise every remaining expected report field at the production CLI boundary.
+    # Existing requirements-root aliases retain their dedicated map controls below.
+    remaining_report_fields = (
+        "source_head", "implementation_head", "evidence_head", "report_kind", "status",
+        "metadata_cases", "shared_macro_cases", "inline_cases", "initial_no_protocol_exclusions",
+        "admitted", "executed", "requirements_satisfied",
+    )
+    for protected_root in remaining_report_fields:
+        canonical = next((line for line in report_content.split("\n")
+                          if line.startswith(f"{protected_root}:")), None)
+        if canonical is None:
+            raise SystemExit(f"planning-hygiene self-test FAIL: missing canonical field {protected_root}")
+        mutated = report_content.replace(canonical + "\n",
+                                        f"'{protected_root}': conflicting\n{canonical}\n", 1)
+        mutant_rev = commit({report_path: mutated},
+                            f"reject quoted protected {protected_root} duplicate root")
+        cli_check("report", mutant_rev, "v04-report-frontmatter-duplicate")
 
     # Direct controls exercise every existing scalar reader across unmatched,
     # mixed and repeated quote edges, plus canonical and supported quoted twins.
