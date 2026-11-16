@@ -3,12 +3,12 @@ gsd_state_version: "1.0"
 milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: "23.1"
-current_phase_name: Close v0.4 requirement and verification gaps
+current_phase_name: Close v0.4 requirement and verification gaps (INSERTED)
 current_plan: 1
 status: D-201 rescope authorized for CR-03/CR-04; Phase 23.1 remains incomplete and unverified pending one correction task and one independent review.
 stopped_at: "Phase 23.1 D-201 rescope authorized; next: $gsd-autonomous --from 23.1"
-last_updated: "2026-11-16T02:22:26.896Z"
-state_head: 0c2719201e25effd54736094771d1150160ce56e
+last_updated: "2026-11-16T02:48:00.332Z"
+state_head: 544224178bbc73e8fdc3aea499d5550b95e970ca
 progress:
   total_phases: 5
   completed_phases: 4
