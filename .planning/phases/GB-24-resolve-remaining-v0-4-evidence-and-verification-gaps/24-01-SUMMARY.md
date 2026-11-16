@@ -180,4 +180,4 @@ Plan 24-01 and its automated assessment closure are complete. The orchestrator s
 
 ## Self-Check: PASSED
 
-All eight expected plan files exist. All nine task commits (`b5eb1a6`, `883fdbb`, `9d3eb7b`, `eb43d88`, `a7d49bb`, `5f49629`, `bc48569`, `c661e4e`, and `45fd184`) are ancestors of the completed task head `45fd1846610733a02cdcd34dcef4db9783d75189`. The summary records the measured task-commit count and plan-head boundary; the separate final metadata commit is not counted as a task commit.
+The single expected plan file exists. All nine task commits (`b5eb1a6`, `883fdbb`, `9d3eb7b`, `eb43d88`, `a7d49bb`, `5f49629`, `bc48569`, `c661e4e`, and `45fd184`) are ancestors of the completed task head `45fd1846610733a02cdcd34dcef4db9783d75189`. The summary records the measured task-commit count and plan-head boundary; the separate final metadata commit is not counted as a task commit.
