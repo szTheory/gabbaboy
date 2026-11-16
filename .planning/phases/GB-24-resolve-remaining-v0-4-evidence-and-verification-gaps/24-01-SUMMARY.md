@@ -126,6 +126,19 @@ status: complete
 - Use the current full commit for CMake's configure-time candidate because the existing CMake wiring derives the revision from `git rev-parse HEAD`; this docs-only commit contains the unchanged checker/report tested in T2.
 - Keep the approved focused test override active through the configured regression hook. The original broad hook remains outside this plan and the orchestrator restores its configuration after authorized checks.
 
+## Commit Boundaries and Phase Handoff
+
+- **Assessment input:** `f511baa8c0330f5cd90d56da55d79dbc873b0559`.
+- **Protected baseline:** `f6fe166a7c2a3668f5a412a82b648dd062329d3c`.
+- **Tested checker/report candidate:** `5f496299165e5df89e90d27ad51e997bceec822f`.
+- **Handoff revision:** supplied separately as the full `PHASE24_HANDOFF_REV` after the handoff documents are committed; report and handoff stages read that immutable revision.
+
+Phase 24 execution/automated closure complete. Phase verification pending. The orchestrator is the next actor; after the configured independent reviews it runs `$gsd-verify-work 24`.
+
+FIXT-01 — Pending, original owner Phase 21. RIGHTS-01 — Pending, original owner Phase 20. DIAG-01 — Pending, original owner Phase 22. DIAG-02 — Pending, original owner Phase 22. Phase 20 and Phase 21 are stale; the v0.4 milestone remains open with `gaps_found`, and D-103 is unfulfilled. No broad local suite, no third local lifecycle retest, no release retry, no tag/asset/rights action, and no fixture admission.
+
+Evidence links: [24-EVIDENCE.md](24-EVIDENCE.md), [24-VALIDATION.md](24-VALIDATION.md), [24-UAT.md](24-UAT.md), and [.continue-here.md](.continue-here.md).
+
 ## Deviations from Plan
 
 ### Auto-fixed Issues
