@@ -219,6 +219,23 @@ V04_IMPLEMENTATION_TREE = "e768b7ec26d7c07542d6aa29aef53ae8fc826c5e"
 V04_EVIDENCE_HEAD = "d18db4c56d2a79e6138df37a9d16e3d346a86e13"
 V04_PENDING_OWNERS = {"FIXT-01": "Phase 21", "RIGHTS-01": "Phase 20",
                       "DIAG-01": "Phase 22", "DIAG-02": "Phase 22"}
+V04_REPORT_EXPECTED_FIELDS = {
+    "phase": "GB-22-composition-and-microtest-evidence",
+    "source_head": V04_EVIDENCE_HEAD,
+    "implementation_head": V04_IMPLEMENTATION_HEAD,
+    "evidence_head": V04_EVIDENCE_HEAD,
+    "report_kind": "boundary_reconstruction",
+    "status": "passed",
+    "metadata_cases": "513",
+    "shared_macro_cases": "480",
+    "inline_cases": "2",
+    "initial_no_protocol_exclusions": "31",
+    "admitted": "0",
+    "executed": "0",
+    "requirements_satisfied": "[]",
+}
+V04_PROTECTED_ROOT_KEYS = frozenset(V04_REPORT_EXPECTED_FIELDS) | frozenset(
+    ("unresolved_gates", "requirement_dispositions", "requirements"))
 V04_UNRESOLVED_GATES = (
     "acid2_derivative_build_reproducibility",
     "acid2_component_rights_and_output_scope",
@@ -337,6 +354,18 @@ def decode_frontmatter_scalar(raw: str) -> str | None:
     return inner
 
 
+def _frontmatter_block_scalar_indent(raw: str, parent_indent: int) -> int | None:
+    """Return the minimum indentation for this fixed reader's supported block scalars."""
+    value = decode_frontmatter_scalar(raw)
+    if value is None:
+        return None
+    marker = re.fullmatch(r"[|>](?:[+-][1-9]?|[1-9][+-]?)?", value)
+    if marker is None:
+        return None
+    digit = next((int(char) for char in value if char in "123456789"), None)
+    return parent_indent + digit if digit is not None else parent_indent
+
+
 def frontmatter_fields(text: str) -> tuple[dict[str, str], str]:
     normalized, _ = yaml_source_lines(text)
     match = GAP_FRONTMATTER.match(normalized)
@@ -366,8 +395,16 @@ def frontmatter_duplicates(text: str) -> list[str]:
     _, lines = yaml_source_lines(match.group(1))
     top_level: set[str] = set()
     item_fields: set[str] | None = None
+    block_scalar_indent: int | None = None
     duplicates: list[str] = []
     for line in lines:
+        if block_scalar_indent is not None:
+            if not yaml_horizontal_strip(line):
+                continue
+            indentation = len(line) - len(line.lstrip(" "))
+            if indentation > block_scalar_indent:
+                continue
+            block_scalar_indent = None
         if not yaml_horizontal_strip(line):
             continue
         if line[0] not in " \t":
@@ -377,10 +414,17 @@ def frontmatter_duplicates(text: str) -> list[str]:
                 if key in top_level:
                     duplicates.append(f"top-level key '{key}'")
                 top_level.add(key)
+                if key in V04_PROTECTED_ROOT_KEYS and not line.startswith(f"{key}:"):
+                    duplicates.append(f"noncanonical protected root key '{key}'")
+            elif any(_frontmatter_root_key_is_alias(line, protected)
+                     for protected in V04_PROTECTED_ROOT_KEYS):
+                # Preserve unsupported root syntax so consumers cannot silently drop it.
+                duplicates.append("unsupported or aliased protected root key syntax")
             continue
-        item = re.match(r"^[ \t]*-[ \t]+([A-Za-z0-9_-]+)[ \t]*:", line)
+        item = re.match(r"^[ \t]*-[ \t]+([A-Za-z0-9_-]+)[ \t]*:[ \t]*(.*?)[ \t]*$", line)
         if item:
             item_fields = {item.group(1)}
+            block_scalar_indent = _frontmatter_block_scalar_indent(item.group(2), 2)
             continue
         nested_key = parse_frontmatter_plain_key(line.lstrip(" \t"))
         if nested_key is not None and item_fields is not None:
@@ -388,6 +432,8 @@ def frontmatter_duplicates(text: str) -> list[str]:
             if key in item_fields:
                 duplicates.append(f"nested field '{key}'")
             item_fields.add(key)
+            colon = line.find(":")
+            block_scalar_indent = _frontmatter_block_scalar_indent(line[colon + 1:], 4)
     return duplicates
 
 
@@ -431,10 +477,21 @@ def frontmatter_objects(text: str, key: str) -> list[dict[str, str]] | None:
         return None
     entries: list[dict[str, str]] = []
     current: dict[str, str] | None = None
+    block_scalar_indent: int | None = None
     for line in lines[start + 1:]:
         if line and line[0] not in " \t":
             break
-        item = re.match(r"^[ \t]*-[ \t]+([A-Za-z0-9_-]+):[ \t]*(.*?)[ \t]*$", line)
+        horizontal = yaml_horizontal_strip(line)
+        if not horizontal or horizontal.startswith("#"):
+            continue
+        indentation = len(line) - len(line.lstrip(" "))
+        if block_scalar_indent is not None:
+            if indentation > block_scalar_indent:
+                continue
+            block_scalar_indent = None
+        # The fixed disposition schema accepts only two-space items and four-space
+        # members. Every other nonblank row is refused so its members cannot disappear.
+        item = re.fullmatch(r" {2}-[ \t]+([A-Za-z0-9_-]+):[ \t]*(.*?)[ \t]*", line)
         if item:
             if current is not None:
                 entries.append(current)
@@ -442,13 +499,16 @@ def frontmatter_objects(text: str, key: str) -> list[dict[str, str]] | None:
             if decoded is None:
                 return None
             current = {item.group(1): decoded}
+            block_scalar_indent = _frontmatter_block_scalar_indent(item.group(2), 2)
             continue
-        field = re.match(r"^[ \t]+([A-Za-z0-9_-]+):[ \t]*(.*?)[ \t]*$", line)
-        if field and current is not None:
-            decoded = decode_frontmatter_scalar(field.group(2))
-            if decoded is None:
-                return None
-            current[field.group(1)] = decoded
+        field = re.fullmatch(r" {4}([A-Za-z0-9_-]+):[ \t]*(.*?)[ \t]*", line)
+        if field is None or current is None:
+            return None
+        decoded = decode_frontmatter_scalar(field.group(2))
+        if decoded is None:
+            return None
+        current[field.group(1)] = decoded
+        block_scalar_indent = _frontmatter_block_scalar_indent(field.group(2), 4)
     if current is not None:
         entries.append(current)
     return entries
@@ -513,33 +573,40 @@ def _decode_frontmatter_key(raw: str) -> str | None:
 def _frontmatter_root_key_is_alias(line: str, key: str) -> bool:
     """Recognize YAML-equivalent root spellings without normalizing them as accepted input."""
     candidate = yaml_horizontal_strip(line)
+    if not candidate or candidate.startswith("#"):
+        return False
+    # Explicit keys, merge keys, and aliases are outside this schema. An arbitrary alias name
+    # may refer to any protected key anchored elsewhere, so reject it without guessing its name.
+    if candidate == "?" or candidate.startswith(("? ", "?\t", "*")):
+        return True
+    if re.match(r"^<<[ \t]*:", candidate):
+        return True
+    decorated = False
     # YAML node properties may precede a key in either order. This schema needs no tagged or
-    # anchored root key, so strip only enough property syntax to fail closed on its protected key.
+    # anchored root key; inspect recognized properties and refuse malformed property syntax.
     while True:
-        property_prefix = re.match(r"^(?:&[^ \t\[\]{},]+|!(?:<[^>]*>|[^ \t\[\]{},]+))[ \t]+(.+)$",
+        property_prefix = re.match(r"^(?:&[^ \t\[\]{},]+|!(?:<[^>]*>|[^ \t\[\]{},]*))[ \t]+(.+)$",
                                    candidate)
         if property_prefix is None:
             break
+        decorated = True
         candidate = yaml_horizontal_strip(property_prefix.group(1))
-    if candidate.startswith("?") and len(candidate) > 1 and candidate[1] in " \t":
-        candidate = candidate[1:].strip(" \t")
     if not candidate:
-        return False
-    if re.match(r"^\*" + re.escape(key) + r"(?:[ \t]*:|[ \t]+:)", candidate):
+        return decorated
+    if candidate[0] in "&!":
         return True
     if candidate[0] in "\"'":
         decoded = _decode_frontmatter_key(candidate)
         if decoded == key:
             return True
         # Malformed quoted forms that visibly begin with this protected key also fail closed.
-        return decoded is None and candidate[1:].lstrip(" \\t").startswith(key)
+        visible = candidate[1:].lstrip(" \t")
+        return decoded is None and visible.startswith(key) and (
+            len(visible) == len(key) or visible[len(key)] in " '\"\t:")
     plain_key = parse_frontmatter_plain_key(candidate)
     if plain_key == key:
-        return True
-    colon = candidate.find(":")
-    plain = candidate[:colon] if colon >= 0 else candidate
-    plain = yaml_horizontal_strip(re.split(r"[ \t]+#", plain, maxsplit=1)[0])
-    return plain == key
+        return decorated or not candidate.startswith(f"{key}:")
+    return False
 
 
 def frontmatter_mapping_pairs(text: str, key: str) -> list[tuple[str, str]] | None:
@@ -826,22 +893,7 @@ def check_v04_report(repo: Path, rev: str, baseline_rev: str,
     duplicate_fields = frontmatter_duplicates(report)
     if duplicate_fields:
         errors.append("v04-report-frontmatter-duplicate: " + ", ".join(duplicate_fields))
-    expected_fields = {
-        "phase": "GB-22-composition-and-microtest-evidence",
-        "source_head": V04_EVIDENCE_HEAD,
-        "implementation_head": V04_IMPLEMENTATION_HEAD,
-        "evidence_head": V04_EVIDENCE_HEAD,
-        "report_kind": "boundary_reconstruction",
-        "status": "passed",
-        "metadata_cases": "513",
-        "shared_macro_cases": "480",
-        "inline_cases": "2",
-        "initial_no_protocol_exclusions": "31",
-        "admitted": "0",
-        "executed": "0",
-        "requirements_satisfied": "[]",
-    }
-    for key, expected in expected_fields.items():
+    for key, expected in V04_REPORT_EXPECTED_FIELDS.items():
         if fields.get(key) != expected:
             errors.append(f"v04-report-field: {key} must be {expected}")
     if frontmatter_sequence(report, "unresolved_gates") != list(V04_UNRESOLVED_GATES):
@@ -1870,6 +1922,14 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
     cli_pre_fix_accepts("report", cr06_pre_fix_rev,
                         "a complete contradictory disposition row with a spaced item key", d201_checker)
 
+    cr06_tab_pre_fix = report_content.replace(
+        "requirement_dispositions:\n" + dispositions,
+        "requirement_dispositions:\n" + cr06_extra_row.replace("id :", "id\t:", 1) + dispositions, 1)
+    cr06_tab_pre_fix_rev = commit({report_path: cr06_tab_pre_fix},
+                                  "reproduce D-201 tabbed disposition-row acceptance")
+    cli_pre_fix_accepts("report", cr06_tab_pre_fix_rev,
+                        "a complete contradictory disposition row with a tabbed item key", d201_checker)
+
     # The root lexer retains both spellings before any dict conversion; both
     # conflict orders and both permitted horizontal spaces are present here.
     phase_conflicts = report_content.replace(
@@ -1912,6 +1972,8 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
     def root_alias_form(root: str, form: str) -> str:
         if form == "single-quoted":
             return f"'{root}':"
+        if form == "double-quoted":
+            return '"' + root + '":'
         if form == "double-quoted escaped":
             return '"' + root.replace("e", "\\u0065", 1) + '":'
         if form == "tag then anchor":
@@ -1928,6 +1990,17 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
 
     def root_alias_block(root: str, form: str) -> str:
         header = root_alias_form(root, form)
+        if form == "arbitrary alias name":
+            anchor_header, alias_header = header.split("\n", 1)
+            if root == "phase":
+                value = " GB-21-cgb-game-progress-and-scene-regressions\n"
+                return anchor_header + value + alias_header + value
+            if root == "unresolved_gates":
+                row = "  - d202_contradictory_gate\n"
+            else:
+                row = ("  - id: RIGHTS-01\n    status: Satisfied\n"
+                       "    original_owner: Phase 99\n")
+            return anchor_header + "\n" + row + alias_header + "\n" + row
         if root == "phase":
             return header + " GB-21-cgb-game-progress-and-scene-regressions\n"
         if root == "unresolved_gates":
@@ -1935,9 +2008,6 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         else:
             row = ("  - id: RIGHTS-01\n    status: Satisfied\n"
                    "    original_owner: Phase 99\n")
-        if form == "arbitrary alias name":
-            anchor_header, alias_header = header.split("\n", 1)
-            return anchor_header + "\n" + row + alias_header + "\n" + row
         return header + "\n" + row
 
     canonical_root_blocks = {
@@ -1962,7 +2032,7 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         return mutated
 
     root_forms = (
-        "single-quoted", "double-quoted escaped", "tag then anchor", "anchor then tag",
+        "single-quoted", "double-quoted", "double-quoted escaped", "tag then anchor", "anchor then tag",
         "arbitrary alias name", "same-line explicit key", "multiline explicit key",
     )
     root_refusals = {
@@ -1985,6 +2055,48 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
             cli_check("report", only_alias_rev, missing_root_refusal)
         # The paired canonical fixture demonstrates that the refusal comes from the alias.
         cli_check("report", report_rev)
+
+    spaced_item = ("  - id : EXTRA-01\n    status: Satisfied\n"
+                   "    original_owner: Phase 99\n")
+    tabbed_item = spaced_item.replace("id :", "id\t:", 1)
+    canonical_dispositions = canonical_root_blocks["requirement_dispositions"]
+    for label, extra_row in (("spaced", spaced_item), ("tabbed", tabbed_item)):
+        before_rows = report_content.replace(
+            "requirement_dispositions:\n",
+            "requirement_dispositions:\n" + extra_row, 1)
+        before_rows_rev = commit({report_path: before_rows},
+                                 f"reject {label} contradictory disposition row before canonical entries")
+        cli_check("report", before_rows_rev, "v04-report-requirements")
+        after_rows = report_content.replace(
+            canonical_dispositions, canonical_dispositions + extra_row, 1)
+        after_rows_rev = commit({report_path: after_rows},
+                                f"reject {label} contradictory disposition row after canonical entries")
+        cli_check("report", after_rows_rev, "v04-report-requirements")
+
+    extra_canonical_row = ("  - id: EXTRA-01\n    status: Satisfied\n"
+                           "    original_owner: Phase 99\n")
+    for position in ("before canonical", "after canonical"):
+        if position == "before canonical":
+            mutated = report_content.replace("requirement_dispositions:\n",
+                                             "requirement_dispositions:\n" + extra_canonical_row, 1)
+        else:
+            mutated = report_content.replace(canonical_dispositions,
+                                             canonical_dispositions + extra_canonical_row, 1)
+        mutant_rev = commit({report_path: mutated},
+                            f"reject complete extra disposition row {position}")
+        cli_check("report", mutant_rev, "v04-report-requirements")
+
+    malformed_rows = (
+        ("orphan member", "    status: Satisfied\n    original_owner: Phase 99\n"),
+        ("malformed item", "  - id EXTRA-01\n    status: Satisfied\n    original_owner: Phase 99\n"),
+        ("unrecognized member row", "    ? status: Satisfied\n"),
+    )
+    for label, malformed_row in malformed_rows:
+        mutated = report_content.replace("requirement_dispositions:\n",
+                                         "requirement_dispositions:\n" + malformed_row, 1)
+        mutant_rev = commit({report_path: mutated}, f"reject {label} in disposition object")
+        cli_check("report", mutant_rev, "v04-report-requirements")
+    cli_check("report", report_rev)
 
     # Exercise every remaining expected report field at the production CLI boundary.
     # Existing requirements-root aliases retain their dedicated map controls below.
