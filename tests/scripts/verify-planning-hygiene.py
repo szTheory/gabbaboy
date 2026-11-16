@@ -479,8 +479,6 @@ def frontmatter_objects(text: str, key: str) -> list[dict[str, str]] | None:
     current: dict[str, str] | None = None
     block_scalar_indent: int | None = None
     for line in lines[start + 1:]:
-        if line and line[0] not in " \t":
-            break
         horizontal = yaml_horizontal_strip(line)
         if not horizontal or horizontal.startswith("#"):
             continue
@@ -489,6 +487,10 @@ def frontmatter_objects(text: str, key: str) -> list[dict[str, str]] | None:
             if indentation > block_scalar_indent:
                 continue
             block_scalar_indent = None
+        if line[0] not in " \t":
+            if parse_frontmatter_plain_key(line) is None:
+                return None
+            break
         # The fixed disposition schema accepts only two-space items and four-space
         # members. Every other nonblank row is refused so its members cannot disappear.
         item = re.fullmatch(r" {2}-[ \t]+([A-Za-z0-9_-]+):[ \t]*(.*?)[ \t]*", line)
@@ -1929,6 +1931,48 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
                                   "reproduce D-201 tabbed disposition-row acceptance")
     cli_pre_fix_accepts("report", cr06_tab_pre_fix_rev,
                         "a complete contradictory disposition row with a tabbed item key", d201_checker)
+
+    # D-202's exact reviewed checker still accepts a contradictory row whose
+    # unsupported non-ASCII prefix makes the object reader stop at the boundary.
+    d202_source_rev = "af36fa2f4c0f35dc6b537a3e736f5cd264b83593"
+    d202_source = git_run(source_repo, "show",
+                          f"{d202_source_rev}:tests/scripts/verify-planning-hygiene.py")
+    if d202_source.returncode != 0:
+        raise SystemExit("planning-hygiene self-test FAIL: D-202 checker source is unavailable")
+    d202_checker = base / "verify-planning-hygiene-d202.py"
+    d202_checker.write_bytes(d202_source.stdout)
+    cr07_extra_row = ("\u00a0  - id: EXTRA-01\n    status: Satisfied\n"
+                      "    original_owner: Phase 99\n")
+    cr07_canonical_dispositions = f"requirement_dispositions:\n{dispositions}\n"
+    cr07_mutant = report_content.replace(
+        cr07_canonical_dispositions,
+        cr07_canonical_dispositions + cr07_extra_row, 1)
+    if cr07_mutant == report_content:
+        raise SystemExit("planning-hygiene self-test FAIL: could not seed the CR-07 disposition row")
+    cr07_mutant_rev = commit({report_path: cr07_mutant},
+                             "reproduce D-202 non-ASCII disposition-row acceptance")
+    cli_pre_fix_accepts("report", cr07_mutant_rev,
+                        "the U+00A0-prefixed contradictory disposition row", d202_checker)
+    cli_check("report", cr07_mutant_rev, "v04-report-requirements")
+    cli_check("report", report_rev)
+
+    object_boundary_text = (
+        "---\nrequirement_dispositions:\n"
+        "  - id: FIXT-01\n    status: Pending\n    original_owner: Phase 21\n"
+        "    note: |-\n      status: Satisfied\n      original_owner: Phase 99\n"
+        "# column-zero comment does not end the object block\n"
+        "  - id: RIGHTS-01\n    status: Pending\n    original_owner: Phase 20\n"
+        "next_root: recognized\n---\n"
+    )
+    expected_objects = [
+        {"id": "FIXT-01", "status": "Pending", "original_owner": "Phase 21", "note": "|-"},
+        {"id": "RIGHTS-01", "status": "Pending", "original_owner": "Phase 20"},
+    ]
+    actual_objects = frontmatter_objects(object_boundary_text, "requirement_dispositions")
+    if actual_objects != expected_objects:
+        raise SystemExit("planning-hygiene self-test FAIL: object comments, block scalar, or root transition "
+                         f"changed: {actual_objects!r} != {expected_objects!r}")
+    controls += 1
 
     # The root lexer retains both spellings before any dict conversion; both
     # conflict orders and both permitted horizontal spaces are present here.
