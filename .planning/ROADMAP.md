@@ -247,6 +247,6 @@ Phase 20 completed with no admitted fixture; RIGHTS-01 remains pending. Phase 21
 **Boundary:** Completing the Phase 24 assessment can coexist with FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remaining Pending under Phases 21, 20, 22 and 22. Keep v0.4 open and its audit gaps_found. No broad suite, third lifecycle retest, release/tag/asset operation, payload acquisition, build/run/admission, rights action or archival is authorized. Both auto-advance flags remain false.
 
 Plans:
-- [ ] 24-01-PLAN.md — Add the immutable all-eight gap assessment, causal controls and exact D-205 cap exception; record only the two focused CTests and shared automated closure.
+- [x] 24-01-PLAN.md — Add the immutable all-eight gap assessment, causal controls and exact D-205 cap exception; record only the two focused CTests and shared automated closure.
 
 **Execution handoff:** Phase 24 discussion, research, pattern mapping and planning are complete; implementation has not started. Next: `$gsd-execute-phase 24`. This bounded execution route preserves every remaining milestone gate and safety stop.

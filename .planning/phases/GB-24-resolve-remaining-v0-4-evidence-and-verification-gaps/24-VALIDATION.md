@@ -45,7 +45,7 @@ Every runnable plan command must state a causal `<fails_when>` condition. The im
 - The focused CTest filter passed `2/2`: `plan_cap` in 0.46 seconds and `planning_hygiene_controls` in 18.81 seconds; total CTest time was 19.31 seconds. No emulator build was run.
 - The actual SUMMARY passed the supported block-style coverage schema with 6 entries; `verify-summary-coverage.py --self-test` passed with 12 mutation controls.
 - The shared generator wrote `24-UAT.md` with 6 automated items and 0 human checkpoints. The generated closure passed with 6/6 items and 0 gaps; its self-test passed with 21 mutation controls. These checks close only the Phase 24 assessment deliverables.
-- The committed handoff report and handoff stages will be checked at the separate `PHASE24_HANDOFF_REV`; those results are recorded after the Task 3 documentation commit.
+- The direct immutable report and handoff stages both passed at committed `PHASE24_HANDOFF_REV=45fd1846610733a02cdcd34dcef4db9783d75189`, distinct from the tested CTest candidate. The summary/continuation/state contract now preserves the exact owners, stop set, and local artifact links.
 
 ### Causal Failure Conditions
 

@@ -12,17 +12,18 @@ provides:
   - Focused regression evidence and shared automated closure for this plan
 affects: [v0.4-audit, phase-24-verification, requirement-traceability]
 actuals:
-  tokens: 0
+  tokens: 34592.25
   tasks: 3
-  commits: 7
+  commits: 9
 plan_head_before: f511baa8c0330f5cd90d56da55d79dbc873b0559
-plan_head_after: 5f496299165e5df89e90d27ad51e997bceec822f
+plan_head_after: 45fd1846610733a02cdcd34dcef4db9783d75189
 tech-stack:
   added: []
   patterns: [immutable committed-input assessment, causal CLI refusal controls]
 key-files:
   created:
     - .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-EVIDENCE.md
+    - .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-SUMMARY.md
     - .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-UAT.md
     - .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md
   modified:
@@ -30,7 +31,6 @@ key-files:
     - .planning/ROADMAP.md
     - .planning/STATE.md
     - .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md
-    - .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-SUMMARY.md
 key-decisions:
   - "Keep each original requirement, tracker state, audit state, historical result, freshness, source boundary, and remaining gate distinct."
   - "Retain the exact D-205 six-phase exception and 40-plan ceiling; this assessment satisfies no requirement and closes no milestone gate."
@@ -82,7 +82,7 @@ coverage:
       - kind: other
         ref: "verify-summary-coverage.py --self-test; 12 mutation controls passed"
         status: pass
-duration: 90min
+duration: 98min
 completed: 2026-11-16
 status: complete
 ---
@@ -93,7 +93,7 @@ status: complete
 
 ## Performance
 
-- **Duration:** in progress; final duration recorded after closure checks
+- **Duration:** 98 min
 - **Started:** 2026-11-16T20:46:22Z
 - **Completed:** 2026-11-16
 - **Tasks:** 3
@@ -110,7 +110,7 @@ status: complete
 
 1. **Task 1: Read an immutable eight-requirement assessment through the production CLI** — `b5eb1a6` and `883fdbb`.
 2. **Task 2: Prove causal report, handoff, and cap refusal behavior** — `9d3eb7b`, `eb43d88`, `a7d49bb`, and `5f49629`.
-3. **Task 3: Record bounded regression evidence and generate automated assessment closure** — task commit recorded after the closure checks.
+3. **Task 3: Record bounded regression evidence and generate automated assessment closure** — `bc48569`, `c661e4e`, and `45fd184`.
 
 ## Verification Results
 
@@ -119,6 +119,7 @@ status: complete
 - The direct report-stage check passed at configure-time candidate `5f496299165e5df89e90d27ad51e997bceec822f`; the checker/report source was unchanged from the T2 candidate. Configure-only inventory selected exactly `plan_cap` and `planning_hygiene_controls`, both with `TIMEOUT=30` and the expected 125-control floor. Both tests passed, `2/2`, in 19.31 seconds total.
 - The actual SUMMARY passed the supported block-style coverage schema with 6 entries; its checker self-test passed with 12 mutation controls. The shared generator wrote `24-UAT.md` with 6 automated items and 0 human checkpoints; closure verification passed with 6/6 and 0 gaps, and the closure self-test passed with 21 mutation controls.
 - The configured run selected only the two authorized CTests. CMake's existing configure-time repository/protocol checks reported their status; it did not build or run emulator fixtures, and no fixture was admitted.
+- The direct immutable report and handoff stages both passed at full committed handoff candidate `45fd1846610733a02cdcd34dcef4db9783d75189`. This later documentation candidate remains distinct from the tested checker/report candidate.
 
 ## Decisions Made
 
@@ -131,7 +132,7 @@ status: complete
 - **Assessment input:** `f511baa8c0330f5cd90d56da55d79dbc873b0559`.
 - **Protected baseline:** `f6fe166a7c2a3668f5a412a82b648dd062329d3c`.
 - Tested checker/report candidate: `5f496299165e5df89e90d27ad51e997bceec822f`.
-- **Handoff revision:** supplied separately as the full `PHASE24_HANDOFF_REV` after the handoff documents are committed; report and handoff stages read that immutable revision.
+- **Checked handoff candidate (`PHASE24_HANDOFF_REV`):** `45fd1846610733a02cdcd34dcef4db9783d75189`; direct report and handoff stages both passed there.
 
 Phase 24 execution/automated closure complete. Phase verification pending. The orchestrator is the next actor; after the configured independent reviews it runs `$gsd-verify-work 24`.
 
@@ -158,8 +159,8 @@ Evidence links: [24-EVIDENCE.md](24-EVIDENCE.md), [24-VALIDATION.md](24-VALIDATI
 - **Issue:** The first committed handoff omitted explicit owner facts, scoped-stop wording, evidence links, and the tested candidate identity required by the production handoff stage.
 - **Fix:** Added the exact Pending-owner facts, open/stale/D-103 stops, commit-boundary identities, local evidence links, and the explicit Phase 24 verification route to the summary, continuation, and current STATE handoff.
 - **Files modified:** `.planning/STATE.md`, `.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-SUMMARY.md`, `.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md`
-- **Commit:** recorded after the handoff correction.
-- **Verification:** The committed report stage passed; the handoff stage is rerun on the corrected committed candidate before recording final success.
+- **Commits:** `c661e4e`, `45fd184`.
+- **Verification:** The committed report and handoff stages both passed at `45fd1846610733a02cdcd34dcef4db9783d75189`.
 
 ## TDD Evidence
 
@@ -177,6 +178,6 @@ None found in files created or modified by this plan. The historical, stale, rig
 
 Plan 24-01 and its automated assessment closure are complete. The orchestrator still owns the configured independent code/security reviews and Phase 24 verification. After those review gates, the next command is `$gsd-verify-work 24`. v0.4 remains open with `gaps_found`; all four requirements remain Pending, Phase 20/21 remain stale, and the separate D-103 exact-final-head milestone gate remains unfulfilled.
 
-## Self-Check: Pending final commit and handoff check
+## Self-Check: PASSED
 
-Final commit ancestry, handoff report/stage outcomes, and measured plan metrics are recorded after the documentation commit and direct handoff checks.
+All eight expected plan files exist. All nine task commits (`b5eb1a6`, `883fdbb`, `9d3eb7b`, `eb43d88`, `a7d49bb`, `5f49629`, `bc48569`, `c661e4e`, and `45fd184`) are ancestors of the completed task head `45fd1846610733a02cdcd34dcef4db9783d75189`. The summary records the measured task-commit count and plan-head boundary; the separate final metadata commit is not counted as a task commit.
