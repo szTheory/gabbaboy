@@ -374,6 +374,23 @@ def commit_file(repo: Path, rev: str, path: str) -> bytes | None:
     return snapshot.get(path) if snapshot is not None else None
 
 
+def cache_fixture_commit_snapshot(repo: Path, parent_rev: str | None, rev: str,
+                                  files: dict[str, bytes | str], deleted: tuple[str, ...] = ()) -> None:
+    """Cache a test-only committed snapshot from its immutable parent plus the fixture's exact written blobs."""
+    if parent_rev is None:
+        snapshot: dict[str, bytes] = {}
+    else:
+        parent, error = commit_snapshot(repo, parent_rev)
+        if parent is None:
+            raise SystemExit(f"planning-hygiene self-test FAIL: fixture parent snapshot unavailable: {error}")
+        snapshot = dict(parent)
+    for path, content in files.items():
+        snapshot[path] = content if isinstance(content, bytes) else content.encode("utf-8")
+    for path in deleted:
+        snapshot.pop(path, None)
+    COMMIT_SNAPSHOT_CACHE[(str(repo.resolve()), rev)] = snapshot
+
+
 def phase_directory(paths: list[str], number: str) -> str | None:
     """Find a unique phase directory from immutable Git inventory and its numeric metadata."""
     found = {"/".join(path.split("/")[:3]) for path in paths
@@ -1592,6 +1609,18 @@ def check_v04_gap_handoff(repo: Path, rev: str, baseline_rev: str, paths: list[s
                         "no tag/asset/rights action", "no fixture admission")
         if any(term not in text for term in requirements):
             errors.append(f"v04-gap-assessment-handoff: {label} must preserve Pending owners, stale phases, open audit, D-103, and every scoped stop")
+        owner_facts = (
+            "fixt-01 — pending, original owner phase 21",
+            "rights-01 — pending, original owner phase 20",
+            "diag-01 — pending, original owner phase 22",
+            "diag-02 — pending, original owner phase 22",
+        )
+        if any(owner_fact not in text for owner_fact in owner_facts):
+            errors.append(f"v04-gap-assessment-handoff: {label} must retain each Pending requirement's original owner")
+        if re.search(r"d-103[^.]{0,60}\b(?:fulfilled|satisfied|passed|complete|completed)\b", text) or \
+                re.search(r"v0\.4[^.]{0,60}\b(?:closed|completed|milestone_completed)\b", text) or \
+                "milestone_status: closed" in text or "milestone_audit_status: passed" in text:
+            errors.append(f"v04-gap-assessment-handoff: {label} contradicts the unfulfilled D-103 or open milestone state")
     if any(term not in summary_norm for term in (
             "phase 24 execution/automated closure complete", "phase verification pending",
             "orchestrator is the next actor", "assessment input", "protected baseline",
@@ -1696,6 +1725,20 @@ def check_plan_tree(roadmap: str, tree: PlanTree | None, where: str) -> tuple[st
     total = sum(cap for cap in caps.values() if cap is not None)
     if total > PLAN_CAP_SUM_MAX and not approved_v04_d205:
         errors.append(f"plan-cap-sum: caps sum to {total}, above {PLAN_CAP_SUM_MAX}")
+
+    if approved_v04_d205:
+        phase24_lines: list[str] = []
+        in_phase24 = False
+        for line in section:
+            heading = PHASE_HEADING.match(line)
+            if heading:
+                in_phase24 = heading.group(1) == "24"
+            elif line.startswith("### ") and in_phase24:
+                in_phase24 = False
+            if in_phase24:
+                phase24_lines.append(line)
+        if phase24_lines.count(V04_D205_PHASE24_PLAN_LINE) != 1 or roadmap_contract.count("gap reserve") != 2:
+            errors.append("plan-cap-d205-reserve: Phase 24 plan allowance cannot gain or renew a gap reserve")
 
     counts = {number: 0 for number in caps}
     primary = {number: 0 for number in caps}
@@ -2051,14 +2094,30 @@ def self_test_plan_cap_rev(base: Path) -> int:
         done = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True, env=env, timeout=60)
         return done.stdout.strip()
 
+    def head() -> str | None:
+        raw = (repo / ".git/HEAD").read_text(encoding="ascii").strip()
+        ref_path = repo / ".git" / raw[5:] if raw.startswith("ref: ") else None
+        if ref_path is None:
+            return raw or None
+        return ref_path.read_text(encoding="ascii").strip() if ref_path.exists() else None
+
     def commit(files: dict[str, str], message: str) -> str:
+        parent_rev = head()
+        new_paths = any(not (repo / rel).exists() for rel in files)
         for rel, content in files.items():
             path = repo / rel
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(content.encode("utf-8"))  # bytes, so a Windows text-mode write cannot add CRs (GB-CI-011)
-            git("add", rel)
-        git("commit", "-q", "-m", message)
-        return git("rev-parse", "HEAD")
+        if new_paths or parent_rev is None:
+            git("add", "--", *files)
+            git("commit", "-q", "-m", message)
+        else:
+            git("commit", "-q", "-a", "-m", message)
+        revision = head()
+        if revision is None:
+            raise SystemExit("planning-hygiene self-test FAIL: fixture commit did not create HEAD")
+        cache_fixture_commit_snapshot(repo, parent_rev, revision, files)
+        return revision
 
     def judge(rev: str) -> list[str]:
         roadmap, tree = read_rev(repo, rev)
@@ -2160,8 +2219,7 @@ def self_test_plan_cap_rev(base: Path) -> int:
     d205_roadmap = roadmap_text(d205_caps).split("## Progress", 1)[0]
     d205_roadmap += (
         "## Planning and Approval Boundary\n\n"
-        "The owner approved only the exact active v0.4 phase set 20/21/22/23/23.1/24. See D-205. "
-        "Phase 24 has one ordinary plan and no new gap reserve.\n\n"
+        "The owner approved only the exact active v0.4 phase set 20/21/22/23/23.1/24. See D-205.\n\n"
         "### Phase 24: Resolve remaining v0.4 evidence and verification gaps\n\n"
         "**Goal:** preserve the evidence boundary.\n"
         "**Plan cap**: 1\n"
@@ -2194,16 +2252,30 @@ def self_test_plan_cap_rev(base: Path) -> int:
                               check=True, env=env, timeout=60)
         return done.stdout.strip()
 
+    def d205_head() -> str:
+        head = (d205_repo / ".git/HEAD").read_text(encoding="ascii").strip()
+        if head.startswith("ref: "):
+            ref_path = d205_repo / ".git" / head[5:]
+            return ref_path.read_text(encoding="ascii").strip() if ref_path.exists() else ""
+        return head
+
     def d205_commit(files: dict[str, str], message: str, delete: tuple[str, ...] = ()) -> str:
+        parent_rev = d205_head() or None
+        new_path = any(not (d205_repo / rel).exists() for rel in files)
         for rel, content in files.items():
             path = d205_repo / rel
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(content.encode("utf-8"))
         for rel in delete:
             (d205_repo / rel).unlink()
-        d205_git("add", "-A", "--", ".planning")
-        d205_git("commit", "-q", "-m", message)
-        return d205_git("rev-parse", "HEAD")
+        if new_path or delete:
+            d205_git("add", "-A", "--", ".planning")
+            d205_git("commit", "-q", "-m", message)
+        else:
+            d205_git("commit", "-q", "-a", "-m", message)
+        revision = d205_head()
+        cache_fixture_commit_snapshot(d205_repo, parent_rev, revision, files, delete)
+        return revision
 
     d205_git("init", "-q")
     d205_dir_paths: dict[str, str] = {}
@@ -2285,6 +2357,13 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
                               check=True, env=env, timeout=60)
         return done.stdout.strip()
 
+    def repo_head() -> str | None:
+        head = (repo / ".git/HEAD").read_text(encoding="ascii").strip()
+        if head.startswith("ref: "):
+            ref_path = repo / ".git" / head[5:]
+            return ref_path.read_text(encoding="ascii").strip() if ref_path.exists() else None
+        return head or None
+
     git("init", "-q")
     object_dir_raw = git_run(source_repo, "rev-parse", "--git-path", "objects")
     if object_dir_raw.returncode != 0:
@@ -2295,23 +2374,43 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
     alternate = repo / ".git/objects/info/alternates"
     alternate.parent.mkdir(parents=True, exist_ok=True)
     alternate.write_text(str(object_dir.resolve()) + "\n", encoding="utf-8")
-    snapshot, snapshot_error = commit_snapshot(source_repo, source_rev)
-    if snapshot is None:
-        raise SystemExit(f"planning-hygiene self-test FAIL: cannot snapshot report candidate {source_rev}: {snapshot_error}")
+    fixture_paths = (
+        report_path,
+        V04_GAP_REQUIREMENTS_PATH,
+        V04_GAP_AUDIT_PATH,
+        ".planning/ROADMAP.md",
+        ".planning/phases/GB-20-fixture-admission-tune-up/20-VERIFICATION.md",
+        ".planning/phases/GB-21-cgb-game-progress-and-scene-regressions/21-VERIFICATION.md",
+        f"{phase_dir}/24-01-PLAN.md",
+    )
+    snapshot: dict[str, bytes] = {}
+    for source_path in fixture_paths:
+        raw = commit_file(source_repo, source_rev, source_path)
+        if raw is None:
+            raise SystemExit(f"planning-hygiene self-test FAIL: source candidate {source_rev} lacks {source_path}")
+        snapshot[source_path] = raw
     for rel, content in snapshot.items():
         path = repo / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
     git("add", "-A", "--", ".planning")
     git("commit", "-q", "-m", "canonical immutable Phase 24 report fixture")
-    report_rev = git("rev-parse", "HEAD")
+    git("symbolic-ref", "HEAD")
+    def fixture_head() -> str:
+        head = (repo / ".git/HEAD").read_text(encoding="ascii").strip()
+        if head.startswith("ref: "):
+            return (repo / ".git" / head[5:]).read_text(encoding="ascii").strip()
+        return head
+    report_rev = fixture_head()
     report_fields, _ = frontmatter_fields(snapshot[report_path].decode("utf-8", errors="strict"))
     baseline_rev = report_fields["baseline_commit"]
 
     def checkout(revision: str) -> None:
         git("checkout", "-q", revision)
 
-    def commit(files: dict[str, bytes | str], message: str, delete: tuple[str, ...] = ()) -> str:
+    def commit(files: dict[str, bytes | str], message: str, delete: tuple[str, ...] = (),
+               stage_new: bool = False) -> str:
+        parent_rev = fixture_head() or None
         touched: list[str] = []
         for rel, content in files.items():
             path = repo / rel
@@ -2322,11 +2421,16 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
         for rel in delete:
             git("rm", "-q", "--", rel)
             touched.append(rel)
-        for rel in sorted(set(touched)):
-            if rel not in delete:
-                git("add", "--", rel)
-        git("commit", "-q", "-m", message)
-        return git("rev-parse", "HEAD")
+        if stage_new or delete:
+            for rel in sorted(set(touched)):
+                if rel not in delete:
+                    git("add", "--", rel)
+            git("commit", "-q", "-m", message)
+        else:
+            git("commit", "-q", "-a", "-m", message)
+        revision = fixture_head()
+        cache_fixture_commit_snapshot(repo, parent_rev, revision, files, delete)
+        return revision
 
     def cli(stage: str, revision: str, expected: str | None, label: str) -> None:
         nonlocal controls
@@ -2440,7 +2544,6 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
          "v04-gap-assessment-source-records"),
     )
     for label, mutation, expected in cases:
-        canonical()
         mutate_report(label, mutation, expected)
     canonical()
 
@@ -2457,7 +2560,15 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
 
     # A full but incomplete input commit proves source-blob absence is distinct from ref syntax errors.
     checkout(report_rev)
-    missing_input = commit({}, "remove required immutable input source", delete=(".planning/context/DECISIONS.md",))
+    missing_input_files: dict[str, bytes] = {}
+    for source_path in V04_GAP_SOURCE_PATHS:
+        if source_path == ".planning/context/DECISIONS.md":
+            continue
+        source_blob = commit_file(source_repo, V04_GAP_INPUT_REV, source_path)
+        if source_blob is None:
+            raise SystemExit(f"planning-hygiene self-test FAIL: cannot seed missing-source input without {source_path}")
+        missing_input_files[source_path] = source_blob
+    missing_input = commit(missing_input_files, "remove required immutable input source", stage_new=True)
     altered_report = report_text().replace(f"assessment_input_commit: {V04_GAP_INPUT_REV}",
                                            f"assessment_input_commit: {missing_input}", 1)
     missing_source_candidate = commit({report_path: altered_report}, "point assessment at source-missing input")
@@ -2520,7 +2631,7 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
         uat_path: "# Generated shared closure\n",
     }
     checkout(report_rev)
-    handoff_rev = commit(handoff_files, "canonical Phase 24 handoff fixture")
+    handoff_rev = commit(handoff_files, "canonical Phase 24 handoff fixture", stage_new=True)
     cli("handoff", handoff_rev, None, "canonical committed pending-verification handoff")
 
     def handoff_mutant(label: str, path: str, mutation: Callable[[str], str],
@@ -2544,7 +2655,7 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
     handoff_mutant("summary chooses audit instead of verification", summary_path,
                    lambda doc: doc.replace("$gsd-verify-work 24", "$gsd-audit-milestone v0.4", 1))
     handoff_mutant("continuation chooses audit instead of verification", continuation_path,
-                   lambda doc: doc.replace("$gsd-verify-work 24", "$gsd-audit-milestone v0.4", 1))
+                   lambda doc: doc.replace("$gsd-verify-work 24", "$gsd-audit-milestone v0.4"))
     handoff_mutant("D-103 falsely fulfilled", state_path,
                    lambda doc: doc.replace("D-103 unfulfilled", "D-103 fulfilled", 1))
     handoff_mutant("milestone falsely closed", state_path,
@@ -2665,6 +2776,13 @@ def self_test_v04_reconciliation(base: Path, source_repo: Path) -> int:
                               check=True, env=env, timeout=60)
         return done.stdout.strip()
 
+    def repo_head() -> str | None:
+        head = (repo / ".git/HEAD").read_text(encoding="ascii").strip()
+        if head.startswith("ref: "):
+            ref_path = repo / ".git" / head[5:]
+            return ref_path.read_text(encoding="ascii").strip() if ref_path.exists() else None
+        return head or None
+
     git("init", "-q")
     alternate = repo / ".git" / "objects" / "info" / "alternates"
     alternate.parent.mkdir(parents=True, exist_ok=True)
@@ -2715,6 +2833,7 @@ The v0.4 milestone remains open. Four requirements remain Pending.
         base_files[f"{phase_dirs['22']}/{name}"] = f"{name} immutable summary.\n"
 
     def commit(files: dict[str, str], message: str, *, stage_new: bool = False) -> str:
+        parent_rev = repo_head()
         for relative, content in files.items():
             path = repo / relative
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -2726,7 +2845,11 @@ The v0.4 milestone remains open. Four requirements remain Pending.
             # Every later fixture modifies an already committed path. `-a`
             # avoids a redundant Git process while keeping the same snapshot.
             git("commit", "-q", "-a", "-m", message)
-        return git("rev-parse", "HEAD")
+        revision = repo_head()
+        if revision is None:
+            raise SystemExit("planning-hygiene self-test FAIL: fixture commit did not create HEAD")
+        cache_fixture_commit_snapshot(repo, parent_rev, revision, files)
+        return revision
 
     baseline_rev = commit(base_files, "fixture baseline", stage_new=True)
 
