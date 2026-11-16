@@ -5,7 +5,7 @@
 - ✅ **v0.1 Limited DMG Preview** — Phases 1–6 and 06.1, shipped 2026-10-10; [archive](milestones/v0.1-ROADMAP.md).
 - ✅ **v0.2 Color & Cartridge Breadth** — Phases 7–15 and 15.1, shipped 2026-10-24; [archive](milestones/v0.2-ROADMAP.md).
 - ✅ **v0.3 Save States & Host Contract** — Phases 16–19, 35 plans, shipped 2026-10-31; [archive](milestones/v0.3-ROADMAP.md).
-- ⚠️ **v0.4 Evidence Floor** — Phase 23.1 is complete with verification passed 18/18. D-203 Task 11 fixed CR-07, its sole exact-candidate review is clean, and the two authorized focused CTests passed. All four original requirements remain Pending, v0.4 remains open, and D-103's exact-final-head broad suite remains unfulfilled. Next: `$gsd-autonomous --from 23.1` under the existing owner authorization. All other suite, lifecycle, release, fixture and rights limits remain unchanged. See [23.1 verification](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-VERIFICATION.md), [23.1 review](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW.md), and [audit](v0.4-MILESTONE-AUDIT.md).
+- ⚠️ **v0.4 Evidence Floor** — Phase 23.1 is complete with verification passed 18/18. D-203 Task 11 fixed CR-07, its sole exact-candidate review is clean, and the two authorized focused CTests passed. The owner chose to keep v0.4 open without accepting the four Pending requirements and authorized one Phase 24 rescope under D-205. Phase 24 is the sixth phase and stays within the existing total cap of 40 plans. Next: `$gsd-discuss-phase 24`. D-103's exact-final-head broad suite remains unfulfilled; no third lifecycle retest, release retry, fixture admission or rights action is authorized. See [23.1 verification](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-VERIFICATION.md), [23.1 review](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW.md), and [audit](v0.4-MILESTONE-AUDIT.md).
 
 ## v0.4 — Evidence Floor
 
@@ -22,6 +22,7 @@ Numbering continues after completed Phase 19. Decimal phases are reserved for ex
 - [x] **Phase 22: Synthetic Composition and Diagnostic Gate Assessment** — Preserve synthetic composition evidence and machine-check why the real diagnostic candidates remain unadmitted. Completed 2026-11-03; DIAG-01, DIAG-02, and RIGHTS-01 remain pending because all seven real-fixture gates remain unresolved.
 - [x] **Phase 23: Qualified v0.4.0 Release** — Published artifacts and support records carry only the evidence actually established. (completed 2026-11-13)
 - [x] **Phase 23.1: Close v0.4 requirement and verification gaps** (completed 2026-11-16)
+- [ ] **Phase 24: Resolve remaining v0.4 evidence and verification gaps**
 
 ## Phase Details
 
@@ -130,7 +131,7 @@ The source coverage and dependency audit is [22-SOURCE-AUDIT.md](phases/GB-22-co
 
 ### Phase 23: Qualified v0.4.0 Release
 
-**Status**: Phase complete; the milestone audit found gaps, and Phase 23.1 is now complete with verification passed 18/18. Its D-203 Task 11 correction fixed CR-07 and the sole exact-candidate review is clean. The owner confirmed the recorded Task 11 → review → verification-only sequence; only the two authorized focused CTests ran. Four requirements remain Pending, v0.4 remains open, and D-103 plus all unrelated suite, lifecycle, release, fixture and rights limits remain unchanged. Next: `$gsd-autonomous --from 23.1` under the existing owner authorization.
+**Status**: Phase complete; the milestone audit found gaps, and Phase 23.1 is complete with verification passed 18/18. Its D-203 Task 11 correction fixed CR-07 and the sole exact-candidate review is clean. The owner confirmed the recorded Task 11 → review → verification-only sequence; only the two authorized focused CTests ran. The owner chose to keep v0.4 open and authorized one Phase 24 rescope under D-205. No gaps were accepted and archival is stopped. D-103 and all unrelated suite, lifecycle, release, fixture and rights limits remain unchanged.
 
 **Goal**: Users receive a qualified v0.4.0 release whose packages and support records accurately describe the established CGB game and diagnostic evidence.
 **Depends on**: Phase 22
@@ -187,7 +188,7 @@ The [source coverage and dependency audit](phases/GB-23-qualified-v0-4-0-release
   2. `22-VERIFICATION.md` records the approved synthetic-plus-metadata Phase 22 result from immutable implementation and evidence boundaries, including 513 names, seven unresolved gates, admitted=0, executed=0, the exact no-go facts, and Pending original requirements. Historical Phase 20/21 reports and the milestone audit snapshot stay unchanged.
   3. Current state, project summary, and the Phase 23.1 handoff link the new report only after it exists, preserve stale Phase 20/21 status and four Pending requirements, and receive machine-checked SUMMARY/UAT closure without claiming milestone completion.
 **Plan cap**: 1
-**Plans:** The single plan's original tasks and D-194 through D-203 recovery history are recorded in its SUMMARY and review-fix log. D-203 Task 11 fixed CR-07 at source candidate `00f69d9b4a12811912f247873eef6e49cc3bac1d`; its exact-candidate review is clean, the two authorized focused CTests passed, and [23.1-VERIFICATION.md](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-VERIFICATION.md) passed 18/18 after owner confirmation of the recorded route. Phase 23.1 is complete. Preserve the four Pending requirements and D-103 suite limit; continue with `$gsd-autonomous --from 23.1` under the existing owner authorization. At milestone completion, reconcile through the approved PR/merge route and finish on a clean `main`.
+**Plans:** The single plan's original tasks and D-194 through D-203 recovery history are recorded in its SUMMARY and review-fix log. D-203 Task 11 fixed CR-07 at source candidate `00f69d9b4a12811912f247873eef6e49cc3bac1d`; its exact-candidate review is clean, the two authorized focused CTests passed, and [23.1-VERIFICATION.md](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-VERIFICATION.md) passed 18/18 after owner confirmation of the recorded route. Phase 23.1 is complete. The owner authorized Phase 24 under D-205 to discuss and plan the remaining v0.4 gaps, without accepting requirements or changing fixture/rights/test/lifecycle/release limits. Next: `$gsd-discuss-phase 24`.
 
 Plans:
 - [x] 23.1-01-PLAN.md — Enforce the exact cap exception, reconstruct Phase 22 verification from immutable evidence, and reconcile the open-milestone handoff with automated closure; D-203 Task 11 and its sole review are complete, and phase verification passed 18/18.
@@ -227,3 +228,25 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 - Both automatic-advance flags remain false. The owner approved the original Phase 20 roadmap on 2026-10-31; the single permitted security gap round became Plan 20-04. On 2026-11-01 the owner authorized an explicit Phase 20 rescope: trusted final macOS/Windows downloaded-byte checks, independent product-policy identity, exact repository-admission workflow matching, and attributable notice/export/dense-input/mutation-subject/timeout/planning-cap contract repairs. No fixture admission, legal/rights disposition change, accepted v0.3 debt repair, or sandbox-only Git-worktree code repair is authorized by this rescope.
 
 Phase 20 completed with no admitted fixture; RIGHTS-01 remains pending. Phase 21's eight plans and five roadmap criteria are verified; its owner-approved disposition leaves FIXT-01 pending without claiming a license grant or candidate ROM. Phase 22's five plans and approved D-141/D-143 scope are complete. The final configured local suite passed 1,732/1,732; PR #142's exact head passed required CI, fixture reproduction, package artifacts, independent reviews, branch protection, and merge-tree equality before squash merge. The merged tree preserves the metadata-only assessment: seven real-fixture gates unresolved, admitted=0, executed=0; DIAG-01, DIAG-02, and RIGHTS-01 remain pending, with no license prohibition inferred. The post-merge Windows timeout and its recovery are recorded in [Phase 22 final evidence](phases/GB-22-composition-and-microtest-evidence/22-EVIDENCE.md). Phase 23 — Qualified v0.4.0 Release — is the next phase, remains unstarted and owner-controlled through **/gsd-discuss-phase 23**. Both automatic-advance flags remain false.
+
+### Phase 24: Resolve remaining v0.4 evidence and verification gaps
+
+**Goal:** Maintainers can inspect one additive, commit-pinned map of all eight original v0.4 requirements and Phase 20/21 freshness, with original criteria and owners, tracker statuses, milestone-audit dispositions, historical report results, current freshness, evidence boundaries, and exact remaining gates kept distinct.
+**Requirements**: GAME-01, GAME-02, FIXT-01, RIGHTS-01, DIAG-01, DIAG-02, FEED-01, REL-01 (assessment coverage only; original owners and completion meanings remain unchanged)
+**Depends on:** Phase 23.1
+**Success Criteria** (what must be TRUE):
+  1. A source-backed eight-requirement map reads an exact immutable input containing the assessed tracker, audit, decisions and historical reports; its later containing commit is a separate identity.
+  2. Phase 20/21 reports and original identities remain unchanged and historical, their current stale audit observations stay explicit, and focused Phase 24 results are point-in-time evidence rather than refreshed phase verification or satisfaction of D-103.
+  3. The existing planning-hygiene CLI accepts canonical committed evidence and causally refuses false requirement completion, owner drift, freshness promotion, source substitution, milestone closure and excess plan capacity; no dependency, checker, CTest or CI identity is added.
+  4. Only the existing plan_cap and planning_hygiene_controls CTests run after cheap syntax/direct controls, retaining the existing timeout; shared SUMMARY/UAT closure validates this assessed deliverable without satisfying the four Pending requirements or closing v0.4.
+**Plan cap**: 1
+**Plans:** 1 plan
+
+**D-205 bounded exception:** The owner approved only the exact active v0.4 phase set 20/21/22/23/23.1/24. See D-205. This supersedes the earlier sixth-phase prohibition only for Phase 24 and preserves historical caps 9/8/12/10/1. Phase 24 has one ordinary plan and no new gap reserve; independently enforce no more than 40 actual plan files. The extra declared allowance does not authorize 41 actual plans, a changed historical cap, another sixth/seventh phase, or renewed review/gap/test/lifecycle/release/fixture/rights capacity. The earlier D-193 five-phase statement above is historical to that boundary and is superseded only on this exact point.
+
+**Boundary:** Completing the Phase 24 assessment can coexist with FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remaining Pending under Phases 21, 20, 22 and 22. Keep v0.4 open and its audit gaps_found. No broad suite, third lifecycle retest, release/tag/asset operation, payload acquisition, build/run/admission, rights action or archival is authorized. Both auto-advance flags remain false.
+
+Plans:
+- [ ] 24-01-PLAN.md — Add the immutable all-eight gap assessment, causal controls and exact D-205 cap exception; record only the two focused CTests and shared automated closure.
+
+**Execution handoff:** Phase 24 discussion, research, pattern mapping and planning are complete; implementation has not started. Next: `$gsd-execute-phase 24`. This bounded execution route preserves every remaining milestone gate and safety stop.

@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: "23.1"
-current_phase_name: Close v0.4 requirement and verification gaps
+current_phase_name: Resolve remaining v0.4 evidence and verification gaps
 current_plan: Not started
 status: completed
-stopped_at: Phase 23.1 complete — all phases complete
-last_updated: "2026-11-16T18:26:02.246Z"
-state_head: d79db60083eda78f5f9a532232d6c172f78610f6
+stopped_at: Phase 24 context gathered
+last_updated: "2026-11-16T20:33:26.558Z"
+state_head: 112b9ae8692872f48a7ef9af05c46a172a94e5e6
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 5
-  total_plans: 32
+  total_plans: 33
   completed_plans: 32
-  percent: 100
+  percent: 83
 last_activity: 2026-11-16
 ---
 
@@ -26,9 +26,9 @@ last_activity: 2026-11-16
 **Current Phase Name:** Close v0.4 requirement and verification gaps
 **Current Plan:** Not started
 **Status:** All phases complete
-**Progress:** [██████████] 100%
+**Progress:** [████████░░] 83%
 
-Completed stages: Phase 23 release, the v0.4 gaps audit, and Phase 23.1 are recorded. Phase 23.1 verification passed 18/18 after the owner confirmed the recorded Task 11 → clean review → verification-only order. The authorized focused CTests passed 2/2; no broad suite ran. All four requirements remain Pending, v0.4 remains open, and the next authorized route is `$gsd-autonomous --from 23.1`.
+Completed stages: Phase 23 release, the v0.4 gaps audit, and Phase 23.1 are recorded. Phase 23.1 verification passed 18/18 after the owner confirmed the recorded Task 11 → clean review → verification-only order. The authorized focused CTests passed 2/2; no broad suite ran. The owner chose to keep v0.4 open, did not accept the four Pending requirements, and authorized one Phase 24 rescope under D-205. Next: `$gsd-discuss-phase 24`; preserve the 40-plan total cap and all suite, lifecycle, release, fixture, and rights limits.
 
 Historical D-200 snapshot: Task 8 corrected YAML syntax-whitespace handling and passed its bounded checks at candidate `9991327df736f668bd8c98f4fd9441a4c563905b`. At that time, the D-200 review and phase verification were pending; later D-201–D-203 recoveries are recorded below and in the Phase 23.1 artifacts.
 
@@ -55,16 +55,17 @@ The **v0.4 milestone audit remains open with gaps found**. Phase 22 has a histor
 
 Diagnostics remain metadata-only: 513 names, seven unresolved gates, admitted=0, executed=0; 482 protocol candidates remain blocked and 31 initial exclusions do not complete suite accounting. Potion Panic stopped before a ref/commit was returned from its creator-linked repository, and its fork is not source authority. µCity 1.3's required source include has no identified grant/notice under the recorded scope. Neither outcome establishes permission or a license prohibition.
 
-Phase 23.1 is complete with verification passed 18/18. D-203 Task 11 fixed CR-07; the sole exact-candidate review was clean; the owner confirmed the recorded execution order. Only `plan_cap` and `planning_hygiene_controls` ran at the final regression gate; D-103's exact-final-head broad suite remains unfulfilled and no broad local suite or third local lifecycle retest is permitted. All four requirements remain Pending under their original owners and v0.4 remains open. The owner-authorized next route is `$gsd-autonomous --from 23.1`; milestone audit, any owner-only acceptance, and approved reconciliation to `main` remain ahead.
+Phase 23.1 is complete with verification passed 18/18. D-203 Task 11 fixed CR-07; the sole exact-candidate review was clean; the owner confirmed the recorded execution order. Only `plan_cap` and `planning_hygiene_controls` ran at the final regression gate; D-103's exact-final-head broad suite remains unfulfilled and no broad local suite or third local lifecycle retest is permitted. The owner chose to keep v0.4 open without accepting any requirement gaps and authorized one Phase 24 rescope under D-205. All four requirements remain Pending under their original owners. Next: `$gsd-discuss-phase 24`, preserving the 40-plan total cap and all other limits.
 
 Historical D-199 checkpoint (superseded): The tested source candidate was `7fda5b2fb11d62a680dc4a7340eee7c85e2caf90`: the exact-candidate self-test passed with `controls=314`, the immutable report and handoff stages passed against original baseline `1d74b032d8106516b0fd22d6cd02ddaf916b2031`, the 125/124 wrapper boundary behaved as required, SUMMARY coverage and shared UAT closure passed, and only `plan_cap` plus `planning_hygiene_controls` passed after configure-only generation bound to that full candidate. The first handoff wording check failed; the required stop/route/phase terms were committed at `653ed2b3e501bc31c8a12e99ef800822889e08ff`, and the handoff recheck passed at the tested candidate. At that point, Task 7 checks were complete; the sole exact-candidate review was pending and phase verification had not run. D-103's exact-final-head full-suite gate remains unfulfilled; no broad local suite, no third local lifecycle retest, no release retry, and no tag/asset/rights action is permitted. The owner-only audit route is `/gsd-audit-milestone v0.4`. At that checkpoint Phase 23.1 and v0.4 were open; four requirements were Pending and no next phase was selected. See the current handoff above for the later D-203 result.
 
-Current handoff: Phase 23.1 is complete and its verifier passed 18/18. Task 11 fixed CR-07 and the sole D-203 review was clean; owner-confirmed route order is recorded. Four original requirements remain Pending, v0.4 remains open, and the next route is `$gsd-autonomous --from 23.1` under the existing milestone authorization.
+Current handoff: Phase 23.1 is complete and its verifier passed 18/18. Task 11 fixed CR-07 and the sole D-203 review was clean; owner-confirmed route order is recorded. The owner chose to keep v0.4 open without accepting its four Pending requirements and authorized one Phase 24 rescope under D-205. Next: `$gsd-discuss-phase 24`. The rescope does not authorize fixture admission, rights actions, broad tests, lifecycle retries, or release changes.
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
+- Phase 23.1 complete; owner chose to keep v0.4 open after the refreshed `gaps_found` audit and authorized one Phase 24 rescope under D-205. No requirement gaps were accepted and no milestone archival is authorized. Next: `$gsd-discuss-phase 24`; no implementation or fixture/rights action is authorized by the rescope alone.
 - Phase 23.1 inserted after Phase 23: Close v0.4 requirement and verification gaps (URGENT)
 - Phase 23.1 Task 5 and the sole D-196 review completed; two Critical checker issues remain open. Owner acts next with `$gsd-discuss-phase 23.1` to define bounded recovery, then `$gsd-autonomous --from 23.1` after scope authorization. The milestone remains open; finish on a clean `main` after approved reconciliation.
 - Phase 23.1 recovery-scoped: D-198 records one Task 6 and one independent review for CR-01/CR-02; next route is $gsd-autonomous --from 23.1.
@@ -101,9 +102,9 @@ Current handoff: Phase 23.1 is complete and its verifier passed 18/18. Task 11 f
 
 ## Session
 
-**Last session:** 2026-11-16T17:44:07.754Z
-**Stopped at:** Phase 23.1 complete — all phases complete
-**Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-CONTEXT.md
+**Last session:** 2026-11-16T19:41:39.454Z
+**Stopped at:** Phase 24 context gathered
+**Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md
 
 ### Blockers
 None
