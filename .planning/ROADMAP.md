@@ -5,7 +5,7 @@
 - ✅ **v0.1 Limited DMG Preview** — Phases 1–6 and 06.1, shipped 2026-10-10; [archive](milestones/v0.1-ROADMAP.md).
 - ✅ **v0.2 Color & Cartridge Breadth** — Phases 7–15 and 15.1, shipped 2026-10-24; [archive](milestones/v0.2-ROADMAP.md).
 - ✅ **v0.3 Save States & Host Contract** — Phases 16–19, 35 plans, shipped 2026-10-31; [archive](milestones/v0.3-ROADMAP.md).
-- ⚠️ **v0.4 Evidence Floor** — Phase 23.1 remains blocked, incomplete and unverified after the sole D-202 exact-candidate review found Critical CR-07: non-ASCII indentation can hide a contradictory disposition row. CR-05/CR-06 and carried CR-01/CR-02/CR-03/CR-04/WR-01 are closed. All four original requirements remain Pending, and v0.4 remains open. Owner next: `$gsd-discuss-phase 23.1`. D-103 and all unrelated suite, lifecycle, release, fixture and rights limits remain unchanged. See [23.1 review](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW.md) and [audit](v0.4-MILESTONE-AUDIT.md).
+- ⚠️ **v0.4 Evidence Floor** — Phase 23.1 is complete with verification passed 18/18. D-203 Task 11 fixed CR-07, its sole exact-candidate review is clean, and the two authorized focused CTests passed. All four original requirements remain Pending, v0.4 remains open, and D-103's exact-final-head broad suite remains unfulfilled. Next: `$gsd-autonomous --from 23.1` under the existing owner authorization. All other suite, lifecycle, release, fixture and rights limits remain unchanged. See [23.1 verification](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-VERIFICATION.md), [23.1 review](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW.md), and [audit](v0.4-MILESTONE-AUDIT.md).
 
 ## v0.4 — Evidence Floor
 
@@ -21,7 +21,7 @@ Numbering continues after completed Phase 19. Decimal phases are reserved for ex
 - [x] **Phase 21: CGB Game Progress and Scene Regressions** — The shared runner proves CGB progress and records the bounded game-candidate outcome. (completed 2026-11-02)
 - [x] **Phase 22: Synthetic Composition and Diagnostic Gate Assessment** — Preserve synthetic composition evidence and machine-check why the real diagnostic candidates remain unadmitted. Completed 2026-11-03; DIAG-01, DIAG-02, and RIGHTS-01 remain pending because all seven real-fixture gates remain unresolved.
 - [x] **Phase 23: Qualified v0.4.0 Release** — Published artifacts and support records carry only the evidence actually established. (completed 2026-11-13)
-- [ ] **Phase 23.1: Close v0.4 requirement and verification gaps**
+- [x] **Phase 23.1: Close v0.4 requirement and verification gaps** (completed 2026-11-16)
 
 ## Phase Details
 
@@ -130,7 +130,7 @@ The source coverage and dependency audit is [22-SOURCE-AUDIT.md](phases/GB-22-co
 
 ### Phase 23: Qualified v0.4.0 Release
 
-**Status**: Phase complete; the milestone audit found gaps, and Phase 23.1 remains incomplete and unverified. Its sole D-202 review examined source candidate `af36fa2f4c0f35dc6b537a3e736f5cd264b83593`, closed CR-05/CR-06, confirmed carried CR-01/CR-02/CR-03/CR-04/WR-01 did not regress, and found Critical CR-07: a non-ASCII whitespace prefix can hide an extra disposition row. No phase verifier or further source correction/review may run. Owner next: `$gsd-discuss-phase 23.1`. Four requirements remain Pending, v0.4 remains open, and D-103 plus all unrelated suite, lifecycle, release, fixture and rights limits remain unchanged.
+**Status**: Phase complete; the milestone audit found gaps, and Phase 23.1 is now complete with verification passed 18/18. Its D-203 Task 11 correction fixed CR-07 and the sole exact-candidate review is clean. The owner confirmed the recorded Task 11 → review → verification-only sequence; only the two authorized focused CTests ran. Four requirements remain Pending, v0.4 remains open, and D-103 plus all unrelated suite, lifecycle, release, fixture and rights limits remain unchanged. Next: `$gsd-autonomous --from 23.1` under the existing owner authorization.
 
 **Goal**: Users receive a qualified v0.4.0 release whose packages and support records accurately describe the established CGB game and diagnostic evidence.
 **Depends on**: Phase 22
@@ -176,7 +176,7 @@ The [source coverage and dependency audit](phases/GB-23-qualified-v0-4-0-release
 
 ### Phase 23.1: Close v0.4 requirement and verification gaps (INSERTED)
 
-**D-202 sole review outcome:** The independent review examined source candidate `af36fa2f4c0f35dc6b537a3e736f5cd264b83593` at pre-review HEAD `cb4bf5685fe5145bf3bd9b3cd088ed84af067a2d`. CR-05 and CR-06 are fixed; carried CR-01/CR-02/CR-03/CR-04/WR-01 did not regress. Critical CR-07 remains: a non-ASCII whitespace prefix makes a nonblank disposition row terminate parsing silently. The D-201 report archive remains byte-identical to its source provenance at `01420b899f19e868aa66b4e3f5792b64736d5623` (5,274 bytes; SHA-256 `3e0d753fdabc0df22fa8808ad8e6427ea9213c45d5df7557b3e81c90269e4405`). The Task 10 checks are recorded against the exact candidate in [23.1-REVIEW-FIX.md](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW-FIX.md). Phase 23.1 is blocked before verification, and no further fix or review is authorized. Owner next: `$gsd-discuss-phase 23.1`; all four requirements remain Pending and every unrelated stop remains in force.
+**D-202 sole review outcome (historical):** The independent review examined source candidate `af36fa2f4c0f35dc6b537a3e736f5cd264b83593` at pre-review HEAD `cb4bf5685fe5145bf3bd9b3cd088ed84af067a2d`. It closed CR-05 and CR-06, confirmed carried CR-01/CR-02/CR-03/CR-04/WR-01 did not regress, and found CR-07: a non-ASCII whitespace prefix made a nonblank disposition row terminate parsing silently. D-203 later fixed CR-07. The D-201 report archive remains byte-identical to its source provenance at `01420b899f19e868aa66b4e3f5792b64736d5623` (5,274 bytes; SHA-256 `3e0d753fdabc0df22fa8808ad8e6427ea9213c45d5df7557b3e81c90269e4405`). The Task 10 checks are recorded against the exact candidate in [23.1-REVIEW-FIX.md](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW-FIX.md).
 
 **Goal:** Maintainers can inspect an accurate Phase 22 verification report reconstructed from immutable Phase 22 boundary evidence and a current handoff explaining why v0.4 stays open under the preserved limits.
 **Requirements**: []
@@ -187,10 +187,10 @@ The [source coverage and dependency audit](phases/GB-23-qualified-v0-4-0-release
   2. `22-VERIFICATION.md` records the approved synthetic-plus-metadata Phase 22 result from immutable implementation and evidence boundaries, including 513 names, seven unresolved gates, admitted=0, executed=0, the exact no-go facts, and Pending original requirements. Historical Phase 20/21 reports and the milestone audit snapshot stay unchanged.
   3. Current state, project summary, and the Phase 23.1 handoff link the new report only after it exists, preserve stale Phase 20/21 status and four Pending requirements, and receive machine-checked SUMMARY/UAT closure without claiming milestone completion.
 **Plan cap**: 1
-**Plans:** The single plan's original tasks and D-194 through D-199 recovery history are recorded in its SUMMARY and review-fix log. D-198 source candidate `12fcb174885d7682cade9c88a5316c00fa4b0c0a` passed its bounded checks; its review found a Critical U+2028 block-scalar bypass. D-199 source candidate `7fda5b2fb11d62a680dc4a7340eee7c85e2caf90` passed its bounded checks; its review found a Critical Unicode token-boundary bypass. D-200 Task 8 source candidate `9991327df736f668bd8c98f4fd9441a4c563905b` passed its 355-control self-test, immutable report/handoff checks, wrapper boundary, SUMMARY/UAT closure, and the two named CTests. The one independent review remains pending, so Phase 23.1 remains incomplete and no phase verifier ran. Resume with `$gsd-autonomous --from 23.1`; if review finds a Critical or new blocker, stop before verification. Preserve D-103's suite and all other explicit stops. Finish at `main` only after an approved clean reconciliation.
+**Plans:** The single plan's original tasks and D-194 through D-203 recovery history are recorded in its SUMMARY and review-fix log. D-203 Task 11 fixed CR-07 at source candidate `00f69d9b4a12811912f247873eef6e49cc3bac1d`; its exact-candidate review is clean, the two authorized focused CTests passed, and [23.1-VERIFICATION.md](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-VERIFICATION.md) passed 18/18 after owner confirmation of the recorded route. Phase 23.1 is complete. Preserve the four Pending requirements and D-103 suite limit; continue with `$gsd-autonomous --from 23.1` under the existing owner authorization. At milestone completion, reconcile through the approved PR/merge route and finish on a clean `main`.
 
 Plans:
-- [x] 23.1-01-PLAN.md — Enforce the exact cap exception, reconstruct Phase 22 verification from immutable evidence, and reconcile the open-milestone handoff with automated closure; D-200 Task 8 bounded checks pass and the sole independent review remains pending.
+- [x] 23.1-01-PLAN.md — Enforce the exact cap exception, reconstruct Phase 22 verification from immutable evidence, and reconcile the open-milestone handoff with automated closure; D-203 Task 11 and its sole review are complete, and phase verification passed 18/18.
 
 ## Requirement Coverage
 
@@ -217,7 +217,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 | 21. CGB Game Progress and Scene Regressions | 8/8 | Complete; PR #140 passed exact-head checks and merged as `bef2cfbd` | 2026-11-02 |
 | 22. Synthetic Composition and Diagnostic Gate Assessment | 5/5 | Complete; exact-head qualification and merge passed; DIAG-01/02 and RIGHTS-01 remain pending | 2026-11-03 |
 | 23. Qualified v0.4.0 Release | 9/9 | Complete    | 2026-11-13 |
-| 23.1. Close v0.4 requirement and verification gaps | 1/1 | D-200 Task 8 checks pass at `9991327`; sole independent review pending | — |
+| 23.1. Close v0.4 requirement and verification gaps | 1/1 | Complete    | 2026-11-16 |
 
 ## Planning and Approval Boundary
 
