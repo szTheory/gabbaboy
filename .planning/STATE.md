@@ -5,10 +5,10 @@ milestone_name: Evidence Floor
 current_phase: "23.1"
 current_phase_name: Close v0.4 requirement and verification gaps (INSERTED)
 current_plan: 1 of 1
-status: "Phase 23.1 remains blocked, incomplete, and unverified. D-202 authorizes one same-plan correction task for CR-05 and CR-06 and one independent review of its exact committed candidate; no implementation or phase verifier has run. Next: $gsd-autonomous --from 23.1."
-stopped_at: Phase 23.1 context gathered
-last_updated: "2026-11-16T05:09:12.569Z"
-state_head: 4408a2fe3d308b57c6070ecda27c95b4521b8627
+status: "Phase 23.1 remains blocked, incomplete, and unverified. D-202 authorizes one same-plan Task 10 for CR-05/CR-06 and one independent review of its exact committed candidate. No implementation has run. Next internal step: -execute-phase 23.1 --no-transition. Stop before verification if any Critical/new blocker remains or review is unavailable."
+stopped_at: Phase 23.1 D-202 Task 10 pre-dispatch
+last_updated: "2026-11-16T05:21:23.157Z"
+state_head: c2db1743336a893aa08fe1d55b0d17328203ca37
 progress:
   total_phases: 5
   completed_phases: 4
@@ -25,10 +25,10 @@ last_activity: 2026-11-15
 **Current Phase:** 23.1
 **Current Phase Name:** Close v0.4 requirement and verification gaps
 **Current Plan:** 1 of 1
-**Status:** Phase 23.1 remains blocked, incomplete, and unverified. D-202 authorizes one same-plan correction task for CR-05 and CR-06 and one independent review of its exact committed candidate; no implementation or phase verifier has run. Next: $gsd-autonomous --from 23.1.
+**Status:** Phase 23.1 remains blocked, incomplete, and unverified. D-202 authorizes one same-plan Task 10 for CR-05/CR-06 and one independent review of its exact committed candidate. No implementation has run. Next internal step: -execute-phase 23.1 --no-transition. Stop before verification if any Critical/new blocker remains or review is unavailable.
 **Progress:** [████████░░] 80%
 
-Completed stages: Phase 23 release and the v0.4 gaps audit are recorded. Phase 23.1 Task 7 passed its bounded checks at source candidate 7fda5b2fb11d62a680dc4a7340eee7c85e2caf90; the sole D-199 review found a Critical Unicode whitespace bypass. Phase 23.1 remains incomplete and unverified; no verifier or further fix/review ran. The D-199 allowance is exhausted. Owner next: $gsd-discuss-phase 23.1.
+Completed stages: Phase 23 release and the v0.4 gaps audit are recorded. Phase 23.1 Tasks 1–9 and the D-201 review are historical; D-202 Task 10 is planned but not executed. No phase verifier has run.
 
 D-200 Task 8 corrected the YAML syntax-whitespace handling and passed all bounded checks at candidate `9991327df736f668bd8c98f4fd9441a4c563905b`. The D-199 review is preserved byte-for-byte; the one independent D-200 review is pending, and no phase verifier has run. Phase 23.1 remains incomplete until the review and normal phase gates pass.
 
@@ -59,7 +59,7 @@ Phase 23.1 remains incomplete. Task 6 corrected the D-196 findings at candidate 
 
 The tested D-199 source candidate is `7fda5b2fb11d62a680dc4a7340eee7c85e2caf90`: the exact-candidate self-test passed with `controls=314`, the immutable report and handoff stages passed against original baseline `1d74b032d8106516b0fd22d6cd02ddaf916b2031`, the 125/124 wrapper boundary behaved as required, SUMMARY coverage and shared UAT closure passed, and only `plan_cap` plus `planning_hygiene_controls` passed after configure-only generation bound to that full candidate. The first handoff wording check failed; the required stop/route/phase terms were committed at `653ed2b3e501bc31c8a12e99ef800822889e08ff`, and the handoff recheck passed at the tested candidate. All bounded Task 7 checks are complete; the sole independent exact-candidate review remains pending. D-103's exact-final-head full-suite gate remains unfulfilled; no broad local suite, no third local lifecycle retest, no release retry, and no tag/asset/rights action is permitted. The owner-only audit route is `/gsd-audit-milestone v0.4`. Phase 23.1 and v0.4 remain open; the four requirements remain Pending, no phase verifier has run, and no next phase or milestone is selected.
 
-Current D-200 handoff: Task 8 checks passed at `9991327df736f668bd8c98f4fd9441a4c563905b`; the sole independent review of that exact candidate is next. If any Critical/correctness/security finding remains, a new blocker appears, or review is unavailable, stop before phase verification with no further correction or review. Keep the four original requirements Pending, v0.4 open, both automatic-advance flags false, and every D-193–D-200 limit in force. Continue through the already authorized `$gsd-autonomous --from 23.1` route; no user action is needed for this review handoff.
+Current D-200 handoff: D-202 authorizes one same-plan Task 10 for CR-05/CR-06 and one exact-candidate independent review. Task 10 has not run. Next: $gsd-execute-phase 23.1 --no-transition through $gsd-autonomous --from 23.1. Stop before verification if any Critical, new blocker, or unavailable review remains; no further correction or review.
 
 ## Accumulated Context
 
@@ -93,13 +93,14 @@ Current D-200 handoff: Task 8 checks passed at `9991327df736f668bd8c98f4fd9441a4
 - [Phase 23.1]: D-198 Task 6 checks passed, but the sole review at `12fcb174885d7682cade9c88a5316c00fa4b0c0a` found a Critical YAML block-scalar U+2028 bypass. The review cap is exhausted; no fix or verifier follows. Owner next: `$gsd-discuss-phase 23.1`.
 - [Phase 23.1]: D-199 authorizes exactly one same-plan Task 7 for the D-198 YAML block-scalar bypass and one independent review. The current Critical remains open; next: $gsd-autonomous --from 23.1. Stop before phase verification if review finds any Critical or new blocker. — This preserves the one-plan cap and all D-193–D-198 limits while allowing the owner-directed v0.4 continuation. At milestone closeout, reconcile reviewed work to main and verify a clean worktree.
 - [Phase 23.1]: D-201 authorizes one formal rescope of the existing plan for CR-03/CR-04, with one correction task and one independent review. — Keep the fixed Phase 22 report contract and standard-library checker; preserve every unrelated D-193–D-200 limit and stop before verification if any Critical remains.
+- [Phase 23.1]: D-202 authorizes one same-plan Task 10 for CR-05/CR-06 and one exact-candidate independent review. — Keep the fixed Phase 22 report schema and standard-library checker; preserve all other D-193–D-201 limits and stop before verification if any Critical or new blocker remains.
 
 ## Session
 
-**Last session:** 2026-11-16T04:28:30.248Z
-**Stopped at:** Phase 23.1 context gathered
+**Last session:** 2026-11-16T05:21:23.016Z
+**Stopped at:** Phase 23.1 D-202 Task 10 pre-dispatch
 **Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-CONTEXT.md
 
 ### Blockers
 
-- D-201 sole deep review at source candidate 6df11f34ce19ee54c4b3270ed6214c61dbdd7927 found Critical CR-05 (quoted/decorated protected-root aliases) and CR-06 (spaced disposition item key skipped). Phase 23.1 remains incomplete and unverified; no phase verifier, further source correction or review is authorized. Owner next: $gsd-discuss-phase 23.1.
+- D-202 Task 10 is authorized but has not run. CR-05/CR-06 remain open, so Phase 23.1 stays blocked and no verifier may run unless the sole exact-candidate review clears all Criticals and blockers. Next internal action: $gsd-execute-phase 23.1 --no-transition; no additional correction or review is authorized.
