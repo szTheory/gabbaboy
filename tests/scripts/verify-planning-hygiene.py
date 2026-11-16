@@ -87,6 +87,16 @@ V04_EXCEPTION_TEXT = "one exact exception for the active v0.4 phase set 20/21/22
 V04_D205_PHASE_CAPS = {**V04_APPROVED_PHASE_CAPS, "24": 1}
 V04_D205_EXCEPTION_TEXT = "the owner approved only the exact active v0.4 phase set 20/21/22/23/23.1/24"
 V04_D205_PHASE24_PLAN_LINE = "**Plans:** Exactly one ordinary plan (`24-01-PLAN.md`); no Phase 24 gap reserve."
+V04_D205_DECISION_HEADING = "## D-205 — One Phase 24 rescope for remaining v0.4 gaps (2026-11-16)"
+V04_D205_DECISION_BODY = (
+    "The owner authorized one Phase 24 rescope for the four Pending requirements and stale Phase 20/21 verification. "
+    "This supersedes D-193/D-203 only on the prohibition against adding a sixth v0.4 phase. "
+    "The phase discussion and plan must keep original requirement ownership and preserve all other limits: "
+    "total plan capacity does not exceed 40; no broad suite or third lifecycle retest; no release retry, tag, or asset "
+    "changes; and no fixture admission or rights action without a separate explicit authorization. "
+    "This rescope does not accept any requirement gap or authorize milestone archival/cleanup. "
+    "Both auto-advance flags remain false."
+)
 
 PHASE_HEADING = re.compile(r"^### Phase (\d+(?:\.\d+)?):")
 CAP_LINE = re.compile(r"^\*\*Plan cap\*\*: (\d+)[ \t]*$")
@@ -185,9 +195,8 @@ def git_run(repo: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, check=False, env=env, timeout=60)
 
 
-def read_rev(repo: Path, rev: str) -> tuple[str, PlanTree]:
-    """The ROADMAP text and the plan tree of one commit. Only a full commit id is accepted, so what is judged cannot move
-    between reads, and nothing is read from the working tree."""
+def read_rev(repo: Path, rev: str) -> tuple[str, PlanTree, str | None]:
+    """Read the roadmap, plan tree, and D-205 authority from one immutable commit."""
     if not FULL_COMMIT.fullmatch(rev):
         raise SystemExit("plan-cap-rev: --rev must be a full 40-hex commit id, not a name")
     found = git_run(repo, "cat-file", "-t", rev)
@@ -238,7 +247,9 @@ def read_rev(repo: Path, rev: str) -> tuple[str, PlanTree]:
                     raise SystemExit(f"plan-cap-rev: {path} cannot be read at {rev}")
                 return shown.stdout.decode("utf-8", errors="replace")
             files[name] = reader
-    return roadmap.stdout.decode("utf-8"), tree
+    decisions = git_run(repo, "show", f"{rev}:.planning/context/DECISIONS.md")
+    decision_text = decisions.stdout.decode("utf-8", errors="strict") if decisions.returncode == 0 else None
+    return roadmap.stdout.decode("utf-8"), tree, decision_text
 
 
 V04_IMPLEMENTATION_HEAD = "ca2f0be6b38e7dd22e0eb3296b9a21cceed1a765"
@@ -1691,8 +1702,8 @@ def check_v04_gap_handoff(repo: Path, rev: str, baseline_rev: str, paths: list[s
         text = documents.get(label, "")
         if any(not has_local_link(text, source_path, target) for target in targets):
             errors.append(f"v04-gap-assessment-handoff: {label} must link to its local immutable evidence artifacts")
-    roadmap, tree = read_rev(repo, rev)
-    _, plan_cap_errors = check_plan_tree(roadmap, tree, rev)
+    roadmap, tree, decisions = read_rev(repo, rev)
+    _, plan_cap_errors = check_plan_tree(roadmap, tree, rev, decisions)
     if plan_cap_errors:
         errors.extend(f"v04-gap-assessment-handoff: {error}" for error in plan_cap_errors)
     return "v04-gap-assessment pass stage=handoff", errors
@@ -1711,11 +1722,28 @@ def read_deferrals(repo: Path, rev: str) -> str:
     return content.stdout.decode("utf-8", errors="strict")
 
 
-def check_plan_cap(roadmap: str, phases_dir: Path) -> tuple[str, list[str]]:
-    return check_plan_tree(roadmap, tree_from_dir(phases_dir), str(phases_dir))
+def has_exact_d205_authorization(decisions_text: str | None) -> bool:
+    """Accept D-205 only when its one canonical decision section has the exact authorized scope."""
+    if decisions_text is None:
+        return False
+    lines = markdown_source_lines(decisions_text)
+    headings = [index for index, line in enumerate(lines) if line == V04_D205_DECISION_HEADING]
+    if len(headings) != 1:
+        return False
+    start = headings[0] + 1
+    end = next((index for index in range(start, len(lines))
+                if re.match(r"^ {0,3}#{1,6}[ \t]+", lines[index])), len(lines))
+    body = " ".join(" ".join(line.split()) for line in lines[start:end] if line.strip())
+    return body == V04_D205_DECISION_BODY
 
 
-def check_plan_tree(roadmap: str, tree: PlanTree | None, where: str) -> tuple[str, list[str]]:
+def check_plan_cap(roadmap: str, phases_dir: Path,
+                   decisions_text: str | None = None) -> tuple[str, list[str]]:
+    return check_plan_tree(roadmap, tree_from_dir(phases_dir), str(phases_dir), decisions_text)
+
+
+def check_plan_tree(roadmap: str, tree: PlanTree | None, where: str,
+                    decisions_text: str | None = None) -> tuple[str, list[str]]:
     errors: list[str] = []
     section = phase_details(roadmap)
     if section is None:
@@ -1751,6 +1779,7 @@ def check_plan_tree(roadmap: str, tree: PlanTree | None, where: str) -> tuple[st
         and V04_D205_EXCEPTION_TEXT in roadmap_contract
         and "see d-205" in roadmap_contract
         and "phase 24 has one ordinary plan and no new gap reserve" in roadmap_contract
+        and has_exact_d205_authorization(decisions_text)
     )
     approved_v04_exception = approved_v04_d193 or approved_v04_d205
     if len(caps) > PHASE_COUNT_MAX and not approved_v04_exception:
@@ -2014,7 +2043,7 @@ def self_test(rev: str | None = None, repo: Path = Path(".")) -> int:
         _, errors = check_plan_cap(fixture_roadmap, phases("fixture", {"16": 4}))
         expect("the committed over-cap roadmap fixture is rejected", errors, "plan-cap-exceeded")
 
-        controls += self_test_plan_cap_rev(base)
+        controls += self_test_plan_cap_rev(base, repo, rev)
 
         # lessons-ids: exact tokens, every occurrence named, earliest kept, order independent.
         lessons = "### GB-TEST-001 / d / one\n\n### GB-TEST-0010 / d / ten\n\n### GB-TEST-002 / d / two\n"
@@ -2119,10 +2148,15 @@ def self_test(rev: str | None = None, repo: Path = Path(".")) -> int:
     return 0
 
 
-def self_test_plan_cap_rev(base: Path) -> int:
+def self_test_plan_cap_rev(base: Path, source_repo: Path, source_rev: str | None) -> int:
     """--rev judges one commit's ROADMAP and plan names with git, so a working-tree edit, a later commit or a moving name
     cannot change the verdict. Everything runs in a disposable repository."""
     controls = 0
+    if source_rev is None:
+        head = git_run(source_repo, "rev-parse", "HEAD")
+        if head.returncode != 0:
+            raise SystemExit(f"planning-hygiene self-test FAIL: could not resolve source HEAD in {source_repo}")
+        source_rev = head.stdout.decode("ascii").strip()
     repo = base / "rev-repo"
     repo.mkdir()
     env = {k: v for k, v in os.environ.items() if k in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")}
@@ -2160,8 +2194,8 @@ def self_test_plan_cap_rev(base: Path) -> int:
         return revision
 
     def judge(rev: str) -> list[str]:
-        roadmap, tree = read_rev(repo, rev)
-        return check_plan_tree(roadmap, tree, rev)[1]
+        roadmap, tree, decisions = read_rev(repo, rev)
+        return check_plan_tree(roadmap, tree, rev, decisions)[1]
 
     def expect_rev(label: str, rev: str, code: str | None) -> None:
         nonlocal controls
@@ -2257,6 +2291,11 @@ def self_test_plan_cap_rev(base: Path) -> int:
     # D-205 is a single exact six-phase exception, not a general sixth-phase allowance.
     d205_caps = [("20", "9"), ("21", "8"), ("22", "12"), ("23", "10"), ("23.1", "1")]
     d205_roadmap = roadmap_text(d205_caps).split("## Progress", 1)[0]
+    d205_decision_path = ".planning/context/DECISIONS.md"
+    d205_decisions_raw = commit_file(source_repo, source_rev, d205_decision_path)
+    if d205_decisions_raw is None:
+        raise SystemExit("planning-hygiene self-test FAIL: source revision lacks immutable D-205 decision record")
+    d205_decisions = d205_decisions_raw.decode("utf-8", errors="strict")
     d205_roadmap += (
         "## Planning and Approval Boundary\n\n"
         "The owner approved only the exact active v0.4 phase set 20/21/22/23/23.1/24. See D-205.\n\n"
@@ -2273,7 +2312,7 @@ def self_test_plan_cap_rev(base: Path) -> int:
     d205_root = base / "d205-path"
     d205_root.mkdir()
     d205_phases = make_phases(d205_root, d205_caps_actual, d205_gaps)
-    summary, errors = check_plan_cap(d205_roadmap, d205_phases)
+    summary, errors = check_plan_cap(d205_roadmap, d205_phases, d205_decisions)
     if errors or summary != "plan-cap pass phases=6 plans=40":
         raise SystemExit(f"planning-hygiene self-test FAIL: path-based D-205 40-plan fixture: {summary} {errors}")
     controls += 1
@@ -2319,7 +2358,8 @@ def self_test_plan_cap_rev(base: Path) -> int:
 
     d205_git("init", "-q")
     d205_dir_paths: dict[str, str] = {}
-    d205_files: dict[str, str] = {".planning/ROADMAP.md": d205_roadmap}
+    d205_files: dict[str, str] = {".planning/ROADMAP.md": d205_roadmap,
+                                  d205_decision_path: d205_decisions}
     for phase_dir in sorted(d205_phases.iterdir()):
         if not phase_dir.is_dir():
             continue
@@ -2362,6 +2402,15 @@ def self_test_plan_cap_rev(base: Path) -> int:
     d205_variant("missing D-205 approval", {".planning/ROADMAP.md": d205_roadmap.replace(
         "approved only the exact active v0.4 phase set 20/21/22/23/23.1/24",
         "has no exception for the active v0.4 phase set")}, "plan-cap-phase-count")
+    d205_variant("missing D-205 decision with roadmap approval retained", {},
+                 "plan-cap-approved-exception", delete=(d205_decision_path,))
+    contradictory_decisions = d205_decisions.replace(
+        "This supersedes D-193/D-203 only on the prohibition against adding a sixth v0.4 phase.",
+        "This does not supersede D-193/D-203 on the prohibition against adding a sixth v0.4 phase.", 1)
+    if contradictory_decisions == d205_decisions:
+        raise SystemExit("planning-hygiene self-test FAIL: contradictory D-205 mutant was not seeded")
+    d205_variant("contradictory D-205 decision with roadmap approval retained",
+                 {d205_decision_path: contradictory_decisions}, "plan-cap-approved-exception")
     d205_variant("altered historical cap", {".planning/ROADMAP.md": d205_roadmap.replace(
         "**Plan cap**: 9", "**Plan cap**: 8", 1)}, "plan-cap-approved-exception")
     d205_variant("41st actual plan", {".planning/phases/GB-24-some-title/24-02-PLAN-extra.md": PRIMARY_FRONTMATTER_TEXT},
@@ -4196,8 +4245,8 @@ def main(argv: list[str] | None = None) -> int:
             if args.rev:
                 if args.roadmap or args.phases_dir:
                     parser.error("plan-cap --rev reads the commit only; give no --roadmap or --phases-dir")
-                roadmap_text_at_rev, tree = read_rev(Path(args.repo), args.rev)
-                summary, errors = check_plan_tree(roadmap_text_at_rev, tree, args.rev)
+                roadmap_text_at_rev, tree, decisions = read_rev(Path(args.repo), args.rev)
+                summary, errors = check_plan_tree(roadmap_text_at_rev, tree, args.rev, decisions)
             elif not args.roadmap or not args.phases_dir:
                 parser.error("plan-cap needs --rev, or --roadmap and --phases-dir")
             else:
