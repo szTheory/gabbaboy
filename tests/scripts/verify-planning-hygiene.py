@@ -95,6 +95,11 @@ CAP_LINE = re.compile(r"^\*\*Plan cap\*\*: (\d+)[ \t]*$")
 PLAN_FILE = re.compile(r"^(\d+(?:\.\d+)?)-\d[^/\\]*-PLAN[^/\\]*\.md$", re.IGNORECASE)
 GAP_FRONTMATTER = re.compile(r"\A---\n(.*?)\n---(?:\n|\Z)", re.DOTALL)
 GAP_LINE = re.compile(r"(?m)^gap_closure:\s*true\s*$")
+V04_GAP_HANDOFF_SUMMARY_KEYS = frozenset((
+    "phase", "plan", "subsystem", "tags", "requires", "provides", "affects", "actuals",
+    "plan_head_before", "plan_head_after", "tech-stack", "key-files", "key-decisions",
+    "patterns-established", "requirements-completed", "coverage", "duration", "completed", "status",
+))
 FULL_COMMIT = re.compile(r"[0-9a-f]{40}")
 PHASE_DIR = re.compile(r"^GB-(\d+(?:\.\d+)?)-")
 LESSON_HEADING = re.compile(r"^### ([A-Z0-9]+(?:-[A-Z0-9]+)+) / ")
@@ -481,6 +486,35 @@ def frontmatter_fields(text: str) -> tuple[dict[str, str], str]:
             if value is not None:
                 fields[key] = value
     return fields, normalized[match.end():]
+
+
+def closed_frontmatter_root_errors(text: str, allowed_keys: frozenset[str]) -> list[str]:
+    """Reject unknown, aliased, decorated, or duplicate root keys in a fixed document schema."""
+    normalized, _ = yaml_source_lines(text)
+    match = GAP_FRONTMATTER.match(normalized)
+    if match is None:
+        return ["missing YAML frontmatter"]
+    errors: list[str] = []
+    seen: set[str] = set()
+    _, lines = yaml_source_lines(match.group(1))
+    for line in lines:
+        if not line or line.startswith("#") or line[0] in " \t":
+            continue
+        key = parse_frontmatter_plain_key(line)
+        if key is None:
+            if any(_frontmatter_root_key_is_alias(line, allowed) for allowed in allowed_keys):
+                errors.append("unsupported or aliased protected root key syntax")
+            else:
+                errors.append("unsupported root key syntax")
+            continue
+        if key not in allowed_keys:
+            errors.append(f"unsupported root key '{key}'")
+        if not line.startswith(f"{key}:"):
+            errors.append(f"noncanonical root key '{key}'")
+        if key in seen:
+            errors.append(f"duplicate root key '{key}'")
+        seen.add(key)
+    return errors
 
 
 def frontmatter_duplicates(text: str) -> list[str]:
@@ -1588,11 +1622,17 @@ def check_v04_gap_handoff(repo: Path, rev: str, baseline_rev: str, paths: list[s
     validation = documents.get("validation", "")
     continuation = documents.get("continuation", "")
     state = documents.get("state", "")
-    summary_fields, summary_body = frontmatter_fields(summary)
-    if summary_fields.get("status") != "complete" or summary_fields.get("requirements-completed") != "[]":
-        errors.append("v04-gap-assessment-handoff: summary must complete the assessment plan with requirements-completed: []")
-    if summary_fields.get("phase") != "GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps" or summary_fields.get("plan") != "01":
-        errors.append("v04-gap-assessment-handoff: summary must identify the Phase 24 plan")
+    summary_schema_errors = closed_frontmatter_root_errors(summary, V04_GAP_HANDOFF_SUMMARY_KEYS)
+    if summary_schema_errors:
+        errors.append("v04-gap-assessment-handoff: summary frontmatter must use its closed root-key schema: " +
+                      ", ".join(summary_schema_errors))
+        summary_fields, summary_body = {}, ""
+    else:
+        summary_fields, summary_body = frontmatter_fields(summary)
+        if summary_fields.get("status") != "complete" or summary_fields.get("requirements-completed") != "[]":
+            errors.append("v04-gap-assessment-handoff: summary must complete the assessment plan with requirements-completed: []")
+        if summary_fields.get("phase") != "GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps" or summary_fields.get("plan") != "01":
+            errors.append("v04-gap-assessment-handoff: summary must identify the Phase 24 plan")
 
     summary_norm = " ".join(summary_body.lower().split())
     validation_norm = " ".join(validation.lower().split())
@@ -2649,6 +2689,16 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
 
     handoff_mutant("summary requirement completion", summary_path,
                    lambda doc: doc.replace("requirements-completed: []", "requirements-completed: [FIXT-01]", 1))
+    handoff_mutant("quoted requirements-completed alias", summary_path,
+                   lambda doc: doc.replace("requirements-completed: []",
+                                           'requirements-completed: []\n"requirements-completed": [FIXT-01]', 1))
+    handoff_mutant("quoted status alias", summary_path,
+                   lambda doc: doc.replace("status: complete", 'status: complete\n"status": incomplete', 1))
+    handoff_mutant("quoted phase alias", summary_path,
+                   lambda doc: doc.replace(
+                       "phase: GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps",
+                       'phase: GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps\n'
+                       '"phase": GB-23.1-close-v0-4-requirement-and-verification-gaps', 1))
     handoff_mutant("summary owner reassignment", summary_path,
                    lambda doc: doc.replace("FIXT-01 — Pending, original owner Phase 21",
                                            "FIXT-01 — Pending, original owner Phase 20", 1))
