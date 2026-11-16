@@ -1998,6 +1998,7 @@ def self_test(rev: str | None = None, repo: Path = Path(".")) -> int:
             if head.returncode != 0:
                 raise SystemExit(f"deferrals-rev: cannot resolve HEAD in {repo}")
             live_revision = head.stdout.decode("ascii").strip()
+        controls += self_test_v04_gap_assessment(base, repo, live_revision)
         live_text = read_deferrals(repo, live_revision)
         summary, errors = check_deferrals(live_text)
         if errors or summary != "deferrals pass pins=8":
@@ -2259,6 +2260,298 @@ def self_test_plan_cap_rev(base: Path) -> int:
     d205_variant("Phase 24 gap plan", {
         ".planning/phases/GB-24-some-title/24-01-PLAN.md": GAP_FRONTMATTER_TEXT}, "plan-cap-d205-phase24-gap")
     d205_variant("attempted reserve renewal", {".planning/ROADMAP.md": renewed_path_roadmap}, "plan-cap-d205-reserve")
+    return controls
+
+
+def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str) -> int:
+    """Run report and handoff mutations through the committed production CLI in an alternate-object fixture."""
+    controls = 0
+    phase_dir = ".planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps"
+    report_path = V04_GAP_REPORT_PATH
+    summary_path = f"{phase_dir}/24-01-SUMMARY.md"
+    validation_path = f"{phase_dir}/24-VALIDATION.md"
+    continuation_path = f"{phase_dir}/.continue-here.md"
+    uat_path = f"{phase_dir}/24-UAT.md"
+    state_path = ".planning/STATE.md"
+    repo = base / "v04-gap-assessment-repo"
+    repo.mkdir()
+    env = {k: v for k, v in os.environ.items() if k in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull,
+               GIT_AUTHOR_NAME="fixture", GIT_AUTHOR_EMAIL="fixture@example.invalid",
+               GIT_COMMITTER_NAME="fixture", GIT_COMMITTER_EMAIL="fixture@example.invalid")
+
+    def git(*args: str) -> str:
+        done = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True,
+                              check=True, env=env, timeout=60)
+        return done.stdout.strip()
+
+    git("init", "-q")
+    object_dir_raw = git_run(source_repo, "rev-parse", "--git-path", "objects")
+    if object_dir_raw.returncode != 0:
+        raise SystemExit("planning-hygiene self-test FAIL: could not locate source object store")
+    object_dir = Path(object_dir_raw.stdout.decode("utf-8").strip())
+    if not object_dir.is_absolute():
+        object_dir = source_repo.resolve() / object_dir
+    alternate = repo / ".git/objects/info/alternates"
+    alternate.parent.mkdir(parents=True, exist_ok=True)
+    alternate.write_text(str(object_dir.resolve()) + "\n", encoding="utf-8")
+    snapshot, snapshot_error = commit_snapshot(source_repo, source_rev)
+    if snapshot is None:
+        raise SystemExit(f"planning-hygiene self-test FAIL: cannot snapshot report candidate {source_rev}: {snapshot_error}")
+    for rel, content in snapshot.items():
+        path = repo / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    git("add", "-A", "--", ".planning")
+    git("commit", "-q", "-m", "canonical immutable Phase 24 report fixture")
+    report_rev = git("rev-parse", "HEAD")
+    report_fields, _ = frontmatter_fields(snapshot[report_path].decode("utf-8", errors="strict"))
+    baseline_rev = report_fields["baseline_commit"]
+
+    def checkout(revision: str) -> None:
+        git("checkout", "-q", revision)
+
+    def commit(files: dict[str, bytes | str], message: str, delete: tuple[str, ...] = ()) -> str:
+        touched: list[str] = []
+        for rel, content in files.items():
+            path = repo / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            data = content if isinstance(content, bytes) else content.encode("utf-8")
+            path.write_bytes(data)
+            touched.append(rel)
+        for rel in delete:
+            git("rm", "-q", "--", rel)
+            touched.append(rel)
+        for rel in sorted(set(touched)):
+            if rel not in delete:
+                git("add", "--", rel)
+        git("commit", "-q", "-m", message)
+        return git("rev-parse", "HEAD")
+
+    def cli(stage: str, revision: str, expected: str | None, label: str) -> None:
+        nonlocal controls
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            exit_code = main(["--check", "v04-gap-assessment", "--stage", stage, "--rev", revision,
+                              "--baseline-rev", baseline_rev, "--repo", str(repo)])
+        error_text = stderr.getvalue()
+        if expected is None:
+            wanted = f"v04-gap-assessment pass stage={stage}"
+            if exit_code != 0 or stdout.getvalue().strip() != wanted:
+                raise SystemExit(f"planning-hygiene self-test FAIL: {label} should pass: {exit_code} {stdout.getvalue()} {error_text}")
+        elif exit_code != 1 or expected not in error_text:
+            raise SystemExit(f"planning-hygiene self-test FAIL: {label} should fail with {expected}: {exit_code} {error_text}")
+        controls += 1
+        if revision != report_rev:
+            COMMIT_SNAPSHOT_CACHE.pop((str(repo.resolve()), revision), None)
+
+    def canonical() -> None:
+        cli("report", report_rev, None, "canonical committed report")
+
+    def report_text(revision: str = report_rev) -> str:
+        raw = commit_file(repo, revision, report_path)
+        if raw is None:
+            raise SystemExit(f"planning-hygiene self-test FAIL: report fixture missing at {revision}")
+        return raw.decode("utf-8", errors="strict")
+
+    def row_span(document: str, row_id: str, collection: str = "requirement_assessments") -> tuple[int, int]:
+        marker = f'  - phase: "{row_id}"\n' if collection == "phase_assessments" else f"  - id: {row_id}\n"
+        start = document.find(marker)
+        collection_start = document.find(collection + ":")
+        end_collection = document.find("\nphase_assessments:", collection_start) if collection == "requirement_assessments" else len(document)
+        if start < collection_start or start < 0 or (end_collection >= 0 and start > end_collection):
+            raise SystemExit(f"planning-hygiene self-test FAIL: missing {row_id} row in {collection}")
+        next_marker = "\n  - phase: " if collection == "phase_assessments" else "\n  - id: "
+        next_row = document.find(next_marker, start + len(marker))
+        end = min((value for value in (next_row, end_collection if end_collection >= 0 else len(document)) if value >= 0),
+                  default=len(document))
+        return start, end
+
+    def mutate_row(document: str, row_id: str, mutate: Callable[[str], str],
+                   collection: str = "requirement_assessments") -> str:
+        start, end = row_span(document, row_id, collection)
+        changed = mutate(document[start:end])
+        if changed == document[start:end]:
+            raise SystemExit(f"planning-hygiene self-test FAIL: mutation did not change {row_id}")
+        return document[:start] + changed + document[end:]
+
+    def mutate_report(label: str, mutation: Callable[[str], str], expected: str) -> None:
+        checkout(report_rev)
+        candidate = commit({report_path: mutation(report_text())}, label)
+        cli("report", candidate, expected, label)
+
+    canonical()
+    # Dirty checkout facts cannot contaminate the already committed report candidate.
+    (repo / V04_GAP_REQUIREMENTS_PATH).write_text("dirty false completion", encoding="utf-8")
+    (repo / V04_GAP_AUDIT_PATH).write_text("dirty closed audit", encoding="utf-8")
+    (repo / report_path).write_text("dirty substituted report", encoding="utf-8")
+    cli("report", report_rev, None, "dirty checkout does not change immutable report")
+    git("checkout", "--", V04_GAP_REQUIREMENTS_PATH, V04_GAP_AUDIT_PATH, report_path)
+
+    # Canonical exact-source checks bind every original criterion and owner.
+    canonical()
+    for requirement in V04_GAP_EXPECTED:
+        def drift_criterion_and_owner(block: str) -> str:
+            block = re.sub(r"(?m)^    original_criterion:.*$", "    original_criterion: altered criterion", block, count=1)
+            return re.sub(r"(?m)^    original_owner:.*$", "    original_owner: Phase 99", block, count=1)
+        mutate_report(f"criterion and owner drift {requirement}",
+                      lambda doc, requirement=requirement: mutate_row(doc, requirement, drift_criterion_and_owner),
+                      "v04-gap-assessment-requirements")
+    canonical()
+
+    for requirement in ("FIXT-01", "RIGHTS-01", "DIAG-01", "DIAG-02"):
+        mutate_report(f"false completion {requirement}",
+                      lambda doc, requirement=requirement: mutate_row(
+                          doc, requirement, lambda row: row.replace("tracker_status: Pending", "tracker_status: Complete", 1)),
+                      "v04-gap-assessment-requirements")
+    for requirement in ("GAME-01", "GAME-02", "FEED-01"):
+        mutate_report(f"tracker audit conflation {requirement}",
+                      lambda doc, requirement=requirement: mutate_row(
+                          doc, requirement, lambda row: row.replace("milestone_audit_status: partial", "milestone_audit_status: satisfied", 1)),
+                      "v04-gap-assessment-requirements")
+    for phase in ("20", "21"):
+        mutate_report(f"stale phase promotion {phase}",
+                      lambda doc, phase=phase: mutate_row(
+                          doc, phase, lambda row: row.replace("current_audit_observation: stale", "current_audit_observation: fresh", 1),
+                          "phase_assessments"), "v04-gap-assessment-phase")
+    mutate_report("diagnostic metadata recast as execution",
+                  lambda doc: mutate_row(doc, "DIAG-02", lambda row: row.replace(
+                      "approved metadata-only scope passed; no case executed", "513 cases admitted and executed", 1)),
+                  "v04-gap-assessment-requirements")
+    canonical()
+
+    cases = (
+        ("duplicate assessment row", lambda doc: (lambda span: doc[:span[1]] + "\n" + doc[span[0]:span[1]] + doc[span[1]:])(row_span(doc, "GAME-01")),
+         "v04-gap-assessment-requirements"),
+        ("missing assessment row", lambda doc: (lambda span: doc[:span[0]] + doc[span[1]:])(row_span(doc, "REL-01")),
+         "v04-gap-assessment-requirements"),
+        ("extra assessment row", lambda doc: mutate_row(doc, "REL-01", lambda row: row.replace("id: REL-01", "id: EXTRA-01", 1)),
+         "v04-gap-assessment-requirements"),
+        ("malformed protected alias", lambda doc: doc.replace("milestone: v0.4", "milestone: v0.4\nmilestone : closed", 1),
+         "v04-gap-assessment-frontmatter"),
+        ("closed milestone claim", lambda doc: doc.replace("milestone_status: open", "milestone_status: closed", 1),
+         "v04-gap-assessment-field"),
+        ("passed audit claim", lambda doc: doc.replace("milestone_audit_status: gaps_found", "milestone_audit_status: passed", 1),
+         "v04-gap-assessment-field"),
+        ("input substitution", lambda doc: doc.replace(f"assessment_input_commit: {V04_GAP_INPUT_REV}",
+                                                        f"assessment_input_commit: {baseline_rev}", 1),
+         "v04-gap-assessment-input"),
+        ("source digest drift", lambda doc: re.sub(r"(?m)^(    sha256: )[0-9a-f]{64}$", lambda match: match.group(1) + "0" * 64, doc, count=1),
+         "v04-gap-assessment-source-records"),
+    )
+    for label, mutation, expected in cases:
+        canonical()
+        mutate_report(label, mutation, expected)
+    canonical()
+
+    for label, revision, expected in (("abbreviated revision", source_rev[:12], "v04-gap-assessment-rev"),
+                                      ("symbolic revision", "HEAD", "v04-gap-assessment-rev"),
+                                      ("nonexistent revision", "0" * 40, "v04-gap-assessment-rev")):
+        cli("report", revision, expected, label)
+    saved_input_rev = V04_GAP_INPUT_REV
+    try:
+        globals()["V04_GAP_INPUT_REV"] = report_rev
+        cli("report", report_rev, "v04-gap-assessment-input", "input equals containing revision")
+    finally:
+        globals()["V04_GAP_INPUT_REV"] = saved_input_rev
+
+    # A full but incomplete input commit proves source-blob absence is distinct from ref syntax errors.
+    checkout(report_rev)
+    missing_input = commit({}, "remove required immutable input source", delete=(".planning/context/DECISIONS.md",))
+    altered_report = report_text().replace(f"assessment_input_commit: {V04_GAP_INPUT_REV}",
+                                           f"assessment_input_commit: {missing_input}", 1)
+    missing_source_candidate = commit({report_path: altered_report}, "point assessment at source-missing input")
+    try:
+        globals()["V04_GAP_INPUT_REV"] = missing_input
+        cli("report", missing_source_candidate, "v04-gap-assessment-source-records", "missing required input source")
+    finally:
+        globals()["V04_GAP_INPUT_REV"] = saved_input_rev
+    COMMIT_SNAPSHOT_CACHE.pop((str(repo.resolve()), missing_input), None)
+
+    checkout(report_rev)
+    baseline_audit = commit_file(source_repo, baseline_rev, V04_GAP_AUDIT_PATH)
+    if baseline_audit is None:
+        raise SystemExit("planning-hygiene self-test FAIL: protected baseline audit blob is absent")
+    stale_audit_candidate = commit({V04_GAP_AUDIT_PATH: baseline_audit}, "substitute stale historical audit")
+    cli("report", stale_audit_candidate, "v04-gap-assessment-audit", "stale audit substitution")
+    checkout(report_rev)
+    historical_path = V04_GAP_HISTORICAL_REPORTS["RIGHTS-01"]
+    historical = commit_file(repo, report_rev, historical_path)
+    if historical is None:
+        raise SystemExit("planning-hygiene self-test FAIL: protected historical report fixture is absent")
+    drifted_history = commit({historical_path: historical + b"\nunauthorized historical byte drift\n"},
+                            "mutate protected historical report bytes")
+    cli("report", drifted_history, "v04-gap-assessment-history", "protected historical byte drift")
+    canonical()
+
+    owner_lines = ("FIXT-01 — Pending, original owner Phase 21; RIGHTS-01 — Pending, original owner Phase 20; "
+                   "DIAG-01 — Pending, original owner Phase 22; DIAG-02 — Pending, original owner Phase 22.")
+    limits = ("v0.4 stays open with gaps_found. Phase 20 and Phase 21 remain stale. D-103 unfulfilled. "
+              "Next: $gsd-verify-work 24. no broad local suite, no third local lifecycle retest, no release retry, "
+              "no tag/asset/rights action, no fixture admission.")
+    links_summary = ("[evidence](24-EVIDENCE.md) [validation](24-VALIDATION.md) "
+                     "[closure](24-UAT.md) [continuation](.continue-here.md)")
+    summary = (
+        "---\nphase: GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps\nplan: \"01\"\n"
+        "status: complete\nrequirements-completed: []\n---\n\n"
+        "# Phase 24 Plan 01 Summary\n\n"
+        "Phase 24 execution/automated closure complete; phase verification pending. The orchestrator is the next actor. "
+        f"Assessment input `{V04_GAP_INPUT_REV}`; protected baseline `{baseline_rev}`; "
+        f"tested checker/report candidate: `{source_rev}`. requirements-completed: []\n\n"
+        f"{owner_lines} {limits}\n\n{links_summary}\n")
+    continuation = ("# Phase 24 Continuation\n\n"
+                    f"{owner_lines} {limits} The orchestrator is next; use `$gsd-verify-work 24`.\n\n"
+                    "[evidence](24-EVIDENCE.md) [summary](24-01-SUMMARY.md) "
+                    "[validation](24-VALIDATION.md) [closure](24-UAT.md)\n")
+    state = ("# Project State\n\n## Current Position\nPhase 24 execution is complete; phase verification pending.\n\n"
+             "Current Handoff: Phase 24 execution/automated closure complete. "
+             f"{owner_lines} {limits}\n\n"
+             "[evidence](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-EVIDENCE.md) "
+             "[summary](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-SUMMARY.md) "
+             "[validation](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md) "
+             "[closure](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-UAT.md)\n\n"
+             "## Accumulated Context\n")
+    validation = "# Validation\n\nplanning-hygiene 24-01-T1-map 24-01-T2-controls 24-01-T3-closure\n"
+    handoff_files: dict[str, bytes | str] = {
+        summary_path: summary,
+        continuation_path: continuation,
+        state_path: state,
+        validation_path: validation,
+        uat_path: "# Generated shared closure\n",
+    }
+    checkout(report_rev)
+    handoff_rev = commit(handoff_files, "canonical Phase 24 handoff fixture")
+    cli("handoff", handoff_rev, None, "canonical committed pending-verification handoff")
+
+    def handoff_mutant(label: str, path: str, mutation: Callable[[str], str],
+                       expected: str = "v04-gap-assessment-handoff") -> None:
+        checkout(handoff_rev)
+        current = commit_file(repo, handoff_rev, path)
+        if current is None:
+            raise SystemExit(f"planning-hygiene self-test FAIL: missing handoff fixture {path}")
+        original = current.decode("utf-8", errors="strict")
+        changed = mutation(original)
+        if changed == original:
+            raise SystemExit(f"planning-hygiene self-test FAIL: handoff mutation {label} was not seeded")
+        candidate = commit({path: changed}, label)
+        cli("handoff", candidate, expected, label)
+
+    handoff_mutant("summary requirement completion", summary_path,
+                   lambda doc: doc.replace("requirements-completed: []", "requirements-completed: [FIXT-01]", 1))
+    handoff_mutant("summary owner reassignment", summary_path,
+                   lambda doc: doc.replace("FIXT-01 — Pending, original owner Phase 21",
+                                           "FIXT-01 — Pending, original owner Phase 20", 1))
+    handoff_mutant("summary chooses audit instead of verification", summary_path,
+                   lambda doc: doc.replace("$gsd-verify-work 24", "$gsd-audit-milestone v0.4", 1))
+    handoff_mutant("continuation chooses audit instead of verification", continuation_path,
+                   lambda doc: doc.replace("$gsd-verify-work 24", "$gsd-audit-milestone v0.4", 1))
+    handoff_mutant("D-103 falsely fulfilled", state_path,
+                   lambda doc: doc.replace("D-103 unfulfilled", "D-103 fulfilled", 1))
+    handoff_mutant("milestone falsely closed", state_path,
+                   lambda doc: doc.replace("v0.4 stays open with gaps_found", "v0.4 is closed with gaps_found", 1))
+    handoff_mutant("missing evidence link", summary_path,
+                   lambda doc: doc.replace("[evidence](24-EVIDENCE.md)", "[evidence](#missing)", 1))
+    cli("handoff", handoff_rev, None, "canonical handoff remains immutable after checkout mutations")
     return controls
 
 
