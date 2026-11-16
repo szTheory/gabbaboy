@@ -1627,6 +1627,15 @@ def self_test_plan_cap_rev(base: Path) -> int:
 def self_test_v04_reconciliation(base: Path, source_repo: Path) -> int:
     """Exercise report/handoff contracts through the real CLI in a disposable Git repository."""
     controls = 0
+    git_read_cache: dict[tuple[str, tuple[str, ...]], subprocess.CompletedProcess[bytes]] = {}
+    source_git_run = git_run
+
+    def cached_git_run(repo: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
+        key = (str(repo.resolve()), args)
+        if key not in git_read_cache:
+            git_read_cache[key] = source_git_run(repo, *args)
+        return git_read_cache[key]
+
     line_cases = (
         ("", []),
         ("one", ["one"]),
@@ -1774,16 +1783,21 @@ The v0.4 milestone remains open. Four requirements remain Pending.
     for name in V04_PHASE22_SUMMARIES:
         base_files[f"{phase_dirs['22']}/{name}"] = f"{name} immutable summary.\n"
 
-    def commit(files: dict[str, str], message: str) -> str:
+    def commit(files: dict[str, str], message: str, *, stage_new: bool = False) -> str:
         for relative, content in files.items():
             path = repo / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(content.encode("utf-8"))
-            git("add", relative)
-        git("commit", "-q", "-m", message)
+        if stage_new:
+            git("add", "--", *files)
+            git("commit", "-q", "-m", message)
+        else:
+            # Every later fixture modifies an already committed path. `-a`
+            # avoids a redundant Git process while keeping the same snapshot.
+            git("commit", "-q", "-a", "-m", message)
         return git("rev-parse", "HEAD")
 
-    baseline_rev = commit(base_files, "fixture baseline")
+    baseline_rev = commit(base_files, "fixture baseline", stage_new=True)
 
     def artifact_link(name: str) -> str:
         return f"[{name}]({name})"
@@ -1847,15 +1861,20 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         raise SystemExit(f"planning-hygiene self-test FAIL: missing Phase 22 report was not rejected: {no_report_out[0].getvalue()} {no_report_out[1].getvalue()}")
     controls += 1
 
-    report_rev = commit({report_path: report_content}, "add historical report")
+    report_rev = commit({report_path: report_content}, "add historical report", stage_new=True)
 
     def cli_check(stage: str, rev: str, expected_code: str | None = None,
                   check_baseline: str | None = None) -> None:
         nonlocal controls
         output, error = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
-            result = main(["--check", "v04-reconciliation", "--stage", stage, "--rev", rev,
-                           "--baseline-rev", check_baseline or baseline_rev, "--repo", str(repo)])
+        original_git_run = globals()["git_run"]
+        globals()["git_run"] = cached_git_run
+        try:
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+                result = main(["--check", "v04-reconciliation", "--stage", stage, "--rev", rev,
+                               "--baseline-rev", check_baseline or baseline_rev, "--repo", str(repo)])
+        finally:
+            globals()["git_run"] = original_git_run
         if expected_code is None:
             expected_line = f"v04-reconciliation pass stage={stage}"
             if result != 0 or output.getvalue().strip() != expected_line:
@@ -1951,8 +1970,22 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         raise SystemExit("planning-hygiene self-test FAIL: could not seed the CR-07 disposition row")
     cr07_mutant_rev = commit({report_path: cr07_mutant},
                              "reproduce D-202 non-ASCII disposition-row acceptance")
-    cli_pre_fix_accepts("report", cr07_mutant_rev,
-                        "the U+00A0-prefixed contradictory disposition row", d202_checker)
+    d202_namespace = {
+        "__name__": "verify_planning_hygiene_d202",
+        "__file__": str(source_repo / "tests/scripts/verify-planning-hygiene.py"),
+        "git_run": cached_git_run,
+    }
+    exec(compile(d202_source.stdout, str(d202_checker), "exec"), d202_namespace)
+    output, error = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+        d202_result = d202_namespace["main"]([
+            "--check", "v04-reconciliation", "--stage", "report", "--rev", cr07_mutant_rev,
+            "--baseline-rev", baseline_rev, "--repo", str(repo)])
+    if d202_result != 0 or output.getvalue().strip() != "v04-reconciliation pass stage=report":
+        raise SystemExit("planning-hygiene self-test FAIL: D-202 checker did not causally accept the "
+                         f"U+00A0-prefixed contradictory disposition row: {d202_result} "
+                         f"{output.getvalue()} {error.getvalue()}")
+    controls += 1
     cli_check("report", cr07_mutant_rev, "v04-report-requirements")
 
     object_boundary_text = (
@@ -2096,8 +2129,6 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
             only_alias_rev = commit({report_path: only_alias},
                                    f"reject {form} {protected_root} root without canonical spelling")
             cli_check("report", only_alias_rev, missing_root_refusal)
-        # The paired canonical fixture demonstrates that the refusal comes from the alias.
-        cli_check("report", report_rev)
 
     spaced_item = ("  - id : EXTRA-01\n    status: Satisfied\n"
                    "    original_owner: Phase 99\n")
@@ -2792,7 +2823,8 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         git("checkout", "-q", baseline_rev)
         malformed_baseline_rev = commit({".planning/REQUIREMENTS.md": malformed_requirements},
                                         "join requirement rows with a non-CommonMark separator")
-        malformed_report_rev = commit({report_path: report_content}, "add report over malformed traceability rows")
+        malformed_report_rev = commit({report_path: report_content},
+                                      "add report over malformed traceability rows", stage_new=True)
         cli_check("report", malformed_report_rev, "v04-report-requirements", malformed_baseline_rev)
         git("checkout", "-q", report_rev)
 
@@ -2849,7 +2881,7 @@ Completed stage: Phase 23.1 — Close v0.4 requirement and verification gaps. Th
 The next command is owner-only: `/gsd-audit-milestone v0.4`. No next phase or milestone is selected or started.
 """
     handoff_files = {state_path: state_handoff, project_path: project_state, continuation_path: continuation}
-    handoff_rev = commit(handoff_files, "reconcile current handoff")
+    handoff_rev = commit(handoff_files, "reconcile current handoff", stage_new=True)
     cli_check("handoff", handoff_rev)
     handoff_documents = (
         ("STATE", state_path, state_handoff, "Owner Handoff"),
