@@ -2,21 +2,21 @@
 status: complete
 phase: GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps
 source: 24-01-SUMMARY.md
-started: 2026-11-16T23:25:43.538299+00:00
-updated: 2026-11-16T23:25:43.538299+00:00
+started: 2026-11-16T23:43:57.723220+00:00
+updated: 2026-11-16T23:43:57.723220+00:00
 ---
 
 ## Automated Evidence
 
 # Phase 24 execution handoff
 
-**Stage completed:** Plan 24-01 execution, its review-fix pass, and the corrected candidate's bounded assessment checks. Phase verification remains pending.
+**Stage completed:** Plan 24-01 execution, its review-fix pass, the corrected candidate's bounded checks, and one fresh independent review. Phase verification is blocked.
 
-**Next actor:** the orchestrator. Commit the refreshed evidence documents, run the immutable report and handoff stages at that documentation commit, then obtain one fresh independent code review of the corrected candidate. If the review is clean, run the configured regression hook using only the two authorized focused CTests, then run `$gsd-verify-work 24`. Any Critical, correctness, security, or new blocking review finding stops Phase 24; no further fix or review cycle is authorized.
+**Next actor:** the owner, using `$gsd-discuss-phase 24` to decide whether to authorize a new bounded recovery. The fresh review found Critical CR-01 on exact candidate `0320a081bb5076682b2b99a55eb0d1375db87cdd`: a BOM-prefixed YAML frontmatter fence lets a `gap_closure: true` plan bypass the Phase 24 plan-cap guard. The prior bounded fix/review pass is exhausted, so no further fix, review, configured regression hook, or `$gsd-verify-work 24` is authorized now. If authorized, the recommended correction is to strip exactly one leading UTF-8 BOM in the plan parser and add a production-CLI BOM-prefixed gap-plan negative with a canonical ordinary-plan positive twin; then require a clean independent review and only the two existing focused CTests before Phase 24 verification.
 
-The immutable assessment input is `f511baa8c0330f5cd90d56da55d79dbc873b0559`; the protected baseline is `f6fe166a7c2a3668f5a412a82b648dd062329d3c`; the corrected checker/report candidate is `a1e8067500016158347e92522934b9af45d78386`. Its 628-control self-test, six-phase/40-plan cap check, and immutable report and handoff stages passed. Only the existing focused CTests `plan_cap` and `planning_hygiene_controls` ran at this candidate; both passed, with the existing 30-second timeout and 125-control floor. The documentation handoff commit still needs its own report/handoff stage checks; do not attribute CTest results to that later commit.
+The immutable assessment input is `f511baa8c0330f5cd90d56da55d79dbc873b0559`; the protected baseline is `f6fe166a7c2a3668f5a412a82b648dd062329d3c`; the corrected checker/report candidate is `a1e8067500016158347e92522934b9af45d78386`; the reviewed handoff candidate is `0320a081bb5076682b2b99a55eb0d1375db87cdd`. The corrected candidate's 628-control self-test, six-phase/40-plan cap check, immutable report and handoff stages, and only the two focused CTests passed. The final handoff stages passed, but the independent review found CR-01; no CTest result is attributed to the later handoff commit.
 
-FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending under their original owners. Phase 20/21 remain stale; v0.4 remains open with `gaps_found`; D-103 is unfulfilled. No broad local suite, no third local lifecycle retest, no release retry, no tag/asset/rights action, and no fixture admission. Do not run a milestone close, archival, or cleanup. No phase or milestone completion is claimed yet.
+FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending under their original owners. Phase 20/21 remain stale; v0.4 remains open with `gaps_found`; D-103 is unfulfilled. No broad local suite, no third local lifecycle retest, no release retry, no tag/asset/rights action, and no fixture admission. Do not run the phase verifier, milestone close, archival, or cleanup while blocked. No phase or milestone completion is claimed.
 
 FIXT-01 — Pending, original owner Phase 21. RIGHTS-01 — Pending, original owner Phase 20. DIAG-01 — Pending, original owner Phase 22. DIAG-02 — Pending, original owner Phase 22. Preserve the 40-plan ceiling and all existing test, lifecycle, release, fixture, rights, and milestone boundaries.
 

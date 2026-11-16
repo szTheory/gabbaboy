@@ -133,9 +133,9 @@ status: complete
 - **Assessment input:** `f511baa8c0330f5cd90d56da55d79dbc873b0559`.
 - **Protected baseline:** `f6fe166a7c2a3668f5a412a82b648dd062329d3c`.
 - Tested checker/report candidate: `a1e8067500016158347e92522934b9af45d78386`.
-- **Checked handoff candidate (`PHASE24_HANDOFF_REV`):** pending the final evidence-document commit and its direct report/handoff stage checks.
+- **Checked handoff candidate (`PHASE24_HANDOFF_REV`):** `0320a081bb5076682b2b99a55eb0d1375db87cdd`; immutable report and handoff stages passed there. The exact-candidate review of that revision found CR-01, so this pass does not clear the phase gate.
 
-Phase 24 execution/automated closure complete. Phase verification pending. The orchestrator is the next actor; after the fresh independent review is accepted and the configured regression hook passes, it runs `$gsd-verify-work 24`.
+Phase 24 execution/automated closure complete. Phase verification pending but blocked by Critical CR-01 from the fresh independent review: a BOM-prefixed YAML frontmatter fence lets a `gap_closure: true` plan bypass the Phase 24 plan guard. The prior bounded fix/review pass is exhausted. The owner is the next actor and must decide whether to authorize a new bounded recovery; the exact next command is `$gsd-discuss-phase 24`. After an authorized correction and clean independent review, the orchestrator is the next actor to run the configured focused regression hook and then `$gsd-verify-work 24`.
 
 The assessed plan keeps `requirements-completed: []`; all eight requirement IDs here describe assessment coverage only.
 
@@ -169,7 +169,7 @@ The D-205 path-renewal control was committed RED as `9d3eb7b`; direct self-test 
 
 ## Shared Automated Closure
 
-The shared closure generator wrote `24-UAT.md` from all six passing coverage entries (`automated=6`, `human=0`). The generated closure passed with `automated=6`, `gaps=0`; its 21-control mutation self-test also passed. It creates no human checkpoint and asserts no original requirement completion. The handoff route remains with the orchestrator for independent reviews and Phase 24 verification.
+The shared closure generator wrote `24-UAT.md` from all six passing assessment coverage entries (`automated=6`, `human=0`). The generated closure passed with `automated=6`, `gaps=0`; its 21-control mutation self-test also passed. It creates no human checkpoint and asserts no original requirement completion. The separate fresh code review found CR-01; the phase verifier did not run.
 
 ## Known Stubs
 
@@ -177,7 +177,7 @@ None found in files created or modified by this plan. The historical, stale, rig
 
 ## Next Phase Readiness
 
-Plan 24-01 and its automated assessment closure are complete. The orchestrator still owns the fresh independent code review and Phase 24 verification. After review acceptance and the configured regression hook, the next command is `$gsd-verify-work 24`. v0.4 remains open with `gaps_found`; all four requirements remain Pending, Phase 20/21 remain stale, and the separate D-103 exact-final-head milestone gate remains unfulfilled.
+Plan 24-01 and its automated assessment closure are complete. Phase 24 remains blocked before verification because fresh review CR-01 found that a BOM-prefixed YAML frontmatter fence bypasses the gap-plan guard. No further correction or review is authorized under the exhausted bounded pass. The owner acts next with `$gsd-discuss-phase 24` to decide whether to authorize a new bounded recovery; if authorized and the correction, clean review, and focused regression gate pass, the next command is `$gsd-verify-work 24`. v0.4 remains open with `gaps_found`; all four requirements remain Pending, Phase 20/21 remain stale, and the separate D-103 exact-final-head milestone gate remains unfulfilled.
 
 ## Self-Check: PASSED
 

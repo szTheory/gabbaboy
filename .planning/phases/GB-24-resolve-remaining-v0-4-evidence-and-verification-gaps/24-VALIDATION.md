@@ -100,7 +100,11 @@ None. Source-page access outcomes are recorded only when supported by existing f
 - [x] All four requirements remain Pending under original owners and v0.4 remains open.
 - [x] Phase completion is not represented as requirement or milestone completion.
 
-Plan 24-01 execution checks are recorded above. The fresh independent code review, configured regression hook, phase verifier, and owner-controlled milestone audit remain separate gates. All three task IDs match 24-01-PLAN.md; shared closure belongs to T3 rather than a fourth task.
+Plan 24-01 execution checks are recorded above. The fresh independent code review of `0320a081bb5076682b2b99a55eb0d1375db87cdd` found Critical CR-01: a BOM-prefixed YAML frontmatter fence lets a gap-closure plan bypass the Phase 24 plan guard. The phase verifier and post-review regression hook did not run; the prior bounded fix/review pass is exhausted. All three task IDs match 24-01-PLAN.md; shared closure belongs to T3 rather than a fourth task.
+
+## Review Gate
+
+The standard-depth review is recorded in [24-REVIEW.md](24-REVIEW.md). It confirmed the five earlier findings are fixed and identified one remaining plan-classification blocker. Phase 24 verification remains blocked; no source correction or additional review is authorized in the current scope. The owner acts next to decide whether to authorize a new bounded recovery.
 
 ## Validation Audit 2026-11-16
 
