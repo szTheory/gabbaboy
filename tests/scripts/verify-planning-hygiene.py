@@ -1243,7 +1243,8 @@ def v04_gap_audit_requirements(text: str) -> dict[str, tuple[str, str]]:
         cells = markdown_table_cells(line)
         if cells is None or len(cells) < 6 or cells[0] not in V04_GAP_EXPECTED:
             continue
-        owner = " ".join(cells[1].split())
+        owner_value = " ".join(cells[1].split())
+        owner = f"Phase {owner_value}" if re.fullmatch(r"\d+(?:\.\d+)?", owner_value) else owner_value
         result = cells[-1].strip().lower()
         status = next((known for prefix, known in (("partial", "partial"),
                                                      ("unsatisfied", "unsatisfied"),
@@ -1531,7 +1532,7 @@ def check_v04_gap_assessment(repo: Path, stage: str, rev: str,
         "2026-11-16", "https://deved.itch.io/potion-panic", "https://codeberg.org/deved/potion-panic",
         "https://github.com/antoniond/ucity", "https://github.com/antoniond/ucity/releases/tag/v1.3",
         "https://codeberg.org/skylyrac/ucity", "dmg-acid2/blob/v1.0/readme.md",
-        "cgb-acid2/blob/v1.1/readme.md", "gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/README.md",
+        "cgb-acid2/blob/v1.1/readme.md", "gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/readme.md",
         "could not fetch", "do not infer",
     )
     if any(term not in context_norm for term in source_observations):
