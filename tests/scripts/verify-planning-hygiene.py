@@ -86,6 +86,7 @@ V04_APPROVED_PHASE_CAPS = {"20": 9, "21": 8, "22": 12, "23": 10, "23.1": 1}
 V04_EXCEPTION_TEXT = "one exact exception for the active v0.4 phase set 20/21/22/23/23.1"
 V04_D205_PHASE_CAPS = {**V04_APPROVED_PHASE_CAPS, "24": 1}
 V04_D205_EXCEPTION_TEXT = "the owner approved only the exact active v0.4 phase set 20/21/22/23/23.1/24"
+V04_D205_PHASE24_PLAN_LINE = "**Plans:** Exactly one ordinary plan (`24-01-PLAN.md`); no Phase 24 gap reserve."
 
 PHASE_HEADING = re.compile(r"^### Phase (\d+(?:\.\d+)?):")
 CAP_LINE = re.compile(r"^\*\*Plan cap\*\*: (\d+)[ \t]*$")
@@ -2152,6 +2153,112 @@ def self_test_plan_cap_rev(base: Path) -> int:
                                   "archived plans exceed cap")
     expect_rev("archive still enforces plan cap", over_cap_archive_rev, "plan-cap-exceeded")
     expect_rev("earlier archive stays valid", archived_rev, None)
+
+    # D-205 is a single exact six-phase exception, not a general sixth-phase allowance.
+    d205_caps = [("20", "9"), ("21", "8"), ("22", "12"), ("23", "10"), ("23.1", "1")]
+    d205_roadmap = roadmap_text(d205_caps).split("## Progress", 1)[0]
+    d205_roadmap += (
+        "## Planning and Approval Boundary\n\n"
+        "The owner approved only the exact active v0.4 phase set 20/21/22/23/23.1/24. See D-205. "
+        "Phase 24 has one ordinary plan and no new gap reserve.\n\n"
+        "### Phase 24: Resolve remaining v0.4 evidence and verification gaps\n\n"
+        "**Goal:** preserve the evidence boundary.\n"
+        "**Plan cap**: 1\n"
+        f"{V04_D205_PHASE24_PLAN_LINE}\n\n"
+        "**D-205 bounded exception:** the owner approved only the exact active v0.4 phase set "
+        "20/21/22/23/23.1/24. See D-205. Phase 24 has one ordinary plan and no new gap reserve; "
+        "independently enforce no more than 40 actual plan files.\n"
+    )
+    d205_caps_actual = {"20": 8, "21": 7, "22": 11, "23": 9, "23.1": 0, "24": 1}
+    d205_gaps = {"20": 1, "21": 1, "22": 1, "23.1": 1}
+    d205_root = base / "d205-path"
+    d205_root.mkdir()
+    d205_phases = make_phases(d205_root, d205_caps_actual, d205_gaps)
+    summary, errors = check_plan_cap(d205_roadmap, d205_phases)
+    if errors or summary != "plan-cap pass phases=6 plans=40":
+        raise SystemExit(f"planning-hygiene self-test FAIL: path-based D-205 40-plan fixture: {summary} {errors}")
+    controls += 1
+    renewed_path_roadmap = d205_roadmap.replace(
+        V04_D205_PHASE24_PLAN_LINE, "**Plans:** Phase 24 has one plan plus a renewed gap reserve.", 1)
+    _, errors = check_plan_cap(renewed_path_roadmap, d205_phases)
+    if "plan-cap-d205-reserve" not in codes(errors):
+        raise SystemExit(f"planning-hygiene self-test FAIL: path-based D-205 reserve renewal was accepted: {errors}")
+    controls += 1
+
+    d205_repo = base / "d205-rev-repo"
+    d205_repo.mkdir()
+
+    def d205_git(*args: str) -> str:
+        done = subprocess.run(["git", "-C", str(d205_repo), *args], capture_output=True, text=True,
+                              check=True, env=env, timeout=60)
+        return done.stdout.strip()
+
+    def d205_commit(files: dict[str, str], message: str, delete: tuple[str, ...] = ()) -> str:
+        for rel, content in files.items():
+            path = d205_repo / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content.encode("utf-8"))
+        for rel in delete:
+            (d205_repo / rel).unlink()
+        d205_git("add", "-A", "--", ".planning")
+        d205_git("commit", "-q", "-m", message)
+        return d205_git("rev-parse", "HEAD")
+
+    d205_git("init", "-q")
+    d205_dir_paths: dict[str, str] = {}
+    d205_files: dict[str, str] = {".planning/ROADMAP.md": d205_roadmap}
+    for phase_dir in sorted(d205_phases.iterdir()):
+        if not phase_dir.is_dir():
+            continue
+        rel_dir = f".planning/phases/{phase_dir.name}"
+        for plan in sorted(phase_dir.iterdir()):
+            if plan.is_file() and PLAN_FILE.match(plan.name):
+                relative = f"{rel_dir}/{plan.name}"
+                d205_files[relative] = plan.read_text(encoding="utf-8")
+                if phase_dir.name.startswith("GB-24-"):
+                    d205_dir_paths[plan.name] = relative
+    d205_good = d205_commit(d205_files, "canonical exact D-205 40-plan fixture")
+
+    def d205_cli(rev: str, expected: str | None, label: str) -> None:
+        nonlocal controls
+        output, errors = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+            exit_code = main(["--check", "plan-cap", "--rev", rev, "--repo", str(d205_repo)])
+        error_text = errors.getvalue()
+        if expected is None:
+            if exit_code != 0 or "plan-cap pass phases=6 plans=40" not in output.getvalue():
+                raise SystemExit(f"planning-hygiene self-test FAIL: {label} should pass via CLI: {exit_code} {error_text}")
+        elif exit_code != 1 or expected not in error_text:
+            raise SystemExit(f"planning-hygiene self-test FAIL: {label} should fail with {expected}: {exit_code} {error_text}")
+        controls += 1
+
+    d205_cli(d205_good, None, "canonical immutable six-phase 40-plan exception")
+    (d205_repo / ".planning/ROADMAP.md").write_text("broken live ROADMAP", encoding="utf-8")
+    d205_cli(d205_good, None, "D-205 immutable revision ignores dirty checkout")
+
+    def d205_variant(label: str, files: dict[str, str], expected: str, delete: tuple[str, ...] = ()) -> None:
+        d205_git("checkout", "-q", "--", ".planning/ROADMAP.md")
+        d205_git("checkout", "-q", d205_good)
+        variant = d205_commit(files, label, delete)
+        d205_cli(variant, expected, label)
+
+    d205_variant("unauthorized sixth phase", {".planning/ROADMAP.md": d205_roadmap.replace(
+        "20/21/22/23/23.1/24", "20/21/22/23/23.1/25")}, "plan-cap-phase-count")
+    seventh = d205_roadmap + "\n### Phase 25: unauthorized\n\n**Plan cap**: 1\n"
+    d205_variant("unauthorized seventh phase", {".planning/ROADMAP.md": seventh}, "plan-cap-phase-count")
+    d205_variant("missing D-205 approval", {".planning/ROADMAP.md": d205_roadmap.replace(
+        "approved only the exact active v0.4 phase set 20/21/22/23/23.1/24",
+        "has no exception for the active v0.4 phase set")}, "plan-cap-phase-count")
+    d205_variant("altered historical cap", {".planning/ROADMAP.md": d205_roadmap.replace(
+        "**Plan cap**: 9", "**Plan cap**: 8", 1)}, "plan-cap-approved-exception")
+    d205_variant("41st actual plan", {".planning/phases/GB-24-some-title/24-02-PLAN-extra.md": PRIMARY_FRONTMATTER_TEXT},
+                 "plan-cap-actual-total")
+    d205_variant("decorated second Phase 24 plan", {
+        ".planning/phases/GB-24-some-title/24-02-PLAN-extra.md": PRIMARY_FRONTMATTER_TEXT},
+        "plan-cap-d205-phase24-plan")
+    d205_variant("Phase 24 gap plan", {
+        ".planning/phases/GB-24-some-title/24-01-PLAN.md": GAP_FRONTMATTER_TEXT}, "plan-cap-d205-phase24-gap")
+    d205_variant("attempted reserve renewal", {".planning/ROADMAP.md": renewed_path_roadmap}, "plan-cap-d205-reserve")
     return controls
 
 
