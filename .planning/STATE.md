@@ -6,9 +6,9 @@ current_phase: "23.1"
 current_phase_name: Close v0.4 requirement and verification gaps (INSERTED)
 current_plan: 1
 status: executing
-stopped_at: "Phase 23.1 verification stopped before the configured full-suite regression gate; owner next: $gsd-discuss-phase 23.1."
-last_updated: "2026-11-16T17:24:32.013Z"
-state_head: 40bc2278f5722a1a717ed6b088989f1c17803a8e
+stopped_at: Phase 23.1 focused regression gate passed (2/2); phase verifier dispatch follows; original full-suite command restored.
+last_updated: "2026-11-16T17:44:08.147Z"
+state_head: e20f594c5f5b4dcfea8b05c6b17a3116380d2b34
 progress:
   total_phases: 5
   completed_phases: 4
@@ -74,6 +74,7 @@ Current D-200 handoff: Current D-203 recovery: D-202 Task 10 and its sole review
 - Phase 23.1 blocked after Phase 23: D-200 sole exact-candidate review found Critical CR-03 and CR-04 after closing D-199 CR-01 and D-196 CR-02; the one-review allowance is exhausted, no phase verifier or further correction/review follows, and the owner acts next with $gsd-discuss-phase 23.1.
 - Phase 23.1 verification stopped: Task 11 and the sole D-203 independent review are complete and clean; Nyquist/security pass and the existing Phase 23 UAT has no gaps. Stop at Phase 23.1's configured regression gate because it runs the broad phase1 build and full CTest suite, prohibited by D-103/D-203. Owner next: -discuss-phase 23.1 to decide a bounded gate or explicit scope change; no phase verifier ran.
 - Phase 23.1 verification stopped: Task 11 and the sole D-203 independent review are complete and clean; Nyquist/security pass and the existing Phase 23 UAT has no gaps. Stop at Phase 23.1 regression gate because the configured command runs the broad full preset suite prohibited by D-103/D-203. Owner next: $gsd-discuss-phase 23.1 to decide a bounded gate or explicit scope change; no phase verifier ran.
+- Phase 23.1 focused regression gate passed: The approved one-time gate override ran only plan_cap and planning_hygiene_controls; both passed. The original full-suite workflow.test_command was restored, the prohibited broad suite did not run, and the phase verifier is next. All four requirements remain Pending and v0.4 open.
 
 ## Performance Metrics
 
@@ -100,10 +101,9 @@ Current D-200 handoff: Current D-203 recovery: D-202 Task 10 and its sole review
 
 ## Session
 
-**Last session:** 2026-11-16T17:20:50.384Z
-**Stopped at:** Phase 23.1 verification stopped before the configured full-suite regression gate; owner next: $gsd-discuss-phase 23.1.
+**Last session:** 2026-11-16T17:44:07.754Z
+**Stopped at:** Phase 23.1 focused regression gate passed (2/2); phase verifier dispatch follows; original full-suite command restored.
 **Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-CONTEXT.md
 
 ### Blockers
-
-- Phase 23.1 verification stopped at the configured regression gate: it would run the broad full preset suite, which D-103 prohibits. Owner next: $gsd-discuss-phase 23.1 to decide a narrowly bounded gate or explicit scope change; do not run the phase verifier before that decision.
+None
