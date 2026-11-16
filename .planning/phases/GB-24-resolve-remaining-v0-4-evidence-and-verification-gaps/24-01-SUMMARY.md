@@ -130,10 +130,12 @@ status: complete
 
 - **Assessment input:** `f511baa8c0330f5cd90d56da55d79dbc873b0559`.
 - **Protected baseline:** `f6fe166a7c2a3668f5a412a82b648dd062329d3c`.
-- **Tested checker/report candidate:** `5f496299165e5df89e90d27ad51e997bceec822f`.
+- Tested checker/report candidate: `5f496299165e5df89e90d27ad51e997bceec822f`.
 - **Handoff revision:** supplied separately as the full `PHASE24_HANDOFF_REV` after the handoff documents are committed; report and handoff stages read that immutable revision.
 
 Phase 24 execution/automated closure complete. Phase verification pending. The orchestrator is the next actor; after the configured independent reviews it runs `$gsd-verify-work 24`.
+
+The assessed plan keeps `requirements-completed: []`; all eight requirement IDs here describe assessment coverage only.
 
 FIXT-01 — Pending, original owner Phase 21. RIGHTS-01 — Pending, original owner Phase 20. DIAG-01 — Pending, original owner Phase 22. DIAG-02 — Pending, original owner Phase 22. Phase 20 and Phase 21 are stale; the v0.4 milestone remains open with `gaps_found`, and D-103 is unfulfilled. No broad local suite, no third local lifecycle retest, no release retry, no tag/asset/rights action, and no fixture admission.
 
@@ -150,6 +152,14 @@ Evidence links: [24-EVIDENCE.md](24-EVIDENCE.md), [24-VALIDATION.md](24-VALIDATI
 - **Files modified:** `tests/scripts/verify-planning-hygiene.py`
 - **Commit:** `883fdbb`
 - **Verification:** Exact 40-plan D-205 case passed; extra phase/plan mutations are refused by the 621-control self-test.
+
+**2. [Rule 3 - Blocking] Make the committed pending-verification handoff satisfy its immutable contract**
+- **Found during:** Task 3
+- **Issue:** The first committed handoff omitted explicit owner facts, scoped-stop wording, evidence links, and the tested candidate identity required by the production handoff stage.
+- **Fix:** Added the exact Pending-owner facts, open/stale/D-103 stops, commit-boundary identities, local evidence links, and the explicit Phase 24 verification route to the summary, continuation, and current STATE handoff.
+- **Files modified:** `.planning/STATE.md`, `.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-SUMMARY.md`, `.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md`
+- **Commit:** recorded after the handoff correction.
+- **Verification:** The committed report stage passed; the handoff stage is rerun on the corrected committed candidate before recording final success.
 
 ## TDD Evidence
 
