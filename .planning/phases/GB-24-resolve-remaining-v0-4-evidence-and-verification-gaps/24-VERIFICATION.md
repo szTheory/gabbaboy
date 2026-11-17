@@ -1,6 +1,6 @@
 ---
 phase: GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps
-verified: 2026-11-17T01:29:47Z
+verified: 2026-11-17T01:56:34Z
 status: passed
 score: 6/6 must-haves verified
 covered_files:
@@ -14,7 +14,7 @@ covered_files:
   - .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-UAT.md
   - .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md
   - tests/scripts/verify-planning-hygiene.py
-covered_digest: "v4:sha256:c19be5aa3de4fda2511c29b883713de75d57caa6bf607b181c9bdcc54cecbbc9"
+covered_digest: "v4:sha256:12e6210aa829a2134d2410a237421e856e93c42720ba7acf0b446304c79d7fec"
 behavior_unverified: 0
 overrides_applied: 0
 decision_coverage:
@@ -26,7 +26,7 @@ decision_coverage:
 # Phase 24: Resolve Remaining v0.4 Evidence and Verification Gaps — Verification
 
 **Phase Goal:** Maintainers can inspect one additive, commit-pinned map of all eight original v0.4 requirements and Phase 20/21 freshness, with original criteria and owners, tracker statuses, milestone-audit dispositions, historical report results, current freshness, evidence boundaries, and exact remaining gates kept distinct.
-**Verified:** 2026-11-17T01:29:47Z
+**Verified:** 2026-11-17T01:56:34Z
 **Status:** passed
 
 ## Goal Achievement
@@ -128,9 +128,9 @@ None — this infrastructure and evidence-map phase has no user-facing or percep
 
 - **Approach:** Goal-backward against all four ROADMAP success criteria and the six PLAN must-have truths.
 - **Checks relied on:** Existing exact-candidate self-test and cap check, independent review, two focused CTests, shared closure, immutable Phase 20/21 blob comparison, and GSD decision coverage.
-- **Checks run by verifier:** This refresh recomputed the covered-input fingerprint after the committed handoff update and confirmed the former PROJECT.md warning was resolved. No tests, code review, build, or regression suite was run again.
+- **Checks run by verifier:** This refresh recomputed the covered-input fingerprint after the milestone-audit handoff update. The current handoff records `gaps_found`, the newly stale Phase 23.1 verification, and the owner's next decision; none changes Phase 24's verified scope. No tests, code review, build, or regression suite was run again.
 - **Human checks required:** 0.
 
 ---
-*Verified: 2026-11-17T01:29:47Z*  
+*Verified: 2026-11-17T01:56:34Z*
 *Verifier: the agent (gsd-verifier)*
