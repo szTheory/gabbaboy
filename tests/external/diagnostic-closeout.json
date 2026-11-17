@@ -1,0 +1,50 @@
+{
+  "acid2": {
+    "cases": [
+      {
+        "admission": {
+          "commit": null,
+          "status": "not-created"
+        },
+        "blocked_by": [
+          "footer-and-reference-images"
+        ],
+        "commit": "dc2295408f881637ff69f784d8d93f3d2db30181",
+        "derivative": {
+          "path": null,
+          "sha256": null,
+          "status": "not-created"
+        },
+        "id": "dmg-acid2-v1.0",
+        "root_tree_sha1": "a59741f15579a82205fff557dd000a5ebb6d7f6e"
+      },
+      {
+        "admission": {
+          "commit": null,
+          "status": "not-created"
+        },
+        "blocked_by": [
+          "footer-and-reference-images"
+        ],
+        "commit": "fa5b7f86d6fb599f79e55169494d981a7af75a31",
+        "derivative": {
+          "path": null,
+          "sha256": null,
+          "status": "not-created"
+        },
+        "id": "cgb-acid2-v1.1",
+        "root_tree_sha1": "a541bf54356809dc04cc050f8fc14d9620649f88"
+      }
+    ],
+    "font_data": "excluded-by-design",
+    "status": "blocked-before-derivative"
+  },
+  "rights_input": {
+    "commit": "e3b4c5c8b58c5617d9cc41f31f1bd699e6cf0a35",
+    "path": "tests/data/v04-closeout.json",
+    "sha256": "79030ea8fa874dab505812f644f75d222e4b60fb3705a6fcbbde1630acd8705d",
+    "size_bytes": 30529
+  },
+  "schema": "gabbaboy-diagnostic-closeout-v1",
+  "status": "blocked-before-admission"
+}

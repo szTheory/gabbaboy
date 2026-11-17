@@ -24,6 +24,10 @@ PHASE20_POLICY_PATH = "cmake/FixtureAdmissionPolicy.json"
 PHASE20 = ROOT / "tests/scripts/verify-fixture-admission.py"
 CANDIDATE_CHECKER_PATH = "tests/scripts/verify-cgb-candidates.py"
 CANDIDATE_CLOSEOUT_PATH = "tests/data/v04-closeout.json"
+DIAGNOSTIC_CLOSEOUT_PATH = "tests/external/diagnostic-closeout.json"
+DIAGNOSTIC_RIGHTS_REVISION = "e3b4c5c8b58c5617d9cc41f31f1bd699e6cf0a35"
+DIAGNOSTIC_RIGHTS_SHA256 = "79030ea8fa874dab505812f644f75d222e4b60fb3705a6fcbbde1630acd8705d"
+DIAGNOSTIC_RIGHTS_SIZE = 30529
 CANDIDATE_CONTRACT_PATHS = (
     CANDIDATE_CHECKER_PATH,
     PHASE20_CHECKER_PATH,
@@ -55,6 +59,9 @@ GBMICROTEST_PROTOCOL_COUNTS = {
     "no-verdict-protocol": 31,
 }
 GBMICROTEST_ROSTER_PROJECTION_SHA256 = "29c610580ee8d953ac9a85a80db7d46bba80908e888cb91d65e327ce25a3651b"
+GBMICROTEST_SELECTED_CASE = "div_inc_timing_a"
+GBMICROTEST_SELECTED_SOURCE_SHA256 = "ea6017487ac860fa29e54c43d2d1a73659ed3662b7ba3c7c91cc41faf5ef6deb"
+GBMICROTEST_MACROS_SHA256 = "d3964ffc94d5ef110b3536b7bb9448840ef88d718ebca1ee662670680164c3a3"
 GBMICROTEST_INLINE_CASES = frozenset(("mbc1_ram_banks", "mbc1_rom_banks"))
 GBMICROTEST_INITIAL_EXCLUSIONS = frozenset((
     "000-oam_lock", "000-write_to_x8000", "001-vram_unlocked", "002-vram_locked",
@@ -461,6 +468,109 @@ def validate_assessment(root: pathlib.Path) -> tuple[dict[str, Any], dict[str, A
     if record.get("status") != expected_status:
         raise AdmissionRefused("diagnostic-assessment-status-gate-mismatch")
     return record, inventory
+
+
+def _diagnostic_source_by_id(record: dict[str, Any], source_id: str) -> dict[str, Any]:
+    sources = record.get("sources")
+    if not isinstance(sources, list):
+        raise AdmissionRefused("diagnostic-rights-sources-invalid")
+    matches = [source for source in sources if isinstance(source, dict) and source.get("id") == source_id]
+    if len(matches) != 1:
+        raise AdmissionRefused(f"diagnostic-rights-source-missing-or-duplicate:{source_id}")
+    return matches[0]
+
+
+def _diagnostic_component(source: dict[str, Any], component_id: str) -> dict[str, Any]:
+    components = source.get("components")
+    if not isinstance(components, list):
+        raise AdmissionRefused("diagnostic-rights-components-invalid")
+    matches = [item for item in components if isinstance(item, dict) and item.get("id") == component_id]
+    if len(matches) != 1:
+        raise AdmissionRefused(f"diagnostic-rights-component-missing-or-duplicate:{component_id}")
+    return matches[0]
+
+
+def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: dict[str, Any],
+                                         kind: str) -> dict[str, Any]:
+    """Validate current diagnostic outcomes without treating blockers as approval."""
+    if kind not in ("acid2", "gbmicrotest", "all"):
+        raise AdmissionRefused("diagnostic-closeout-kind-invalid")
+    if (record.get("schema") != "gabbaboy-diagnostic-closeout-v1"
+            or record.get("rights_input") != {
+                "commit": DIAGNOSTIC_RIGHTS_REVISION,
+                "path": CANDIDATE_CLOSEOUT_PATH,
+                "size_bytes": DIAGNOSTIC_RIGHTS_SIZE,
+                "sha256": DIAGNOSTIC_RIGHTS_SHA256,
+            }):
+        raise AdmissionRefused("diagnostic-closeout-input-identity-invalid")
+    if rights_record.get("schema") != "gabbaboy-v04-closeout-v1":
+        raise AdmissionRefused("diagnostic-closeout-rights-schema-invalid")
+
+    blockers: list[str] = []
+    if kind in ("acid2", "all"):
+        acid2 = record.get("acid2")
+        if not isinstance(acid2, dict) or acid2.get("status") != "blocked-before-derivative":
+            raise AdmissionRefused("diagnostic-closeout-acid2-outcome-invalid")
+        if acid2.get("font_data") != "excluded-by-design":
+            raise AdmissionRefused("diagnostic-closeout-acid2-font-scope-invalid")
+        cases = acid2.get("cases")
+        expected_acid2 = (
+            ("dmg-acid2-v1.0", "dc2295408f881637ff69f784d8d93f3d2db30181",
+             "a59741f15579a82205fff557dd000a5ebb6d7f6e"),
+            ("cgb-acid2-v1.1", "fa5b7f86d6fb599f79e55169494d981a7af75a31",
+             "a541bf54356809dc04cc050f8fc14d9620649f88"),
+        )
+        if not isinstance(cases, list) or len(cases) != len(expected_acid2):
+            raise AdmissionRefused("diagnostic-closeout-acid2-case-set-invalid")
+        for item, (source_id, commit, tree) in zip(cases, expected_acid2, strict=True):
+            if (not isinstance(item, dict) or item.get("id") != source_id
+                    or item.get("commit") != commit or item.get("root_tree_sha1") != tree
+                    or item.get("blocked_by") != ["footer-and-reference-images"]
+                    or item.get("derivative") != {"status": "not-created", "path": None, "sha256": None}
+                    or item.get("admission") != {"status": "not-created", "commit": None}):
+                raise AdmissionRefused(f"diagnostic-closeout-acid2-case-mutated:{source_id}")
+            source = _diagnostic_source_by_id(rights_record, source_id)
+            if source.get("commit") != commit or source.get("root_tree_sha1") != tree:
+                raise AdmissionRefused(f"diagnostic-closeout-rights-pin-mismatch:{source_id}")
+            image_component = _diagnostic_component(source, "footer-and-reference-images")
+            if image_component.get("outcome") != "unresolved":
+                raise AdmissionRefused(f"diagnostic-closeout-rights-mismatch:{source_id}:footer-and-reference-images")
+            font_component = _diagnostic_component(source, "mgblib-font-data")
+            if font_component.get("outcome") != "excluded-by-design":
+                raise AdmissionRefused(f"diagnostic-closeout-font-rights-mutated:{source_id}")
+        blockers.append("acid2-footer-reference-image-rights-unresolved")
+    if kind in ("gbmicrotest", "all"):
+        if "gbmicrotest" not in record:
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-stage-missing")
+        blockers.append("gbmicrotest-stage-not-yet-validated")
+    if record.get("status") != "blocked-before-admission":
+        raise AdmissionRefused("diagnostic-closeout-status-mutated")
+    record["_blockers"] = blockers
+    return record
+
+
+def check_diagnostic_closeout(root: pathlib.Path, source_revision: str, kind: str,
+                              *, require_approved: bool = False) -> dict[str, Any]:
+    """Read the immutable current record and its pinned T5 rights input."""
+    if not HEX40.fullmatch(source_revision):
+        raise AdmissionRefused("diagnostic-closeout-source-revision-invalid")
+    root = root.resolve(strict=True)
+    require_worktree_source_file(root, source_revision, ADMISSION_CHECKER_PATH,
+                                 root / ADMISSION_CHECKER_PATH)
+    require_worktree_source_file(root, source_revision, DIAGNOSTIC_CLOSEOUT_PATH,
+                                 root / DIAGNOSTIC_CLOSEOUT_PATH)
+    record_raw = read_source_file(root, source_revision, DIAGNOSTIC_CLOSEOUT_PATH)
+    record = _json_without_duplicates(record_raw, "diagnostic-closeout")
+    if (record.get("rights_input", {}).get("commit") != DIAGNOSTIC_RIGHTS_REVISION):
+        raise AdmissionRefused("diagnostic-closeout-input-identity-invalid")
+    rights_raw = read_source_file(root, DIAGNOSTIC_RIGHTS_REVISION, CANDIDATE_CLOSEOUT_PATH)
+    if len(rights_raw) != DIAGNOSTIC_RIGHTS_SIZE or sha256(rights_raw) != DIAGNOSTIC_RIGHTS_SHA256:
+        raise AdmissionRefused("diagnostic-closeout-rights-input-digest-mismatch")
+    rights_record = _json_without_duplicates(rights_raw, "diagnostic-rights-input")
+    validated = validate_diagnostic_closeout_record(record, rights_record, kind)
+    if require_approved and validated["_blockers"]:
+        raise AdmissionRefused("scope-resolution-required: " + ",".join(validated["_blockers"]))
+    return validated
 
 
 def _instruction_size(instruction: str) -> int:
@@ -1007,6 +1117,35 @@ class AdmissionContractTests(unittest.TestCase):
 
 
 class AdmissionControlTests(unittest.TestCase):
+    def _diagnostic_closeout_inputs(self) -> tuple[dict[str, Any], dict[str, Any]]:
+        record = _json_without_duplicates(
+            (ROOT / DIAGNOSTIC_CLOSEOUT_PATH).read_bytes(), "diagnostic-closeout")
+        rights_raw = _git(ROOT, "show", f"{DIAGNOSTIC_RIGHTS_REVISION}:{CANDIDATE_CLOSEOUT_PATH}")
+        return record, _json_without_duplicates(rights_raw, "diagnostic-rights-input")
+
+    def test_acid2_image_gate_stays_blocked_without_creating_an_output(self) -> None:
+        record, rights = self._diagnostic_closeout_inputs()
+        validated = validate_diagnostic_closeout_record(record, rights, "acid2")
+        self.assertEqual(validated["status"], "blocked-before-admission")
+        self.assertEqual(validated["_blockers"], ["acid2-footer-reference-image-rights-unresolved"])
+        self.assertEqual([case["derivative"]["status"] for case in validated["acid2"]["cases"]],
+                         ["not-created", "not-created"])
+
+    def test_acid2_gate_refuses_a_synthetic_derivative_claim(self) -> None:
+        record, rights = self._diagnostic_closeout_inputs()
+        record["acid2"]["cases"][0]["derivative"] = {
+            "status": "created", "path": "fixtures/acid2/dmg.gb", "sha256": "a" * 64}
+        with self.assertRaisesRegex(AdmissionRefused, "diagnostic-closeout-acid2-case-mutated:dmg-acid2-v1.0"):
+            validate_diagnostic_closeout_record(record, rights, "acid2")
+
+    def test_acid2_gate_refuses_a_mutated_source_rights_outcome(self) -> None:
+        record, rights = self._diagnostic_closeout_inputs()
+        source = _diagnostic_source_by_id(rights, "dmg-acid2-v1.0")
+        component = _diagnostic_component(source, "footer-and-reference-images")
+        component["outcome"] = "supported"
+        with self.assertRaisesRegex(AdmissionRefused, "diagnostic-closeout-rights-mismatch:dmg-acid2-v1.0"):
+            validate_diagnostic_closeout_record(record, rights, "acid2")
+
     def test_unresolved_candidate_component_reaches_intended_admission_refusal(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gbb-candidate-rights-admission-") as name:
             root = pathlib.Path(name)
@@ -1223,17 +1362,29 @@ class AdmissionControlTests(unittest.TestCase):
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    modes = parser.add_mutually_exclusive_group(required=True)
+    modes = parser.add_mutually_exclusive_group(required=False)
     modes.add_argument("--self-test-tracer", action="store_true")
     modes.add_argument("--self-test", action="store_true")
     modes.add_argument("--self-test-controls", action="store_true")
     modes.add_argument("--check-assessment", action="store_true")
-    modes.add_argument("--require-approved", action="store_true")
+    modes.add_argument("--check-closeout", action="store_true")
+    parser.add_argument("--require-approved", action="store_true")
+    parser.add_argument("--closeout-kind", choices=("acid2", "gbmicrotest", "all"))
     parser.add_argument("--runner", type=pathlib.Path)
     parser.add_argument("--repo-root", type=pathlib.Path, default=ROOT)
     parser.add_argument("--source-repo-root", type=pathlib.Path)
     parser.add_argument("--source-revision", default="HEAD")
     args = parser.parse_args(argv)
+    if not any((args.self_test_tracer, args.self_test, args.self_test_controls,
+                args.check_assessment, args.check_closeout, args.require_approved)):
+        parser.error("one checker mode is required")
+    if args.check_closeout and args.closeout_kind is None:
+        parser.error("--check-closeout requires --closeout-kind")
+    if args.closeout_kind and not args.check_closeout:
+        parser.error("--closeout-kind requires --check-closeout")
+    if args.require_approved and (args.self_test_tracer or args.self_test or args.self_test_controls
+                                  or args.check_assessment):
+        parser.error("--require-approved may modify --check-closeout or run as the legacy admission mode")
     if args.self_test_tracer:
         if args.runner is None:
             parser.error("--self-test-tracer requires --runner")
@@ -1254,6 +1405,12 @@ def main(argv: list[str] | None = None) -> int:
         if revision == "HEAD":
             revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=args.repo_root,
                                       capture_output=True, check=True, timeout=30).stdout.decode().strip()
+        if args.check_closeout:
+            record = check_diagnostic_closeout(args.repo_root, revision, args.closeout_kind,
+                                               require_approved=args.require_approved)
+            print(f"diagnostic closeout valid kind={args.closeout_kind} status={record['status']} "
+                  f"blockers={','.join(record['_blockers']) or 'none'}")
+            return 0
         source_root = (args.source_repo_root or args.repo_root).resolve(strict=True)
         require_approved(args.repo_root.resolve(strict=True), revision,
                          source_repo_root=source_root, candidate_rights=True)
