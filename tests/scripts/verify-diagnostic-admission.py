@@ -86,6 +86,21 @@ GBMICROTEST_LICENSE_BLOB = "ca05fdbac9ec607636037171ee3856ea2a3378dd"
 GBMICROTEST_LICENSE_SHA256 = "0b3557142dfcce65428fafb9c8254d9d59c027a008af4810867efd7342b77c25"
 GBMICROTEST_README_BLOB = "e184a72ed5f6f1b76f5124762c6ed3f79f139e4e"
 GBMICROTEST_README_SHA256 = "15610d3e922658503b5250f1e9e0106d3ad6bdee7ff43003147f5871a81a3b92"
+GBMICROTEST_LICENSE_ISSUE = {
+    "number": 1,
+    "title": "License?",
+    "body": "Under what license are these provided?",
+    "url": "https://github.com/aappleby/gbmicrotest/issues/1",
+    "comment_id": 2080090499,
+    "comment_author": "aappleby",
+    "comment_body": "License added.",
+    "comment_url": "https://github.com/aappleby/gbmicrotest/issues/1#issuecomment-2080090499",
+}
+GBMICROTEST_LICENSE_COMMIT = {
+    "sha": GBMICROTEST_COMMIT,
+    "subject": "Create LICENSE",
+    "changed_paths": ["LICENSE"],
+}
 GBMICROTEST_HEADER_BLOB = "aba48b4af33aabedc8e86adad5e5e692f6f4a348"
 GBMICROTEST_HEADER_SHA256 = "380ab2e41fee82c23881b13650e6301b79809e7baa1d3c828363156a70ba9afd"
 GBMICROTEST_BUILD_BLOB = "eb0ddc1368e3a777ef9787dc056d756e95c19102"
@@ -903,7 +918,7 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
             "selected_case": GBMICROTEST_SELECTED_CASE,
             "selection_basis": "One DIV-counter software diagnostic selected from the pinned shared-macro protocol group before any emulator outcome was observed.",
             "review_bundle": {
-                "status": "committed-review-bundle-not-admitted-output-scope-unresolved",
+                "status": "committed-review-bundle-one-case-output-scope-supported",
                 "manifest_path": "fixtures/gbmicrotest/manifest.json",
                 "manifest_sha256": GBMICROTEST_MANIFEST_SHA256,
                 "commit": GBMICROTEST_ADMISSION_COMMIT,
@@ -935,8 +950,8 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
             "local_rom_review": {
                 "review_area": "build/phase24/source-review/gbmicrotest (ignored local review only)",
                 "source_commit": GBMICROTEST_COMMIT,
-                "admission_status": "not-admitted-output-scope-unresolved",
-                "staging_status": "review-bundle-committed-before-rights-reassessment",
+                "admission_status": "admitted-one-case" if not rights_blocked else "not-admitted-output-scope-unresolved",
+                "staging_status": "selected-derivative-only" if not rights_blocked else "review-bundle-committed-before-rights-reassessment",
                 "runtime_status": runtime_status,
                 "original": {
                     "path": "bin/div_inc_timing_a.gb",
@@ -953,7 +968,7 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
                     "path": "derived/div_inc_timing_a.bootless.gb",
                     "sha256": GBMICROTEST_SELECTED_DERIVATIVE_SHA256,
                     "size_bytes": 32768,
-                    "kind": "review-only bootless header derivative; not admitted or run",
+                    "kind": "one-case bootless header derivative; original ROM remains local-only",
                 },
                 "transform": {
                     "zero_range": ["0x0104", "0x0133"],
@@ -993,7 +1008,7 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
             },
             "output_scope": {
                 "status": "supported-bounded-selected-derivative",
-                "component": "one source-bound compiled bootless ROM derivative",
+                "component": "selected prebuilt ROM and its source-bound bootless derivative; Nintendo logo excluded from the bundle",
                 "root_license": {
                     "path": "LICENSE",
                     "git_blob_sha1": GBMICROTEST_LICENSE_BLOB,
@@ -1008,11 +1023,14 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
                     "sha256": GBMICROTEST_README_SHA256,
                     "url": f"https://raw.githubusercontent.com/aappleby/gbmicrotest/{GBMICROTEST_COMMIT}/README.md",
                 },
-                "finding": "The pinned root MIT grant and OSI compiled-form/derived-work language support a bounded interpretation for this modified copy, but the pinned README does not explicitly state binary-output terms. T6 requires exact source/output/header component terms before staging; this interpretation has not been accepted as satisfying that gate, so the output scope remains unresolved.",
-                "required_evidence": "An authoritative component-level grant or source statement that covers this exact compiled derivative for repository/public-CI use, or an explicit owner decision that the bounded MIT interpretation satisfies the T6 component-term gate.",
-                "scope_limit": "No output-rights conclusion is accepted while the T6 component-term gate remains unresolved. The candidate inference would cover only div_inc_timing_a's source-bound bootless derivative with the full MIT notice; it excludes original ROM bytes, removed Nintendo logo bytes, any of the other 512 ROMs, and other sources.",
+                "finding": "Pinned issue #1 asks under what license the files are provided; author aappleby replies 'License added.' The pinned source commit is titled 'Create LICENSE' and changes only the root LICENSE. Together with the README's prebuilt ROM inventory and the included full MIT notice, this supports a bounded MIT output scope for the selected prebuilt ROM and its source-bound bootless derivative. The original logo range remains excluded from the bundle under T5's separate unresolved embedded-logo fact.",
+                "rights_evidence": {
+                    "issue": GBMICROTEST_LICENSE_ISSUE,
+                    "license_commit": GBMICROTEST_LICENSE_COMMIT,
+                },
+                "scope_limit": "This one-case inference covers only div_inc_timing_a's pinned prebuilt ROM and its source-bound bootless derivative with the full MIT notice. The bundle includes only the derivative after logo removal; it excludes original ROM bytes, all Nintendo logo bytes, the other 512 ROMs, and other sources. It does not change T5's unresolved source-wide prebuilt-ROM or embedded-logo outcomes.",
                 "references": ["https://opensource.org/license/mit", "https://opensource.org/osd"],
-                "status": "unresolved",
+                "status": "supported-bounded-selected-derivative",
             },
             "logo_scope": {
                 "t5_upstream_component_outcome": "unresolved",
@@ -2156,20 +2174,20 @@ class AdmissionControlTests(unittest.TestCase):
         with self.assertRaisesRegex(AdmissionRefused, "diagnostic-closeout-rights-mismatch:dmg-acid2-v1.0"):
             validate_diagnostic_closeout_record(record, rights, "acid2")
 
-    def test_gbmicrotest_accounts_for_one_scoped_case_and_512_exclusions(self) -> None:
+    def test_gbmicrotest_accounts_for_one_admitted_case_and_512_exclusions(self) -> None:
         record, rights = self._diagnostic_closeout_inputs()
         inventory = validate_gbmicrotest_inventory(ROOT)
         validated = validate_diagnostic_closeout_record(record, rights, "gbmicrotest", inventory)
         accounting = validated["gbmicrotest"]["accounting"]
         self.assertEqual(accounting["roster_count"], GBMICROTEST_CASE_COUNT)
         self.assertTrue(accounting["roster_accounting_complete"])
-        self.assertEqual(accounting["admitted_eligible_names"], [])
+        self.assertEqual(accounting["admitted_eligible_names"], [GBMICROTEST_SELECTED_CASE])
         self.assertEqual(accounting["executed_names"], [])
-        self.assertEqual(accounting["blocked_candidate_names"], [GBMICROTEST_SELECTED_CASE])
+        self.assertEqual(accounting["blocked_candidate_names"], [])
         self.assertEqual(len(accounting["excluded_names"]), GBMICROTEST_CASE_COUNT - 1)
         self.assertFalse(accounting["final_execution_accounting_complete"])
-        self.assertEqual(validated["_blockers"], ["gbmicrotest-prebuilt-rom-output-scope-unresolved"])
-        self.assertEqual(validated["gbmicrotest"]["status"], "blocked-before-admission")
+        self.assertEqual(validated["_blockers"], [])
+        self.assertEqual(validated["gbmicrotest"]["status"], "admitted-before-runtime")
         review = validated["gbmicrotest"]["source_review"]
         self.assertEqual(review["model_applicability"]["status"], "supported")
         self.assertEqual(review["model_applicability"]["hardware_applicability"],
@@ -2177,10 +2195,29 @@ class AdmissionControlTests(unittest.TestCase):
         selected = next(item for item in validated["gbmicrotest"]["cases"]
                         if item["name"] == GBMICROTEST_SELECTED_CASE)
         self.assertEqual(selected["prebuilt_rom"]["sha256"], GBMICROTEST_SELECTED_ROM_SHA256)
-        self.assertEqual(selected["disposition"]["status"], "blocked-candidate")
+        self.assertEqual(selected["disposition"]["status"], "eligible-for-one-case-cohort")
         self.assertEqual(selected["derivative"]["sha256"], GBMICROTEST_SELECTED_DERIVATIVE_SHA256)
-        self.assertEqual(review["output_scope"]["status"], "unresolved")
-        self.assertIn("not been accepted as satisfying that gate", review["output_scope"]["finding"])
+        self.assertEqual(review["output_scope"]["status"], "supported-bounded-selected-derivative")
+        self.assertEqual(review["output_scope"]["rights_evidence"]["issue"], GBMICROTEST_LICENSE_ISSUE)
+        self.assertEqual(review["output_scope"]["rights_evidence"]["license_commit"], GBMICROTEST_LICENSE_COMMIT)
+
+    def test_gbmicrotest_output_scope_binds_exact_issue_and_license_commit(self) -> None:
+        inventory = validate_gbmicrotest_inventory(ROOT)
+        mutations = (
+            ("issue.comment_id", lambda scope: scope["rights_evidence"]["issue"].__setitem__("comment_id", 2080090498)),
+            ("issue.comment_author", lambda scope: scope["rights_evidence"]["issue"].__setitem__("comment_author", "other")),
+            ("issue.comment_body", lambda scope: scope["rights_evidence"]["issue"].__setitem__("comment_body", "Unknown")),
+            ("issue.url", lambda scope: scope["rights_evidence"]["issue"].__setitem__("comment_url", "https://example.invalid/")),
+            ("commit.subject", lambda scope: scope["rights_evidence"]["license_commit"].__setitem__("subject", "Other")),
+            ("commit.paths", lambda scope: scope["rights_evidence"]["license_commit"].__setitem__("changed_paths", ["LICENSE", "README.md"])),
+            ("commit.sha", lambda scope: scope["rights_evidence"]["license_commit"].__setitem__("sha", "a" * 40)),
+        )
+        for label, mutate in mutations:
+            record, rights = self._diagnostic_closeout_inputs()
+            mutate(record["gbmicrotest"]["source_review"]["output_scope"])
+            with self.subTest(evidence=label), self.assertRaisesRegex(
+                    AdmissionRefused, "diagnostic-closeout-gbmicrotest-source-review-mutated"):
+                validate_diagnostic_closeout_record(record, rights, "gbmicrotest", inventory)
 
     def test_gbmicrotest_local_derivative_digest_and_offset_allowlist_are_bound(self) -> None:
         inventory = validate_gbmicrotest_inventory(ROOT)

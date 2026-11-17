@@ -41,10 +41,10 @@
   },
   "gbmicrotest": {
     "accounting": {
-      "admitted_eligible_names": [],
-      "blocked_candidate_names": [
+      "admitted_eligible_names": [
         "div_inc_timing_a"
       ],
+      "blocked_candidate_names": [],
       "excluded_names": [
         "000-oam_lock",
         "000-write_to_x8000",
@@ -566,9 +566,7 @@
       "roster_projection_sha256": "29c610580ee8d953ac9a85a80db7d46bba80908e888cb91d65e327ce25a3651b",
       "runtime_results": []
     },
-    "blocked_by": [
-      "prebuilt-rom-output-scope-unresolved"
-    ],
+    "blocked_by": [],
     "cases": [
       {
         "disposition": {
@@ -863,11 +861,8 @@
           "size_bytes": 32768
         },
         "disposition": {
-          "status": "blocked-candidate",
-          "blocked_by": [
-            "prebuilt-rom-output-scope-unresolved"
-          ],
-          "reason": "Pinned source/model/oracle and bootless transform were reviewed, but the T6 source/output/header component-term gate remains unresolved. No diagnostic payload runtime is authorized."
+          "status": "eligible-for-one-case-cohort",
+          "reason": "Selected before observing emulator outcomes from the pinned shared-macro protocol group; the scoped derivative has an approved output scope."
         },
         "name": "div_inc_timing_a",
         "prebuilt_rom": {
@@ -10327,7 +10322,7 @@
         }
       }
     ],
-    "cohort_status": "blocked-before-admission",
+    "cohort_status": "admitted-before-runtime",
     "source": {
       "commit": "463eb6bc0fe31d61781ef63060ad6d74090c0255",
       "repository": "https://github.com/aappleby/gbmicrotest",
@@ -10355,9 +10350,9 @@
         "url": "https://raw.githubusercontent.com/aappleby/gbmicrotest/463eb6bc0fe31d61781ef63060ad6d74090c0255/tests/header.inc"
       },
       "local_rom_review": {
-        "admission_status": "not-admitted-output-scope-unresolved",
+        "admission_status": "admitted-one-case",
         "derivative": {
-          "kind": "review-only bootless header derivative; not admitted or run",
+          "kind": "one-case bootless header derivative; original ROM remains local-only",
           "path": "derived/div_inc_timing_a.bootless.gb",
           "sha256": "53b0624af64524fe7cdf9b0aed3456ca60c7b30fe25cd5202b6b77855f57ffa8",
           "size_bytes": 32768
@@ -10374,9 +10369,9 @@
           "size_bytes": 32768
         },
         "review_area": "build/phase24/source-review/gbmicrotest (ignored local review only)",
-        "runtime_status": "not-run",
+        "runtime_status": "pending",
         "source_commit": "463eb6bc0fe31d61781ef63060ad6d74090c0255",
-        "staging_status": "review-bundle-committed-before-rights-reassessment",
+        "staging_status": "selected-derivative-only",
         "transform": {
           "all_changed_offsets_allowlisted": true,
           "all_other_bytes_identical": true,
@@ -10465,8 +10460,8 @@
         "status": "supported"
       },
       "output_scope": {
-        "component": "one source-bound compiled bootless ROM derivative",
-        "finding": "The pinned root MIT grant and OSI compiled-form/derived-work language support a bounded interpretation for this modified copy, but the pinned README does not explicitly state binary-output terms. T6 requires exact source/output/header component terms before staging; this interpretation has not been accepted as satisfying that gate, so the output scope remains unresolved.",
+        "component": "selected prebuilt ROM and its source-bound bootless derivative; Nintendo logo excluded from the bundle",
+        "finding": "Pinned issue #1 asks under what license the files are provided; author aappleby replies 'License added.' The pinned source commit is titled 'Create LICENSE' and changes only the root LICENSE. Together with the README's prebuilt ROM inventory and the included full MIT notice, this supports a bounded MIT output scope for the selected prebuilt ROM and its source-bound bootless derivative. The original logo range remains excluded from the bundle under T5's separate unresolved embedded-logo fact.",
         "readme": {
           "git_blob_sha1": "e184a72ed5f6f1b76f5124762c6ed3f79f139e4e",
           "path": "README.md",
@@ -10485,9 +10480,27 @@
           "size_bytes": 1065,
           "url": "https://raw.githubusercontent.com/aappleby/gbmicrotest/463eb6bc0fe31d61781ef63060ad6d74090c0255/LICENSE"
         },
-        "scope_limit": "No output-rights conclusion is accepted while the T6 component-term gate remains unresolved. The candidate inference would cover only div_inc_timing_a's source-bound bootless derivative with the full MIT notice; it excludes original ROM bytes, removed Nintendo logo bytes, any of the other 512 ROMs, and other sources.",
-        "status": "unresolved",
-        "required_evidence": "An authoritative component-level grant or source statement that covers this exact compiled derivative for repository/public-CI use, or an explicit owner decision that the bounded MIT interpretation satisfies the T6 component-term gate."
+        "scope_limit": "This one-case inference covers only div_inc_timing_a's pinned prebuilt ROM and its source-bound bootless derivative with the full MIT notice. The bundle includes only the derivative after logo removal; it excludes original ROM bytes, all Nintendo logo bytes, the other 512 ROMs, and other sources. It does not change T5's unresolved source-wide prebuilt-ROM or embedded-logo outcomes.",
+        "status": "supported-bounded-selected-derivative",
+        "rights_evidence": {
+          "issue": {
+            "number": 1,
+            "title": "License?",
+            "body": "Under what license are these provided?",
+            "url": "https://github.com/aappleby/gbmicrotest/issues/1",
+            "comment_id": 2080090499,
+            "comment_author": "aappleby",
+            "comment_body": "License added.",
+            "comment_url": "https://github.com/aappleby/gbmicrotest/issues/1#issuecomment-2080090499"
+          },
+          "license_commit": {
+            "sha": "463eb6bc0fe31d61781ef63060ad6d74090c0255",
+            "subject": "Create LICENSE",
+            "changed_paths": [
+              "LICENSE"
+            ]
+          }
+        }
       },
       "protocol": {
         "expected_div": 0,
@@ -10501,7 +10514,7 @@
           "expected": "FF81",
           "status": "FF82"
         },
-        "runtime_status": "not-run",
+        "runtime_status": "pending",
         "source_oracle": "source-defined DIV expectation and pass/fail result are explicit in the pinned assembly and macros",
         "status_values": {
           "fail": "FF",
@@ -10529,11 +10542,11 @@
         "manifest_path": "fixtures/gbmicrotest/manifest.json",
         "manifest_sha256": "d3aedaa5d89f583bea2951a9a58a3190ff2314fafbfa53b7e63e98ed6349cb7c",
         "original_rom_bundled": false,
-        "status": "committed-review-bundle-not-admitted-output-scope-unresolved",
+        "status": "committed-review-bundle-one-case-output-scope-supported",
         "commit": "ce0cdca22b8338442a574f030e47f59f04c99fc2"
       }
     },
-    "status": "blocked-before-admission"
+    "status": "admitted-before-runtime"
   },
   "rights_input": {
     "commit": "e3b4c5c8b58c5617d9cc41f31f1bd699e6cf0a35",
