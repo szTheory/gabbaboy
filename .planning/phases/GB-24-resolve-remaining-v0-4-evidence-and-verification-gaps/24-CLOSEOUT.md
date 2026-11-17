@@ -78,3 +78,13 @@ The current record accounts for all 513 names: one eligible and executed case wi
 | Original requirement ownership | FIXT-01 Phase 21; RIGHTS-01 Phase 20; DIAG-01/02 Phase 22 | Keep each Pending; no milestone closure. |
 
 The one-case gbmicrotest lane is complete. The combined gate still cannot close because Acid2 footer/reference-image rights remain unresolved, and game-source rights remain unresolved. T6 stops before T7 with the overall closeout incomplete; resolve the Acid2 component scope before attempting the combined diagnostic gate.
+
+## Owner-directed best-faith rights dispositions (D-207)
+
+The preceding sections record the T5/T6 evidence state before the owner's D-207 direction. No external messages will be sent. This additive decision supersedes only the listed rights findings; it does not accept gaps or complete any original requirement.
+
+For the exact creator-linked Potion Panic source, the creator page's CC BY-NC-SA 4.0 asset category covers the pinned `GFX`, `Levels`, `Tilesets`, and `Audio/Modules` components under the owner's bounded best-faith interpretation. The repository retains the CC deed/link and attribution in `fixtures/v04-games/LICENSE.txt`. Use remains noncommercial, identifies changes, preserves attribution, and treats adaptations as share-alike. The separately attributed Pigu/AYCE WLE converter is excluded. µCity's pinned `source/engine/hardware.inc` remains excluded because no grant was found and the available CC0 source is not byte-identical.
+
+For dmg-acid2 v1.0 and cgb-acid2 v1.1, the owner accepts each exact pinned repository root MIT grant as covering only that repository's pinned `img/` tree. This is a repository-level inference, not an image-specific upstream statement. Retain both full MIT notices and the README credit to Håkon Wium Lie and Ian Hickson. `mgblib` font data remains excluded.
+
+These dispositions clear the prior rights-only stop for Acid2 composition and Potion Panic asset/music inspection. They do not establish a creator-ROM sidecar, ROM bytes/digest/header, source/build relationship, native mode, or guest progress. They also do not create Acid2 replacement glyphs, source-anchored text masks, reproducible outputs, admissions, or independent comparisons. The gbmicrotest scope remains one admitted/executed case; 512 ROMs and embedded-logo source scope remain unresolved. FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending until their original criteria are actually evidenced. T7, final CI, PR, merge, main handoff, and milestone completion remain unstarted.

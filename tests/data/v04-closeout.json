@@ -8,71 +8,193 @@
       "ref": "gbcompo25",
       "commit": "321b8365d31a3239d3d7f54831d0339991e2c49c",
       "root_tree_sha1": "a999f0b5774cad61057eb07cae38a89ce5375772",
-      "relationship": "The creator page labels its download as the GB Compo 2025 demo and links this Codeberg repository. The pinned gbcompo25 branch README says the game was created for GBCompo 2025. No ROM bytes or source-to-ROM build identity were acquired.",
+      "relationship": "The creator page labels the linked Potion Panic (GB Compo 2025 demo) code MIT and assets CC BY-NC-SA 4.0, and offers a ROM plus LICENSE. The pinned gbcompo25 README identifies the same competition demo. D-207 accepts the asset category label for the exact visual/music folders; no ROM bytes or source-to-ROM build identity has yet been acquired.",
       "components": [
         {
           "id": "source-code",
           "outcome": "supported",
           "terms": "MIT License for project code; the creator page separately labels code MIT.",
-          "scope": {"local_build": "supported", "repository": "supported", "public_ci": "supported"},
-          "identity": {"path": "Engine, GameModes, Objects, Main.asm (Git archive at pinned commit)", "object_id": "a999f0b5774cad61057eb07cae38a89ce5375772", "size_bytes": 327680, "sha256": "0edd8efc05f22c72c6e40777f16d26b8a6f677325c33164258c551f62826cc16"},
-          "notices": [{"path": "LICENSE", "object_id": "1d6196068ffdc67d5eb655b15c4ea269d1e471e1", "size_bytes": 1083, "sha256": "05a737cab7911cce77ab9057d1129c241b02d69b00e5f1ef1409f5626fe4d55b", "url": "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/LICENSE"}],
-          "evidence": ["https://deved.itch.io/potion-panic", "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/Main.asm"],
-          "obligations": ["Retain the MIT copyright and permission notice with redistributed copies or substantial portions of the covered code."],
+          "scope": {
+            "local_build": "supported",
+            "repository": "supported",
+            "public_ci": "supported"
+          },
+          "identity": {
+            "path": "Engine, GameModes, Objects, Main.asm (Git archive at pinned commit)",
+            "object_id": "a999f0b5774cad61057eb07cae38a89ce5375772",
+            "size_bytes": 327680,
+            "sha256": "0edd8efc05f22c72c6e40777f16d26b8a6f677325c33164258c551f62826cc16"
+          },
+          "notices": [
+            {
+              "path": "LICENSE",
+              "object_id": "1d6196068ffdc67d5eb655b15c4ea269d1e471e1",
+              "size_bytes": 1083,
+              "sha256": "05a737cab7911cce77ab9057d1129c241b02d69b00e5f1ef1409f5626fe4d55b",
+              "url": "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/LICENSE"
+            }
+          ],
+          "evidence": [
+            "https://deved.itch.io/potion-panic",
+            "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/Main.asm"
+          ],
+          "obligations": [
+            "Retain the MIT copyright and permission notice with redistributed copies or substantial portions of the covered code."
+          ],
           "blocker": null
         },
         {
           "id": "audio-driver",
           "outcome": "supported",
           "terms": "The pinned Audio/GBMod_Player.asm identifies the driver as by DevEd; root LICENSE is MIT.",
-          "scope": {"local_build": "supported", "repository": "supported", "public_ci": "supported"},
-          "identity": {"path": "Audio/GBMod_Player.asm", "object_id": "921e287aca62d7daf7275ed027c282be2357b879", "size_bytes": 55015, "sha256": "800098146c426471ba723f115b87bb534da2d1145588db37c8d39b1ba140a9a6"},
-          "notices": [{"path": "LICENSE", "object_id": "1d6196068ffdc67d5eb655b15c4ea269d1e471e1", "size_bytes": 1083, "sha256": "05a737cab7911cce77ab9057d1129c241b02d69b00e5f1ef1409f5626fe4d55b", "url": "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/LICENSE"}],
-          "evidence": ["https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/Audio/GBMod_Player.asm"],
-          "obligations": ["Retain the MIT copyright and permission notice with redistributed copies or substantial portions of the driver."],
+          "scope": {
+            "local_build": "supported",
+            "repository": "supported",
+            "public_ci": "supported"
+          },
+          "identity": {
+            "path": "Audio/GBMod_Player.asm",
+            "object_id": "921e287aca62d7daf7275ed027c282be2357b879",
+            "size_bytes": 55015,
+            "sha256": "800098146c426471ba723f115b87bb534da2d1145588db37c8d39b1ba140a9a6"
+          },
+          "notices": [
+            {
+              "path": "LICENSE",
+              "object_id": "1d6196068ffdc67d5eb655b15c4ea269d1e471e1",
+              "size_bytes": 1083,
+              "sha256": "05a737cab7911cce77ab9057d1129c241b02d69b00e5f1ef1409f5626fe4d55b",
+              "url": "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/LICENSE"
+            }
+          ],
+          "evidence": [
+            "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/Audio/GBMod_Player.asm"
+          ],
+          "obligations": [
+            "Retain the MIT copyright and permission notice with redistributed copies or substantial portions of the driver."
+          ],
           "blocker": null
         },
         {
           "id": "hardware-inc",
           "outcome": "supported",
           "terms": "CC0 1.0 Universal at the exact hardware.inc submodule commit.",
-          "scope": {"local_build": "supported", "repository": "supported", "public_ci": "supported"},
-          "identity": {"path": "hardware.inc/hardware.inc at gitlink commit 97e979bd977b469c6dbefae15f581b27d1ba8e35", "object_id": "97e979bd977b469c6dbefae15f581b27d1ba8e35", "size_bytes": 43920, "sha256": "867733145f25f44d30a0880b11e507e5dfb9442cbba399924f721c92b071df4e"},
-          "notices": [{"path": "LICENSE", "object_id": "670154e3538863b2d9891fd5483160fbdfc89164", "size_bytes": 6555, "sha256": "36ffd9dc085d529a7e60e1276d73ae5a030b020313e6c5408593a6ae2af39673", "url": "https://github.com/gbdev/hardware.inc/blob/97e979bd977b469c6dbefae15f581b27d1ba8e35/LICENSE"}],
-          "evidence": ["https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/.gitmodules", "https://github.com/gbdev/hardware.inc/blob/97e979bd977b469c6dbefae15f581b27d1ba8e35/LICENSE"],
-          "obligations": ["CC0 places no attribution or share-alike condition on this include."],
+          "scope": {
+            "local_build": "supported",
+            "repository": "supported",
+            "public_ci": "supported"
+          },
+          "identity": {
+            "path": "hardware.inc/hardware.inc at gitlink commit 97e979bd977b469c6dbefae15f581b27d1ba8e35",
+            "object_id": "97e979bd977b469c6dbefae15f581b27d1ba8e35",
+            "size_bytes": 43920,
+            "sha256": "867733145f25f44d30a0880b11e507e5dfb9442cbba399924f721c92b071df4e"
+          },
+          "notices": [
+            {
+              "path": "LICENSE",
+              "object_id": "670154e3538863b2d9891fd5483160fbdfc89164",
+              "size_bytes": 6555,
+              "sha256": "36ffd9dc085d529a7e60e1276d73ae5a030b020313e6c5408593a6ae2af39673",
+              "url": "https://github.com/gbdev/hardware.inc/blob/97e979bd977b469c6dbefae15f581b27d1ba8e35/LICENSE"
+            }
+          ],
+          "evidence": [
+            "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/.gitmodules",
+            "https://github.com/gbdev/hardware.inc/blob/97e979bd977b469c6dbefae15f581b27d1ba8e35/LICENSE"
+          ],
+          "obligations": [
+            "CC0 places no attribution or share-alike condition on this include."
+          ],
           "blocker": null
         },
         {
           "id": "visual-assets",
-          "outcome": "unresolved",
-          "terms": "The creator page labels assets CC BY-NC-SA 4.0; exact mapping and grant authority for each source asset have not been established.",
-          "scope": {"local_build": "unresolved", "repository": "unresolved", "public_ci": "unresolved"},
-          "identity": {"path": "GFX, Levels, Tilesets (Git archive at pinned commit)", "object_id": "a999f0b5774cad61057eb07cae38a89ce5375772", "size_bytes": 440320, "sha256": "5940c2a3d36f6ca4b1b8c1e7d2d98f00ed1259919621f3778296b8e9f7308cac"},
-          "notices": [],
-          "evidence": ["https://deved.itch.io/potion-panic", "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/GFX"],
-          "obligations": ["The page-level CC BY-NC-SA label carries attribution, noncommercial-use, and share-alike conditions; the precise covered files and permission for the intended local build are unresolved."],
-          "blocker": "The exact component-to-license mapping, grant authority, and scope for local use, repository storage, and public CI are not established by the page label alone."
+          "outcome": "supported",
+          "terms": "D-207 accepts the creator page CC BY-NC-SA 4.0 asset label for this exact linked source component as a bounded category-level inference; noncommercial use with attribution, changes identified, and share-alike for adaptations.",
+          "scope": {
+            "local_build": "supported",
+            "repository": "supported",
+            "public_ci": "supported"
+          },
+          "identity": {
+            "path": "GFX, Levels, Tilesets (Git archive at pinned commit)",
+            "object_id": "a999f0b5774cad61057eb07cae38a89ce5375772",
+            "size_bytes": 440320,
+            "sha256": "5940c2a3d36f6ca4b1b8c1e7d2d98f00ed1259919621f3778296b8e9f7308cac"
+          },
+          "notices": [
+            {
+              "path": "fixtures/v04-games/LICENSE.txt",
+              "object_id": "6e9a3ac22b4ecd5b49b217c1c59007c19c05a5a9",
+              "size_bytes": 2002,
+              "sha256": "2c3e582ca44c15131d61d4e09b7393e442d348157c0b32e5eaf77567b9787581",
+              "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+            }
+          ],
+          "evidence": [
+            "https://deved.itch.io/potion-panic",
+            "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/README.md",
+            "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/GFX"
+          ],
+          "obligations": [
+            "Credit DevEd and Potion Panic; link CC BY-NC-SA 4.0; identify changes; keep the permitted use noncommercial and distribute adaptations under the same license."
+          ],
+          "blocker": null
         },
         {
           "id": "music-assets",
-          "outcome": "unresolved",
-          "terms": "The creator page labels assets CC BY-NC-SA 4.0; the pinned Audio/Modules tree contains the candidate music inputs.",
-          "scope": {"local_build": "unresolved", "repository": "unresolved", "public_ci": "unresolved"},
-          "identity": {"path": "Audio/Modules (Git archive at pinned commit)", "object_id": "a999f0b5774cad61057eb07cae38a89ce5375772", "size_bytes": 276480, "sha256": "84470edb337e1382cd9097e0509bc13ed19416d50364a889b1e404131586546a"},
-          "notices": [],
-          "evidence": ["https://deved.itch.io/potion-panic", "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/Audio/Modules"],
-          "obligations": ["The page-level CC BY-NC-SA label carries attribution, noncommercial-use, and share-alike conditions; exact module coverage remains unverified."],
-          "blocker": "The exact rights scope for the module bytes and their redistribution or use in local builds and public CI is unresolved."
+          "outcome": "supported",
+          "terms": "D-207 accepts the creator page CC BY-NC-SA 4.0 asset label for this exact linked source component as a bounded category-level inference; noncommercial use with attribution, changes identified, and share-alike for adaptations.",
+          "scope": {
+            "local_build": "supported",
+            "repository": "supported",
+            "public_ci": "supported"
+          },
+          "identity": {
+            "path": "Audio/Modules (Git archive at pinned commit)",
+            "object_id": "a999f0b5774cad61057eb07cae38a89ce5375772",
+            "size_bytes": 276480,
+            "sha256": "84470edb337e1382cd9097e0509bc13ed19416d50364a889b1e404131586546a"
+          },
+          "notices": [
+            {
+              "path": "fixtures/v04-games/LICENSE.txt",
+              "object_id": "6e9a3ac22b4ecd5b49b217c1c59007c19c05a5a9",
+              "size_bytes": 2002,
+              "sha256": "2c3e582ca44c15131d61d4e09b7393e442d348157c0b32e5eaf77567b9787581",
+              "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+            }
+          ],
+          "evidence": [
+            "https://deved.itch.io/potion-panic",
+            "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/Audio/Modules"
+          ],
+          "obligations": [
+            "Credit DevEd and Potion Panic; link CC BY-NC-SA 4.0; identify changes; keep the permitted use noncommercial and distribute adaptations under the same license."
+          ],
+          "blocker": null
         },
         {
           "id": "converter-code",
           "outcome": "unresolved",
           "terms": "The root MIT notice is present, but Tools/convertmap.py attributes an embedded WLE encoder to Pigu/AYCE without a separate grant or notice.",
-          "scope": {"local_build": "unresolved", "repository": "unresolved", "public_ci": "unresolved"},
-          "identity": {"path": "Tools (Git archive at pinned commit)", "object_id": "a999f0b5774cad61057eb07cae38a89ce5375772", "size_bytes": 30720, "sha256": "39b9093953d92a1c0710b4bf8fb3289e88e04803a299c8b8ef989de3e6c5739a"},
+          "scope": {
+            "local_build": "unresolved",
+            "repository": "unresolved",
+            "public_ci": "unresolved"
+          },
+          "identity": {
+            "path": "Tools (Git archive at pinned commit)",
+            "object_id": "a999f0b5774cad61057eb07cae38a89ce5375772",
+            "size_bytes": 30720,
+            "sha256": "39b9093953d92a1c0710b4bf8fb3289e88e04803a299c8b8ef989de3e6c5739a"
+          },
           "notices": [],
-          "evidence": ["https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/Tools/convertmap.py", "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/Tools/wlenc.py"],
+          "evidence": [
+            "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/Tools/convertmap.py",
+            "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/Tools/wlenc.py"
+          ],
           "obligations": [],
           "blocker": "The attributed WLE implementation has no identified permission or notice covering the required converter use and repository/public-CI scope."
         }
@@ -90,46 +212,127 @@
           "id": "gpl-header-code",
           "outcome": "supported",
           "terms": "GPL-3.0-or-later applies only to source files carrying the GPL header, as the exact release README states.",
-          "scope": {"local_build": "supported", "repository": "supported", "public_ci": "supported"},
-          "identity": {"path": "source (Git archive at pinned commit)", "object_id": "a4740129e7781f2fb7eca0086078930d8de39c9b", "size_bytes": 1341440, "sha256": "d2427a28f42487c26373ea6543814b6ad1f94f0c242f396e478c80fece24f681"},
+          "scope": {
+            "local_build": "supported",
+            "repository": "supported",
+            "public_ci": "supported"
+          },
+          "identity": {
+            "path": "source (Git archive at pinned commit)",
+            "object_id": "a4740129e7781f2fb7eca0086078930d8de39c9b",
+            "size_bytes": 1341440,
+            "sha256": "d2427a28f42487c26373ea6543814b6ad1f94f0c242f396e478c80fece24f681"
+          },
           "notices": [
-            {"path": "gpl-3.0.txt", "object_id": "94a9ed024d3859793618152ea559a168bbcbb5e2", "size_bytes": 35147, "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903", "url": "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/gpl-3.0.txt"},
-            {"path": "readme.rst", "object_id": "a2929a19cb912a42372066f9461ec445114a9e76", "size_bytes": 4610, "sha256": "b715f12604e95f59cbfa9e0900ed296aba3cc334edeed50e92b6be520d84994f", "url": "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/readme.rst"}
+            {
+              "path": "gpl-3.0.txt",
+              "object_id": "94a9ed024d3859793618152ea559a168bbcbb5e2",
+              "size_bytes": 35147,
+              "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+              "url": "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/gpl-3.0.txt"
+            },
+            {
+              "path": "readme.rst",
+              "object_id": "a2929a19cb912a42372066f9461ec445114a9e76",
+              "size_bytes": 4610,
+              "sha256": "b715f12604e95f59cbfa9e0900ed296aba3cc334edeed50e92b6be520d84994f",
+              "url": "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/readme.rst"
+            }
           ],
-          "evidence": ["https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/readme.rst", "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/gpl-3.0.txt"],
-          "obligations": ["Retain GPL notices and license text, provide corresponding source, and satisfy GPL-3.0-or-later redistribution terms for covered code."],
+          "evidence": [
+            "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/readme.rst",
+            "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/gpl-3.0.txt"
+          ],
+          "obligations": [
+            "Retain GPL notices and license text, provide corresponding source, and satisfy GPL-3.0-or-later redistribution terms for covered code."
+          ],
           "blocker": null
         },
         {
           "id": "gbt-player",
           "outcome": "supported",
           "terms": "BSD-2-Clause for the three GBT Player source files, as identified in the exact source review.",
-          "scope": {"local_build": "supported", "repository": "supported", "public_ci": "supported"},
-          "identity": {"path": "source/engine/gbt_player.asm, gbt_player.inc, gbt_player_bank1.asm (Git archive)", "object_id": "a4740129e7781f2fb7eca0086078930d8de39c9b", "size_bytes": 51200, "sha256": "9ade18a5a5d6cbc39e02de5938f34c53f0e03f746f006f8db459d82eae2f9cd2"},
-          "notices": [{"path": "source/engine/gbt_player.asm", "object_id": "5c541ac1847d9a402c4649da54b7957853f270f8", "size_bytes": 14115, "sha256": "8008112d8507293d8d57af2d0e43ea3e15bff59684e09c8133c773fb4adc5239", "url": "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/source/engine/gbt_player.asm"}],
-          "evidence": ["https://github.com/AntonioND/gbt-player", "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/source/engine/gbt_player.asm"],
-          "obligations": ["Retain the BSD-2-Clause copyright and disclaimer in redistributed copies or substantial portions."],
+          "scope": {
+            "local_build": "supported",
+            "repository": "supported",
+            "public_ci": "supported"
+          },
+          "identity": {
+            "path": "source/engine/gbt_player.asm, gbt_player.inc, gbt_player_bank1.asm (Git archive)",
+            "object_id": "a4740129e7781f2fb7eca0086078930d8de39c9b",
+            "size_bytes": 51200,
+            "sha256": "9ade18a5a5d6cbc39e02de5938f34c53f0e03f746f006f8db459d82eae2f9cd2"
+          },
+          "notices": [
+            {
+              "path": "source/engine/gbt_player.asm",
+              "object_id": "5c541ac1847d9a402c4649da54b7957853f270f8",
+              "size_bytes": 14115,
+              "sha256": "8008112d8507293d8d57af2d0e43ea3e15bff59684e09c8133c773fb4adc5239",
+              "url": "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/source/engine/gbt_player.asm"
+            }
+          ],
+          "evidence": [
+            "https://github.com/AntonioND/gbt-player",
+            "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/source/engine/gbt_player.asm"
+          ],
+          "obligations": [
+            "Retain the BSD-2-Clause copyright and disclaimer in redistributed copies or substantial portions."
+          ],
           "blocker": null
         },
         {
           "id": "media",
           "outcome": "supported",
           "terms": "CC BY-SA 4.0 for graphics and music, identified by the exact release README.",
-          "scope": {"local_build": "supported", "repository": "supported", "public_ci": "supported"},
-          "identity": {"path": "data/gfx, data/music, resources/gfx, and three resources/music modules (Git archive)", "object_id": "a4740129e7781f2fb7eca0086078930d8de39c9b", "size_bytes": 819200, "sha256": "a789c4b755a667ea2ca21bc039b04b4100a6f7a592426098e5a1746caeedb8a7"},
-          "notices": [{"path": "readme.rst", "object_id": "a2929a19cb912a42372066f9461ec445114a9e76", "size_bytes": 4610, "sha256": "b715f12604e95f59cbfa9e0900ed296aba3cc334edeed50e92b6be520d84994f", "url": "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/readme.rst"}],
-          "evidence": ["https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/readme.rst"],
-          "obligations": ["Provide attribution, identify changes, preserve license notices, and distribute adaptations under CC BY-SA 4.0 terms."],
+          "scope": {
+            "local_build": "supported",
+            "repository": "supported",
+            "public_ci": "supported"
+          },
+          "identity": {
+            "path": "data/gfx, data/music, resources/gfx, and three resources/music modules (Git archive)",
+            "object_id": "a4740129e7781f2fb7eca0086078930d8de39c9b",
+            "size_bytes": 819200,
+            "sha256": "a789c4b755a667ea2ca21bc039b04b4100a6f7a592426098e5a1746caeedb8a7"
+          },
+          "notices": [
+            {
+              "path": "readme.rst",
+              "object_id": "a2929a19cb912a42372066f9461ec445114a9e76",
+              "size_bytes": 4610,
+              "sha256": "b715f12604e95f59cbfa9e0900ed296aba3cc334edeed50e92b6be520d84994f",
+              "url": "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/readme.rst"
+            }
+          ],
+          "evidence": [
+            "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/readme.rst"
+          ],
+          "obligations": [
+            "Provide attribution, identify changes, preserve license notices, and distribute adaptations under CC BY-SA 4.0 terms."
+          ],
           "blocker": null
         },
         {
           "id": "hardware-inc",
           "outcome": "unresolved",
           "terms": "source/engine/hardware.inc has no GPL header or separate license notice; its preamble says it is based on Jones hardware.inc and Carsten Sorensen ideas.",
-          "scope": {"local_build": "unresolved", "repository": "unresolved", "public_ci": "unresolved"},
-          "identity": {"path": "source/engine/hardware.inc (included by 81 assembly files)", "object_id": "a4740129e7781f2fb7eca0086078930d8de39c9b", "size_bytes": 17860, "sha256": "05f43643bf29459f6a86b2fedf00b887133b98038fa4f51112ced0f01a762715"},
+          "scope": {
+            "local_build": "unresolved",
+            "repository": "unresolved",
+            "public_ci": "unresolved"
+          },
+          "identity": {
+            "path": "source/engine/hardware.inc (included by 81 assembly files)",
+            "object_id": "a4740129e7781f2fb7eca0086078930d8de39c9b",
+            "size_bytes": 17860,
+            "sha256": "05f43643bf29459f6a86b2fedf00b887133b98038fa4f51112ced0f01a762715"
+          },
           "notices": [],
-          "evidence": ["https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/source/engine/hardware.inc", "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/readme.rst"],
+          "evidence": [
+            "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/source/engine/hardware.inc",
+            "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/readme.rst"
+          ],
           "obligations": [],
           "blocker": "Grantor authority and local-build, repository, and public-CI permission for this required include are unestablished. No µCity build or execution may proceed."
         }
@@ -147,54 +350,141 @@
           "id": "source-code",
           "outcome": "supported",
           "terms": "MIT License at the exact pinned root LICENSE.",
-          "scope": {"local_build": "supported", "repository": "supported", "public_ci": "supported"},
-          "identity": {"path": "src and inc (Git archive at pinned commit)", "object_id": "a59741f15579a82205fff557dd000a5ebb6d7f6e", "size_bytes": 20480, "sha256": "c57123046aa3dc824ad60e9363d0bb701428a3de5af57d8cf03269857bd0403e"},
-          "notices": [{"path": "LICENSE", "object_id": "77b34a180b3fd2fba8c083bbc5ebbe04fbafb4a5", "size_bytes": 1068, "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044", "url": "https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/LICENSE"}],
-          "evidence": ["https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/LICENSE"],
-          "obligations": ["Retain the MIT copyright and permission notice with redistributed copies or substantial portions of the source."],
+          "scope": {
+            "local_build": "supported",
+            "repository": "supported",
+            "public_ci": "supported"
+          },
+          "identity": {
+            "path": "src and inc (Git archive at pinned commit)",
+            "object_id": "a59741f15579a82205fff557dd000a5ebb6d7f6e",
+            "size_bytes": 20480,
+            "sha256": "c57123046aa3dc824ad60e9363d0bb701428a3de5af57d8cf03269857bd0403e"
+          },
+          "notices": [
+            {
+              "path": "LICENSE",
+              "object_id": "77b34a180b3fd2fba8c083bbc5ebbe04fbafb4a5",
+              "size_bytes": 1068,
+              "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044",
+              "url": "https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/LICENSE"
+            }
+          ],
+          "evidence": [
+            "https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/LICENSE"
+          ],
+          "obligations": [
+            "Retain the MIT copyright and permission notice with redistributed copies or substantial portions of the source."
+          ],
           "blocker": null
         },
         {
           "id": "mgblib-code",
           "outcome": "supported",
           "terms": "MIT License at the exact mgblib gitlink commit.",
-          "scope": {"local_build": "supported", "repository": "supported", "public_ci": "supported"},
-          "identity": {"path": "mgblib gitlink commit 5d829bf2ffa1447dcfd63c5dab2c44488632617e (source code only)", "object_id": "5d829bf2ffa1447dcfd63c5dab2c44488632617e", "size_bytes": 1068, "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044"},
-          "notices": [{"path": "LICENSE", "object_id": "5d829bf2ffa1447dcfd63c5dab2c44488632617e", "size_bytes": 1068, "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044", "url": "https://github.com/mattcurrie/mgblib/blob/5d829bf2ffa1447dcfd63c5dab2c44488632617e/LICENSE"}],
-          "evidence": ["https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/.gitmodules", "https://github.com/mattcurrie/mgblib/blob/5d829bf2ffa1447dcfd63c5dab2c44488632617e/LICENSE"],
-          "obligations": ["Retain the MIT notice for any redistributed mgblib source used by the derivative."],
+          "scope": {
+            "local_build": "supported",
+            "repository": "supported",
+            "public_ci": "supported"
+          },
+          "identity": {
+            "path": "mgblib gitlink commit 5d829bf2ffa1447dcfd63c5dab2c44488632617e (source code only)",
+            "object_id": "5d829bf2ffa1447dcfd63c5dab2c44488632617e",
+            "size_bytes": 1068,
+            "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044"
+          },
+          "notices": [
+            {
+              "path": "LICENSE",
+              "object_id": "5d829bf2ffa1447dcfd63c5dab2c44488632617e",
+              "size_bytes": 1068,
+              "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044",
+              "url": "https://github.com/mattcurrie/mgblib/blob/5d829bf2ffa1447dcfd63c5dab2c44488632617e/LICENSE"
+            }
+          ],
+          "evidence": [
+            "https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/.gitmodules",
+            "https://github.com/mattcurrie/mgblib/blob/5d829bf2ffa1447dcfd63c5dab2c44488632617e/LICENSE"
+          ],
+          "obligations": [
+            "Retain the MIT notice for any redistributed mgblib source used by the derivative."
+          ],
           "blocker": null
         },
         {
           "id": "mgblib-font-data",
           "outcome": "excluded-by-design",
           "terms": "Third-party font data is excluded from the planned derivative; project-authored replacement glyphs are required.",
-          "scope": {"local_build": "excluded", "repository": "excluded", "public_ci": "excluded"},
-          "identity": {"path": "mgblib font data excluded by Phase 22 D-01", "object_id": "5d829bf2ffa1447dcfd63c5dab2c44488632617e", "size_bytes": 0, "sha256": null},
+          "scope": {
+            "local_build": "excluded",
+            "repository": "excluded",
+            "public_ci": "excluded"
+          },
+          "identity": {
+            "path": "mgblib font data excluded by Phase 22 D-01",
+            "object_id": "5d829bf2ffa1447dcfd63c5dab2c44488632617e",
+            "size_bytes": 0,
+            "sha256": null
+          },
           "notices": [],
-          "evidence": ["https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/.gitmodules"],
+          "evidence": [
+            "https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/.gitmodules"
+          ],
           "obligations": [],
           "blocker": null
         },
         {
           "id": "footer-and-reference-images",
-          "outcome": "unresolved",
-          "terms": "Pinned README references upstream images; no component-specific repository/public-CI grant for remaining footer or reference-image bytes was established.",
-          "scope": {"local_build": "unresolved", "repository": "unresolved", "public_ci": "unresolved"},
-          "identity": {"path": "img tree at pinned commit (Git archive)", "object_id": "9ebf5fb9c33685947e89f8e0170b77be1672a08a", "size_bytes": 1310720, "sha256": "2b43b4daafc6a9c0f89dab7fcfc52549b6aed285b6f3f09eb57c716df7245ee7"},
-          "notices": [],
-          "evidence": ["https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/README.md", "https://github.com/mattcurrie/dmg-acid2/tree/dc2295408f881637ff69f784d8d93f3d2db30181/img"],
-          "obligations": [],
-          "blocker": "The rights scope for footer graphics and reference-image bytes is not established. No derivative may be staged, built, or admitted until the included component set has positive permission."
+          "outcome": "supported",
+          "terms": "D-207 accepts each pinned root MIT grant as covering only this repository version's img tree; this is a bounded repository-level inference, not an image-specific upstream statement.",
+          "scope": {
+            "local_build": "supported",
+            "repository": "supported",
+            "public_ci": "supported"
+          },
+          "identity": {
+            "path": "img tree at pinned commit (Git archive)",
+            "object_id": "9ebf5fb9c33685947e89f8e0170b77be1672a08a",
+            "size_bytes": 1310720,
+            "sha256": "2b43b4daafc6a9c0f89dab7fcfc52549b6aed285b6f3f09eb57c716df7245ee7"
+          },
+          "notices": [
+            {
+              "path": "LICENSE",
+              "object_id": "77b34a180b3fd2fba8c083bbc5ebbe04fbafb4a5",
+              "size_bytes": 1068,
+              "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044",
+              "url": "https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/LICENSE"
+            }
+          ],
+          "evidence": [
+            "https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/README.md",
+            "https://github.com/mattcurrie/dmg-acid2/tree/dc2295408f881637ff69f784d8d93f3d2db30181/img"
+          ],
+          "obligations": [
+            "Retain the pinned root MIT notice with the image-derived fixture and preserve the README credit to Håkon Wium Lie and Ian Hickson."
+          ],
+          "blocker": null
         },
         {
           "id": "project-font-replacement",
           "outcome": "not-created",
           "terms": "Project-authored replacement glyphs have not been created.",
-          "scope": {"local_build": "not-created", "repository": "not-created", "public_ci": "not-created"},
-          "identity": {"path": "planned project-authored glyph replacement", "object_id": null, "size_bytes": 0, "sha256": null},
+          "scope": {
+            "local_build": "not-created",
+            "repository": "not-created",
+            "public_ci": "not-created"
+          },
+          "identity": {
+            "path": "planned project-authored glyph replacement",
+            "object_id": null,
+            "size_bytes": 0,
+            "sha256": null
+          },
           "notices": [],
-          "evidence": [".planning/phases/GB-22-composition-and-microtest-evidence/22-CONTEXT.md"],
+          "evidence": [
+            ".planning/phases/GB-22-composition-and-microtest-evidence/22-CONTEXT.md"
+          ],
           "obligations": [],
           "blocker": null
         },
@@ -202,10 +492,21 @@
           "id": "diagnostic-output",
           "outcome": "not-created",
           "terms": "No font-replaced, text-masked derivative or output notice has been created.",
-          "scope": {"local_build": "not-created", "repository": "not-created", "public_ci": "not-created"},
-          "identity": {"path": "planned dmg-acid2 derivative", "object_id": null, "size_bytes": 0, "sha256": null},
+          "scope": {
+            "local_build": "not-created",
+            "repository": "not-created",
+            "public_ci": "not-created"
+          },
+          "identity": {
+            "path": "planned dmg-acid2 derivative",
+            "object_id": null,
+            "size_bytes": 0,
+            "sha256": null
+          },
           "notices": [],
-          "evidence": ["tests/acid2/manifest.json"],
+          "evidence": [
+            "tests/acid2/manifest.json"
+          ],
           "obligations": [],
           "blocker": null
         }
@@ -223,54 +524,141 @@
           "id": "source-code",
           "outcome": "supported",
           "terms": "MIT License at the exact pinned root LICENSE.",
-          "scope": {"local_build": "supported", "repository": "supported", "public_ci": "supported"},
-          "identity": {"path": "src and inc (Git archive at pinned commit)", "object_id": "a541bf54356809dc04cc050f8fc14d9620649f88", "size_bytes": 30720, "sha256": "976692a7e1a95ef72774e6b5f17b73c61b7341f703e44f77d33e89946a404a60"},
-          "notices": [{"path": "LICENSE", "object_id": "77b34a180b3fd2fba8c083bbc5ebbe04fbafb4a5", "size_bytes": 1068, "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044", "url": "https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/LICENSE"}],
-          "evidence": ["https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/LICENSE"],
-          "obligations": ["Retain the MIT copyright and permission notice with redistributed copies or substantial portions of the source."],
+          "scope": {
+            "local_build": "supported",
+            "repository": "supported",
+            "public_ci": "supported"
+          },
+          "identity": {
+            "path": "src and inc (Git archive at pinned commit)",
+            "object_id": "a541bf54356809dc04cc050f8fc14d9620649f88",
+            "size_bytes": 30720,
+            "sha256": "976692a7e1a95ef72774e6b5f17b73c61b7341f703e44f77d33e89946a404a60"
+          },
+          "notices": [
+            {
+              "path": "LICENSE",
+              "object_id": "77b34a180b3fd2fba8c083bbc5ebbe04fbafb4a5",
+              "size_bytes": 1068,
+              "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044",
+              "url": "https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/LICENSE"
+            }
+          ],
+          "evidence": [
+            "https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/LICENSE"
+          ],
+          "obligations": [
+            "Retain the MIT copyright and permission notice with redistributed copies or substantial portions of the source."
+          ],
           "blocker": null
         },
         {
           "id": "mgblib-code",
           "outcome": "supported",
           "terms": "MIT License at the exact mgblib gitlink commit.",
-          "scope": {"local_build": "supported", "repository": "supported", "public_ci": "supported"},
-          "identity": {"path": "mgblib gitlink commit 5d829bf2ffa1447dcfd63c5dab2c44488632617e (source code only)", "object_id": "5d829bf2ffa1447dcfd63c5dab2c44488632617e", "size_bytes": 1068, "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044"},
-          "notices": [{"path": "LICENSE", "object_id": "5d829bf2ffa1447dcfd63c5dab2c44488632617e", "size_bytes": 1068, "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044", "url": "https://github.com/mattcurrie/mgblib/blob/5d829bf2ffa1447dcfd63c5dab2c44488632617e/LICENSE"}],
-          "evidence": ["https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/.gitmodules", "https://github.com/mattcurrie/mgblib/blob/5d829bf2ffa1447dcfd63c5dab2c44488632617e/LICENSE"],
-          "obligations": ["Retain the MIT notice for any redistributed mgblib source used by the derivative."],
+          "scope": {
+            "local_build": "supported",
+            "repository": "supported",
+            "public_ci": "supported"
+          },
+          "identity": {
+            "path": "mgblib gitlink commit 5d829bf2ffa1447dcfd63c5dab2c44488632617e (source code only)",
+            "object_id": "5d829bf2ffa1447dcfd63c5dab2c44488632617e",
+            "size_bytes": 1068,
+            "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044"
+          },
+          "notices": [
+            {
+              "path": "LICENSE",
+              "object_id": "5d829bf2ffa1447dcfd63c5dab2c44488632617e",
+              "size_bytes": 1068,
+              "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044",
+              "url": "https://github.com/mattcurrie/mgblib/blob/5d829bf2ffa1447dcfd63c5dab2c44488632617e/LICENSE"
+            }
+          ],
+          "evidence": [
+            "https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/.gitmodules",
+            "https://github.com/mattcurrie/mgblib/blob/5d829bf2ffa1447dcfd63c5dab2c44488632617e/LICENSE"
+          ],
+          "obligations": [
+            "Retain the MIT notice for any redistributed mgblib source used by the derivative."
+          ],
           "blocker": null
         },
         {
           "id": "mgblib-font-data",
           "outcome": "excluded-by-design",
           "terms": "Third-party font data is excluded from the planned derivative; project-authored replacement glyphs are required.",
-          "scope": {"local_build": "excluded", "repository": "excluded", "public_ci": "excluded"},
-          "identity": {"path": "mgblib font data excluded by Phase 22 D-01", "object_id": "5d829bf2ffa1447dcfd63c5dab2c44488632617e", "size_bytes": 0, "sha256": null},
+          "scope": {
+            "local_build": "excluded",
+            "repository": "excluded",
+            "public_ci": "excluded"
+          },
+          "identity": {
+            "path": "mgblib font data excluded by Phase 22 D-01",
+            "object_id": "5d829bf2ffa1447dcfd63c5dab2c44488632617e",
+            "size_bytes": 0,
+            "sha256": null
+          },
           "notices": [],
-          "evidence": ["https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/.gitmodules"],
+          "evidence": [
+            "https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/.gitmodules"
+          ],
           "obligations": [],
           "blocker": null
         },
         {
           "id": "footer-and-reference-images",
-          "outcome": "unresolved",
-          "terms": "Pinned README references upstream images; no component-specific repository/public-CI grant for remaining footer or reference-image bytes was established.",
-          "scope": {"local_build": "unresolved", "repository": "unresolved", "public_ci": "unresolved"},
-          "identity": {"path": "img tree at pinned commit (Git archive)", "object_id": "65d8d4c0057ac716c632fb8ae28628b214c4a801", "size_bytes": 1628160, "sha256": "262917f4a9a912e5fea7b8af8d9370f6c347337590e0b823fc153a1bb59e1e2e"},
-          "notices": [],
-          "evidence": ["https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/README.md", "https://github.com/mattcurrie/cgb-acid2/tree/fa5b7f86d6fb599f79e55169494d981a7af75a31/img"],
-          "obligations": [],
-          "blocker": "The rights scope for footer graphics and reference-image bytes is not established. No derivative may be staged, built, or admitted until the included component set has positive permission."
+          "outcome": "supported",
+          "terms": "D-207 accepts each pinned root MIT grant as covering only this repository version's img tree; this is a bounded repository-level inference, not an image-specific upstream statement.",
+          "scope": {
+            "local_build": "supported",
+            "repository": "supported",
+            "public_ci": "supported"
+          },
+          "identity": {
+            "path": "img tree at pinned commit (Git archive)",
+            "object_id": "65d8d4c0057ac716c632fb8ae28628b214c4a801",
+            "size_bytes": 1628160,
+            "sha256": "262917f4a9a912e5fea7b8af8d9370f6c347337590e0b823fc153a1bb59e1e2e"
+          },
+          "notices": [
+            {
+              "path": "LICENSE",
+              "object_id": "77b34a180b3fd2fba8c083bbc5ebbe04fbafb4a5",
+              "size_bytes": 1068,
+              "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044",
+              "url": "https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/LICENSE"
+            }
+          ],
+          "evidence": [
+            "https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/README.md",
+            "https://github.com/mattcurrie/cgb-acid2/tree/fa5b7f86d6fb599f79e55169494d981a7af75a31/img"
+          ],
+          "obligations": [
+            "Retain the pinned root MIT notice with the image-derived fixture and preserve the README credit to Håkon Wium Lie and Ian Hickson."
+          ],
+          "blocker": null
         },
         {
           "id": "project-font-replacement",
           "outcome": "not-created",
           "terms": "Project-authored replacement glyphs have not been created.",
-          "scope": {"local_build": "not-created", "repository": "not-created", "public_ci": "not-created"},
-          "identity": {"path": "planned project-authored glyph replacement", "object_id": null, "size_bytes": 0, "sha256": null},
+          "scope": {
+            "local_build": "not-created",
+            "repository": "not-created",
+            "public_ci": "not-created"
+          },
+          "identity": {
+            "path": "planned project-authored glyph replacement",
+            "object_id": null,
+            "size_bytes": 0,
+            "sha256": null
+          },
           "notices": [],
-          "evidence": [".planning/phases/GB-22-composition-and-microtest-evidence/22-CONTEXT.md"],
+          "evidence": [
+            ".planning/phases/GB-22-composition-and-microtest-evidence/22-CONTEXT.md"
+          ],
           "obligations": [],
           "blocker": null
         },
@@ -278,10 +666,21 @@
           "id": "diagnostic-output",
           "outcome": "not-created",
           "terms": "No font-replaced, text-masked derivative or output notice has been created.",
-          "scope": {"local_build": "not-created", "repository": "not-created", "public_ci": "not-created"},
-          "identity": {"path": "planned cgb-acid2 derivative", "object_id": null, "size_bytes": 0, "sha256": null},
+          "scope": {
+            "local_build": "not-created",
+            "repository": "not-created",
+            "public_ci": "not-created"
+          },
+          "identity": {
+            "path": "planned cgb-acid2 derivative",
+            "object_id": null,
+            "size_bytes": 0,
+            "sha256": null
+          },
           "notices": [],
-          "evidence": ["tests/acid2/manifest.json"],
+          "evidence": [
+            "tests/acid2/manifest.json"
+          ],
           "obligations": [],
           "blocker": null
         }
@@ -299,21 +698,55 @@
           "id": "source-code",
           "outcome": "supported",
           "terms": "MIT License at the exact pinned root LICENSE; this does not establish permission for generated ROMs.",
-          "scope": {"local_build": "supported", "repository": "supported", "public_ci": "supported"},
-          "identity": {"path": "tests source tree (Git archive at pinned commit)", "object_id": "37d28f327e3c297002ffc7ef583793b021c54b67", "size_bytes": 583680, "sha256": "dfc1147b72b61f76dcdf7ed60597f0b6cc9c42de249ea69f39712a8d0cd2f8e6"},
-          "notices": [{"path": "LICENSE", "object_id": "ca05fdbac9ec607636037171ee3856ea2a3378dd", "size_bytes": 1065, "sha256": "0b3557142dfcce65428fafb9c8254d9d59c027a008af4810867efd7342b77c25", "url": "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/LICENSE"}],
-          "evidence": ["https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/LICENSE", "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/README.md"],
-          "obligations": ["Retain the MIT copyright and permission notice with redistributed copies or substantial portions of source."],
+          "scope": {
+            "local_build": "supported",
+            "repository": "supported",
+            "public_ci": "supported"
+          },
+          "identity": {
+            "path": "tests source tree (Git archive at pinned commit)",
+            "object_id": "37d28f327e3c297002ffc7ef583793b021c54b67",
+            "size_bytes": 583680,
+            "sha256": "dfc1147b72b61f76dcdf7ed60597f0b6cc9c42de249ea69f39712a8d0cd2f8e6"
+          },
+          "notices": [
+            {
+              "path": "LICENSE",
+              "object_id": "ca05fdbac9ec607636037171ee3856ea2a3378dd",
+              "size_bytes": 1065,
+              "sha256": "0b3557142dfcce65428fafb9c8254d9d59c027a008af4810867efd7342b77c25",
+              "url": "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/LICENSE"
+            }
+          ],
+          "evidence": [
+            "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/LICENSE",
+            "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/README.md"
+          ],
+          "obligations": [
+            "Retain the MIT copyright and permission notice with redistributed copies or substantial portions of source."
+          ],
           "blocker": null
         },
         {
           "id": "prebuilt-roms",
           "outcome": "unresolved",
           "terms": "The root MIT notice is present for source, but permission for all 513 generated ROM outputs is not established.",
-          "scope": {"local_build": "unresolved", "repository": "unresolved", "public_ci": "unresolved"},
-          "identity": {"path": "bin tree (513 Git-identified ROMs; payload bytes and SHA-256 intentionally not fetched)", "object_id": "33114fe9b564cf1ace013400900f71887e1243d3", "size_bytes": 18874368, "sha256": null},
+          "scope": {
+            "local_build": "unresolved",
+            "repository": "unresolved",
+            "public_ci": "unresolved"
+          },
+          "identity": {
+            "path": "bin tree (513 Git-identified ROMs; payload bytes and SHA-256 intentionally not fetched)",
+            "object_id": "33114fe9b564cf1ace013400900f71887e1243d3",
+            "size_bytes": 18874368,
+            "sha256": null
+          },
           "notices": [],
-          "evidence": ["https://github.com/aappleby/gbmicrotest/tree/463eb6bc0fe31d61781ef63060ad6d74090c0255/bin", "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/LICENSE"],
+          "evidence": [
+            "https://github.com/aappleby/gbmicrotest/tree/463eb6bc0fe31d61781ef63060ad6d74090c0255/bin",
+            "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/LICENSE"
+          ],
           "obligations": [],
           "blocker": "Repository-wide MIT metadata does not establish distribution scope for all generated ROM bytes. ROM payloads were not fetched; no local build, repository staging, or public-CI use is permitted by this record."
         },
@@ -321,10 +754,22 @@
           "id": "embedded-logo",
           "outcome": "unresolved",
           "terms": "The build sources use a Nintendo-logo header directive; no component grant for the embedded logo output was identified.",
-          "scope": {"local_build": "unresolved", "repository": "unresolved", "public_ci": "unresolved"},
-          "identity": {"path": "tests tree used to generate ROM header content; generated output bytes not fetched", "object_id": "37d28f327e3c297002ffc7ef583793b021c54b67", "size_bytes": 183031, "sha256": null},
+          "scope": {
+            "local_build": "unresolved",
+            "repository": "unresolved",
+            "public_ci": "unresolved"
+          },
+          "identity": {
+            "path": "tests tree used to generate ROM header content; generated output bytes not fetched",
+            "object_id": "37d28f327e3c297002ffc7ef583793b021c54b67",
+            "size_bytes": 183031,
+            "sha256": null
+          },
           "notices": [],
-          "evidence": ["https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/build.sh", "https://github.com/aappleby/gbmicrotest/tree/463eb6bc0fe31d61781ef63060ad6d74090c0255/tests"],
+          "evidence": [
+            "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/build.sh",
+            "https://github.com/aappleby/gbmicrotest/tree/463eb6bc0fe31d61781ef63060ad6d74090c0255/tests"
+          ],
           "obligations": [],
           "blocker": "No grant for the embedded logo bytes is established for local output generation, repository storage, or public CI."
         }
@@ -342,16 +787,56 @@
     "admission_performed": false
   },
   "requirements": [
-    {"id": "FIXT-01", "owner": "Phase 21", "status": "Pending", "reason": "Both named candidates have unresolved component rights, and no exact build, ROM digest, cartridge header, or native CGB mode evidence was produced."},
-    {"id": "RIGHTS-01", "owner": "Phase 20", "status": "Pending", "reason": "No game or diagnostic fixture has complete supported component permissions and required notice coverage for repository and public CI."},
-    {"id": "DIAG-01", "owner": "Phase 22", "status": "Pending", "reason": "Acid2 image/output scope remains unresolved; derivatives were not built or admitted."},
-    {"id": "DIAG-02", "owner": "Phase 22", "status": "Pending", "reason": "gbmicrotest ROM and embedded-logo rights remain unresolved; no ROM bytes, model accounting, or execution results were produced."}
+    {
+      "id": "FIXT-01",
+      "owner": "Phase 21",
+      "status": "Pending",
+      "reason": "Both named candidates have unresolved component rights, and no exact build, ROM digest, cartridge header, or native CGB mode evidence was produced."
+    },
+    {
+      "id": "RIGHTS-01",
+      "owner": "Phase 20",
+      "status": "Pending",
+      "reason": "No game or diagnostic fixture has complete supported component permissions and required notice coverage for repository and public CI."
+    },
+    {
+      "id": "DIAG-01",
+      "owner": "Phase 22",
+      "status": "Pending",
+      "reason": "Acid2 image/output scope remains unresolved; derivatives were not built or admitted."
+    },
+    {
+      "id": "DIAG-02",
+      "owner": "Phase 22",
+      "status": "Pending",
+      "reason": "gbmicrotest ROM and embedded-logo rights remain unresolved; no ROM bytes, model accounting, or execution results were produced."
+    }
   ],
   "build_tools": [
-    {"source_id": "potion-panic-gbcompo25", "status": "not-observed", "reason": "build.sh names RGBDS and SuperFamiconv, but no exact tool version/archive identity was established and no tool was installed or executed."},
-    {"source_id": "ucity-1.3", "status": "not-observed", "reason": "The Makefile requires RGBDS, but the exact tool version/archive identity was not established; no tool was installed or executed."},
-    {"source_id": "dmg-acid2-v1.0", "status": "not-observed", "reason": "The README/Makefile require RGBDS, but the exact tool version/archive identity was not established; no tool was installed or executed."},
-    {"source_id": "cgb-acid2-v1.1", "status": "not-observed", "reason": "The README/Makefile require RGBDS, but the exact tool version/archive identity was not established; no tool was installed or executed."},
-    {"source_id": "gbmicrotest-463eb6b", "status": "not-observed", "reason": "The README requests WLA-DX without pinning a version or closure; no tool was installed or executed."}
+    {
+      "source_id": "potion-panic-gbcompo25",
+      "status": "not-observed",
+      "reason": "build.sh names RGBDS and SuperFamiconv, but no exact tool version/archive identity was established and no tool was installed or executed."
+    },
+    {
+      "source_id": "ucity-1.3",
+      "status": "not-observed",
+      "reason": "The Makefile requires RGBDS, but the exact tool version/archive identity was not established; no tool was installed or executed."
+    },
+    {
+      "source_id": "dmg-acid2-v1.0",
+      "status": "not-observed",
+      "reason": "The README/Makefile require RGBDS, but the exact tool version/archive identity was not established; no tool was installed or executed."
+    },
+    {
+      "source_id": "cgb-acid2-v1.1",
+      "status": "not-observed",
+      "reason": "The README/Makefile require RGBDS, but the exact tool version/archive identity was not established; no tool was installed or executed."
+    },
+    {
+      "source_id": "gbmicrotest-463eb6b",
+      "status": "not-observed",
+      "reason": "The README requests WLA-DX without pinning a version or closure; no tool was installed or executed."
+    }
   ]
 }

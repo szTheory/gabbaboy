@@ -111,7 +111,7 @@ CLOSEOUT_SOURCE_IDENTITIES = {
 CLOSEOUT_COMPONENT_OUTCOMES = {
     "potion-panic-gbcompo25": {
         "source-code": "supported", "audio-driver": "supported", "hardware-inc": "supported",
-        "visual-assets": "unresolved", "music-assets": "unresolved", "converter-code": "unresolved",
+        "visual-assets": "supported", "music-assets": "supported", "converter-code": "unresolved",
     },
     "ucity-1.3": {
         "gpl-header-code": "supported", "gbt-player": "supported", "media": "supported",
@@ -119,12 +119,12 @@ CLOSEOUT_COMPONENT_OUTCOMES = {
     },
     "dmg-acid2-v1.0": {
         "source-code": "supported", "mgblib-code": "supported", "mgblib-font-data": "excluded-by-design",
-        "footer-and-reference-images": "unresolved", "project-font-replacement": "not-created",
+        "footer-and-reference-images": "supported", "project-font-replacement": "not-created",
         "diagnostic-output": "not-created",
     },
     "cgb-acid2-v1.1": {
         "source-code": "supported", "mgblib-code": "supported", "mgblib-font-data": "excluded-by-design",
-        "footer-and-reference-images": "unresolved", "project-font-replacement": "not-created",
+        "footer-and-reference-images": "supported", "project-font-replacement": "not-created",
         "diagnostic-output": "not-created",
     },
     "gbmicrotest-463eb6b": {
@@ -172,6 +172,8 @@ CLOSEOUT_NOTICE_IDENTITIES = {
     "potion-panic-gbcompo25": {
         "source-code": (("LICENSE", "1d6196068ffdc67d5eb655b15c4ea269d1e471e1", 1083, "05a737cab7911cce77ab9057d1129c241b02d69b00e5f1ef1409f5626fe4d55b", "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/LICENSE"),),
         "audio-driver": (("LICENSE", "1d6196068ffdc67d5eb655b15c4ea269d1e471e1", 1083, "05a737cab7911cce77ab9057d1129c241b02d69b00e5f1ef1409f5626fe4d55b", "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/LICENSE"),),
+        "visual-assets": (("fixtures/v04-games/LICENSE.txt", "6e9a3ac22b4ecd5b49b217c1c59007c19c05a5a9", 2002, "2c3e582ca44c15131d61d4e09b7393e442d348157c0b32e5eaf77567b9787581", "https://creativecommons.org/licenses/by-nc-sa/4.0/"),),
+        "music-assets": (("fixtures/v04-games/LICENSE.txt", "6e9a3ac22b4ecd5b49b217c1c59007c19c05a5a9", 2002, "2c3e582ca44c15131d61d4e09b7393e442d348157c0b32e5eaf77567b9787581", "https://creativecommons.org/licenses/by-nc-sa/4.0/"),),
         "hardware-inc": (("LICENSE", "670154e3538863b2d9891fd5483160fbdfc89164", 6555, "36ffd9dc085d529a7e60e1276d73ae5a030b020313e6c5408593a6ae2af39673", "https://github.com/gbdev/hardware.inc/blob/97e979bd977b469c6dbefae15f581b27d1ba8e35/LICENSE"),),
     },
     "ucity-1.3": {
@@ -182,10 +184,12 @@ CLOSEOUT_NOTICE_IDENTITIES = {
     "dmg-acid2-v1.0": {
         "source-code": (("LICENSE", "77b34a180b3fd2fba8c083bbc5ebbe04fbafb4a5", 1068, "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044", "https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/LICENSE"),),
         "mgblib-code": (("LICENSE", "5d829bf2ffa1447dcfd63c5dab2c44488632617e", 1068, "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044", "https://github.com/mattcurrie/mgblib/blob/5d829bf2ffa1447dcfd63c5dab2c44488632617e/LICENSE"),),
+        "footer-and-reference-images": (("LICENSE", "77b34a180b3fd2fba8c083bbc5ebbe04fbafb4a5", 1068, "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044", "https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/LICENSE"),),
     },
     "cgb-acid2-v1.1": {
         "source-code": (("LICENSE", "77b34a180b3fd2fba8c083bbc5ebbe04fbafb4a5", 1068, "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044", "https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/LICENSE"),),
         "mgblib-code": (("LICENSE", "5d829bf2ffa1447dcfd63c5dab2c44488632617e", 1068, "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044", "https://github.com/mattcurrie/mgblib/blob/5d829bf2ffa1447dcfd63c5dab2c44488632617e/LICENSE"),),
+        "footer-and-reference-images": (("LICENSE", "77b34a180b3fd2fba8c083bbc5ebbe04fbafb4a5", 1068, "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044", "https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/LICENSE"),),
     },
     "gbmicrotest-463eb6b": {
         "source-code": (("LICENSE", "ca05fdbac9ec607636037171ee3856ea2a3378dd", 1065, "0b3557142dfcce65428fafb9c8254d9d59c027a008af4810867efd7342b77c25", "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/LICENSE"),),
@@ -196,8 +200,8 @@ CLOSEOUT_COMPONENT_TERMS = {
         "source-code": "MIT License for project code; the creator page separately labels code MIT.",
         "audio-driver": "The pinned Audio/GBMod_Player.asm identifies the driver as by DevEd; root LICENSE is MIT.",
         "hardware-inc": "CC0 1.0 Universal at the exact hardware.inc submodule commit.",
-        "visual-assets": "The creator page labels assets CC BY-NC-SA 4.0; exact mapping and grant authority for each source asset have not been established.",
-        "music-assets": "The creator page labels assets CC BY-NC-SA 4.0; the pinned Audio/Modules tree contains the candidate music inputs.",
+        "visual-assets": "D-207 accepts the creator page CC BY-NC-SA 4.0 asset label for this exact linked source component as a bounded category-level inference; noncommercial use with attribution, changes identified, and share-alike for adaptations.",
+        "music-assets": "D-207 accepts the creator page CC BY-NC-SA 4.0 asset label for this exact linked source component as a bounded category-level inference; noncommercial use with attribution, changes identified, and share-alike for adaptations.",
         "converter-code": "The root MIT notice is present, but Tools/convertmap.py attributes an embedded WLE encoder to Pigu/AYCE without a separate grant or notice.",
     },
     "ucity-1.3": {
@@ -210,7 +214,7 @@ CLOSEOUT_COMPONENT_TERMS = {
         "source-code": "MIT License at the exact pinned root LICENSE.",
         "mgblib-code": "MIT License at the exact mgblib gitlink commit.",
         "mgblib-font-data": "Third-party font data is excluded from the planned derivative; project-authored replacement glyphs are required.",
-        "footer-and-reference-images": "Pinned README references upstream images; no component-specific repository/public-CI grant for remaining footer or reference-image bytes was established.",
+        "footer-and-reference-images": "D-207 accepts each pinned root MIT grant as covering only this repository version's img tree; this is a bounded repository-level inference, not an image-specific upstream statement.",
         "project-font-replacement": "Project-authored replacement glyphs have not been created.",
         "diagnostic-output": "No font-replaced, text-masked derivative or output notice has been created.",
     },
@@ -218,7 +222,7 @@ CLOSEOUT_COMPONENT_TERMS = {
         "source-code": "MIT License at the exact pinned root LICENSE.",
         "mgblib-code": "MIT License at the exact mgblib gitlink commit.",
         "mgblib-font-data": "Third-party font data is excluded from the planned derivative; project-authored replacement glyphs are required.",
-        "footer-and-reference-images": "Pinned README references upstream images; no component-specific repository/public-CI grant for remaining footer or reference-image bytes was established.",
+        "footer-and-reference-images": "D-207 accepts each pinned root MIT grant as covering only this repository version's img tree; this is a bounded repository-level inference, not an image-specific upstream statement.",
         "project-font-replacement": "Project-authored replacement glyphs have not been created.",
         "diagnostic-output": "No font-replaced, text-masked derivative or output notice has been created.",
     },
@@ -2129,7 +2133,7 @@ def closeout_self_test_controls(root: Path) -> int:
 
     mutant = copy.deepcopy(canonical)
     component = next(item for item in mutant["sources"][0]["components"]
-                     if item["id"] == "visual-assets")
+                     if item["id"] == "converter-code")
     component["outcome"] = "supported"
     component["scope"] = {"local_build": "supported", "repository": "supported", "public_ci": "supported"}
     component["blocker"] = None
@@ -2142,7 +2146,7 @@ def closeout_self_test_controls(root: Path) -> int:
 
     mutant = copy.deepcopy(canonical)
     component = next(item for item in mutant["sources"][0]["components"]
-                     if item["id"] == "visual-assets")
+                     if item["id"] == "converter-code")
     component["scope"] = {"local_build": "supported", "repository": "supported", "public_ci": "supported"}
     refuse(mutant, "candidate-closeout-unresolved-scope-overclaim", "unresolved grant scope")
 
