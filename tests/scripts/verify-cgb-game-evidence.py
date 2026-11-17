@@ -495,7 +495,7 @@ def validate_documentation(snapshot: dict[str, bytes], records: list[dict[str, A
             "creator-page asset category is accepted for the pinned visual and music components",
             "no build receipt binds the downloaded bytes to the pinned commit",
             "ROM, sidecar, header/checksums, and local bootless transform are recorded as ignored local metadata only",
-            "the Pigu/AYCE WLE converter is excluded",
+            "the Pigu/AYCE WLE converter remains excluded",
             "no source build, candidate admission, or game runtime was performed",
             "does not establish a license prohibition",
             UCITY_13_REVISION,
