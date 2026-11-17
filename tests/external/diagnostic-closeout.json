@@ -678,12 +678,41 @@
         "win9_a",
         "win9_b"
       ],
-      "executed_names": [],
-      "final_execution_accounting_complete": false,
+      "executed_names": [
+        "div_inc_timing_a"
+      ],
+      "final_execution_accounting_complete": true,
       "roster_accounting_complete": true,
       "roster_count": 513,
       "roster_projection_sha256": "29c610580ee8d953ac9a85a80db7d46bba80908e888cb91d65e327ce25a3651b",
-      "runtime_results": []
+      "runtime_results": [
+        {
+          "case": "div_inc_timing_a",
+          "runner_case_id": "div-inc-a",
+          "source_revision": "4a6c6186fa45b1e59722b8e81e3cc72b538fbcba",
+          "closeout_record_sha256": "dcf3662197d8b6bba1b043745f07111a15ffb934b611e70981771a2b1c0e78f3",
+          "fixture_admission_commit": "3c31824e61e5f2b0b88912e8e7e29acf42a5a8ab",
+          "manifest_sha256": "d3aedaa5d89f583bea2951a9a58a3190ff2314fafbfa53b7e63e98ed6349cb7c",
+          "source_sha256": "ea6017487ac860fa29e54c43d2d1a73659ed3662b7ba3c7c91cc41faf5ef6deb",
+          "original_rom_sha256": "1530b5a34af78e182c8b1f5f9043f8e5ae3e9f2fac13d43f3c5714eece282706",
+          "derivative_sha256": "53b0624af64524fe7cdf9b0aed3456ca60c7b30fe25cd5202b6b77855f57ffa8",
+          "model": "dmg-cpu-b",
+          "verdict": "pass",
+          "runner_exit_code": 0,
+          "reason": null,
+          "actual": "00",
+          "expected": "00",
+          "terminal": "01",
+          "instruction_count": 72,
+          "event_count": 77,
+          "end_half_dots": 736,
+          "elapsed_seconds": 0.441572,
+          "runner_sha256": "17911b4e9ecadbf7d309965ced5e4f419577b50d07955de8a2ef380ae1009ccd",
+          "qualification_sha256": "e9907d983d5a1d2dd4dc55bdc668461a4c6326a23c1715bb5bb64e0a2d4f5068",
+          "evidence_path": "build/phase24/gbmicrotest-runtime-preflight.json",
+          "evidence_sha256": "0056a9fa487e50f531da0bef58748846a4f15ed504ddb6776e8bd8fbe0a70a8a"
+        }
+      ]
     },
     "blocked_by": [],
     "cases": [
@@ -10441,7 +10470,7 @@
         }
       }
     ],
-    "cohort_status": "admitted-before-runtime",
+    "cohort_status": "executed",
     "source": {
       "commit": "463eb6bc0fe31d61781ef63060ad6d74090c0255",
       "repository": "https://github.com/aappleby/gbmicrotest",
@@ -10488,7 +10517,7 @@
           "size_bytes": 32768
         },
         "review_area": "build/phase24/source-review/gbmicrotest (ignored local review only)",
-        "runtime_status": "pending",
+        "runtime_status": "pass",
         "source_commit": "463eb6bc0fe31d61781ef63060ad6d74090c0255",
         "staging_status": "selected-derivative-only",
         "transform": {
@@ -10633,7 +10662,7 @@
           "expected": "FF81",
           "status": "FF82"
         },
-        "runtime_status": "pending",
+        "runtime_status": "pass",
         "source_oracle": "source-defined DIV expectation and pass/fail result are explicit in the pinned assembly and macros",
         "status_values": {
           "fail": "FF",
@@ -10665,7 +10694,7 @@
         "commit": "3c31824e61e5f2b0b88912e8e7e29acf42a5a8ab"
       }
     },
-    "status": "admitted-before-runtime"
+    "status": "executed"
   },
   "rights_input": {
     "commit": "508f37f191ec76506d75921e97430148f4909209",
