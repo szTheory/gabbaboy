@@ -5,7 +5,29 @@
 
 **Date:** 2026-11-16
 **Phase:** 24-Resolve remaining v0.4 evidence and verification gaps
-**Areas discussed:** Additive verification evidence, Read-only candidate research, Phase exit with gaps
+**Areas discussed:** Additive verification evidence, Read-only candidate research, Phase exit with gaps, BOM normalization and plan-cap regression
+
+---
+
+## BOM normalization and plan-cap regression
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Strip one leading BOM and reject a repeated BOM | Normalize exactly one leading U+FEFF before the canonical frontmatter fence; fail closed if a second remains. | ✓ |
+| Reject every BOM | Fail closed without normalization, which would reject BOM-prefixed plans accepted by the upstream reader. | |
+| Decode all plan inputs with UTF-8-SIG | Centralize BOM removal at decoding, but changes multiple reader paths instead of the narrow classifier. | |
+
+**User's choice:** The owner said to follow the bounded recovery recommendation after the fresh Critical review. This locks one same-plan correction and one clean independent review.
+**Notes:** The BOM policy stays local to the existing Python standard-library plan classifier. The independent advisor found that a repeated leading BOM must fail closed or it could remain unrecognized. Python's official [UTF-8-SIG codec documentation](https://docs.python.org/3.13/library/codecs.html#encodings.utf_8_sig) describes BOM handling at the start of the byte stream.
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Immutable production-CLI paired controls | Use the same BOM-prefixed Phase 24 plan path and fixture; vary only gap_closure true/false and require the specific D-205 gap refusal or ordinary-plan pass. | ✓ |
+| Helper-only classifier control | Checks the parser helper but not immutable input, the D-205 rule, or CLI refusal behavior. | |
+| Add a new CTest identity | Makes the gate surface larger despite an existing self-test and focused CTest. | |
+
+**User's choice:** Follow the production-CLI regression recommendation and preserve the existing two CTest identities.
+**Notes:** The negative must require the exact plan-cap-d205-phase24-gap refusal; the ordinary-plan twin must pass. Run only plan_cap and planning_hygiene_controls after cheap direct checks, retaining their existing timeout and control floor. A separate Critical or blocker found by the one fresh review returns the phase to the owner.
 
 ---
 
