@@ -2395,16 +2395,18 @@ def self_test_plan_cap_rev(base: Path, source_repo: Path, source_rev: str | None
                     d205_dir_paths[plan.name] = relative
     d205_good = d205_commit(d205_files, "canonical exact D-205 40-plan fixture")
 
-    def d205_cli(rev: str, expected: str | None, label: str) -> None:
+    def d205_cli(rev: str, expected: str | None, label: str, exact_expected_code: bool = False) -> None:
         nonlocal controls
         output, errors = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
             exit_code = main(["--check", "plan-cap", "--rev", rev, "--repo", str(d205_repo)])
         error_text = errors.getvalue()
+        actual_codes = [match.group(1) for line in error_text.splitlines()
+                        if (match := re.match(r"planning-hygiene FAIL ([a-z0-9-]+)(?=:|$)", line))]
         if expected is None:
-            if exit_code != 0 or "plan-cap pass phases=6 plans=40" not in output.getvalue():
+            if exit_code != 0 or output.getvalue().strip() != "plan-cap pass phases=6 plans=40" or error_text:
                 raise SystemExit(f"planning-hygiene self-test FAIL: {label} should pass via CLI: {exit_code} {error_text}")
-        elif exit_code != 1 or expected not in error_text:
+        elif exit_code != 1 or expected not in actual_codes or (exact_expected_code and actual_codes != [expected]):
             raise SystemExit(f"planning-hygiene self-test FAIL: {label} should fail with {expected}: {exit_code} {error_text}")
         controls += 1
 
@@ -2412,11 +2414,12 @@ def self_test_plan_cap_rev(base: Path, source_repo: Path, source_rev: str | None
     (d205_repo / ".planning/ROADMAP.md").write_text("broken live ROADMAP", encoding="utf-8")
     d205_cli(d205_good, None, "D-205 immutable revision ignores dirty checkout")
 
-    def d205_variant(label: str, files: dict[str, str], expected: str, delete: tuple[str, ...] = ()) -> None:
+    def d205_variant(label: str, files: dict[str, str], expected: str | None, delete: tuple[str, ...] = (),
+                     exact_expected_code: bool = False) -> None:
         d205_git("checkout", "-q", "--", ".planning/ROADMAP.md")
         d205_git("checkout", "-q", d205_good)
         variant = d205_commit(files, label, delete)
-        d205_cli(variant, expected, label)
+        d205_cli(variant, expected, label, exact_expected_code)
 
     d205_variant("unauthorized sixth phase", {".planning/ROADMAP.md": d205_roadmap.replace(
         "20/21/22/23/23.1/24", "20/21/22/23/23.1/25")}, "plan-cap-phase-count")
@@ -2451,6 +2454,28 @@ def self_test_plan_cap_rev(base: Path, source_repo: Path, source_rev: str | None
     flow_gap_key = "---\n{phase: x, gap_closure: true}\n---\n\n# Gap plan\n"
     d205_variant("Phase 24 flow-map gap_closure key", {
         ".planning/phases/GB-24-some-title/24-01-PLAN.md": flow_gap_key}, "plan-cap-d205-phase24-gap")
+    phase24_path = d205_dir_paths.get("24-01-PLAN.md")
+    canonical_phase24_plan = d205_files.get(phase24_path or "")
+    if phase24_path is None or canonical_phase24_plan is None or canonical_phase24_plan.count("gap_closure: false") != 1:
+        raise SystemExit("planning-hygiene self-test FAIL: canonical D-205 Phase 24 plan lacks one root gap_closure false")
+    bom_false_plan = "\ufeff" + canonical_phase24_plan
+    bom_true_plan = "\ufeff" + canonical_phase24_plan.replace("gap_closure: false", "gap_closure: true", 1)
+    if (bom_true_plan.replace("gap_closure: true", "gap_closure: false", 1) != bom_false_plan
+            or not bom_true_plan.startswith("\ufeff---\n") or not bom_false_plan.startswith("\ufeff---\n")
+            or bom_true_plan.startswith("\ufeff\ufeff") or bom_false_plan.startswith("\ufeff\ufeff")):
+        raise SystemExit("planning-hygiene self-test FAIL: single-BOM D-205 plans differ beyond the root boolean or fence")
+    d205_variant("BOM-prefixed Phase 24 gap plan", {phase24_path: bom_true_plan},
+                 "plan-cap-d205-phase24-gap", exact_expected_code=True)
+    d205_variant("BOM-prefixed Phase 24 ordinary plan", {phase24_path: bom_false_plan},
+                 None)
+    repeated_bom_true = "\ufeff" + bom_true_plan
+    repeated_bom_false = "\ufeff" + bom_false_plan
+    if not repeated_bom_true.startswith("\ufeff\ufeff---\n") or not repeated_bom_false.startswith("\ufeff\ufeff---\n"):
+        raise SystemExit("planning-hygiene self-test FAIL: repeated-BOM D-205 variants lack the expected opening fence")
+    d205_variant("repeated-BOM Phase 24 gap plan", {phase24_path: repeated_bom_true},
+                 "plan-cap-d205-phase24-gap", exact_expected_code=True)
+    d205_variant("repeated-BOM Phase 24 ordinary plan", {phase24_path: repeated_bom_false},
+                 "plan-cap-d205-phase24-gap", exact_expected_code=True)
     d205_variant("attempted reserve renewal", {".planning/ROADMAP.md": renewed_path_roadmap}, "plan-cap-d205-reserve")
     return controls
 
