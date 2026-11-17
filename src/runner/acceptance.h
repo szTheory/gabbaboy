@@ -31,7 +31,8 @@ extern "C" {
 typedef enum {
     GBB_ORACLE_PROGRESS_PREDICATE = 0,
     GBB_ORACLE_FRAME_DIGEST_LDBB,  /* frame-digest@ldbb */
-    GBB_ORACLE_FRAME_DIGEST_AT     /* frame-digest@t=<half-dots>, see oracle_half_dots */
+    GBB_ORACLE_FRAME_DIGEST_AT,    /* frame-digest@t=<half-dots>, see oracle_half_dots */
+    GBB_ORACLE_DIAGNOSTIC_SHARED  /* fixed FF80/FF81/FF82 shared verdict protocol */
 } gbb_case_oracle;
 
 typedef struct {
@@ -41,6 +42,9 @@ typedef struct {
     uint32_t rom_size;
     gbb_case_oracle oracle;
     uint64_t oracle_half_dots;   /* FRAME_DIGEST_AT only */
+    uint8_t diagnostic_expected; /* DIAGNOSTIC_SHARED: source-defined FF81 value */
+    uint32_t instruction_limit;  /* DIAGNOSTIC_SHARED only */
+    uint32_t event_limit;        /* DIAGNOSTIC_SHARED only */
     char reference_digest[65];   /* empty when the key is absent */
     char input_script[GBB_CASES_MAX_PATH + 1u];  /* empty when absent */
     char input_sha256[65];

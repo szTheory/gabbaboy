@@ -56,6 +56,12 @@ static void valid_line(char *out, size_t cap, const char *id) {
     snprintf(out, cap, VALID_BASE, id);
 }
 
+static const char *const DIAGNOSTIC_LINE =
+    "id=div-inc-a rom=fixtures/gbmicrotest/div_inc_timing_a.bootless.gb"
+    " rom_sha256=53b0624af64524fe7cdf9b0aed3456ca60c7b30fe25cd5202b6b77855f57ffa8"
+    " rom_size=32768 oracle=diagnostic-shared-ff80-ff82 diagnostic_expected=00"
+    " budget_half_dots=8192 instruction_limit=512 event_limit=4096 model_pass=dmg-cpu-b";
+
 /* A rejection test for one malformed single-line file built from the valid line. `from` is replaced
  * by `to` (both must be present exactly once in the valid line, or `to` is appended when from is NULL). */
 static int mutate_reject(const char *what, const char *from, const char *to, const char *reason) {
@@ -139,6 +145,44 @@ static int acceptance_parse_cases_errors(void) {
     REQUIRE(mutate_reject("model both lists", "model_pass=dmg-cpu-b", "model_pass=dmg-cpu-b model_fail=dmg-cpu-b",
                           "model-in-pass-and-fail") == 0);
     REQUIRE(mutate_reject("bad path", "rom=fixtures/libbet/libbet.gb", "rom=../x.gb", "bad-path") == 0);
+
+    {
+        char line[GBB_CASES_MAX_LINE + 1u], changed[GBB_CASES_MAX_LINE + 2u];
+        gbb_case_list list = {0};
+        char err[160] = "";
+        snprintf(line, sizeof(line), "%s\n", DIAGNOSTIC_LINE);
+        REQUIRE(parse(line, strlen(line), &list, err, sizeof(err)) == 0);
+        REQUIRE(list.count == 1u && list.cases[0].oracle == GBB_ORACLE_DIAGNOSTIC_SHARED);
+        REQUIRE(list.cases[0].diagnostic_expected == 0u && list.cases[0].instruction_limit == 512u &&
+                list.cases[0].event_limit == 4096u && list.cases[0].budget_half_dots == 8192u);
+        gbb_cases_free(&list);
+
+        snprintf(changed, sizeof(changed), "%.*s", (int)strlen(line) - 1, line);
+        char *at = strstr(changed, " event_limit=4096");
+        REQUIRE(at != NULL);
+        snprintf(at, sizeof(changed) - (size_t)(at - changed), "\n");
+        REQUIRE(expect_reject("diagnostic missing event limit", changed, strlen(changed), "missing-key", 1) == 0);
+
+        snprintf(changed, sizeof(changed), "%s\n", DIAGNOSTIC_LINE);
+        at = strstr(changed, "instruction_limit=512");
+        REQUIRE(at != NULL);
+        memcpy(at, "instruction_limit=513", strlen("instruction_limit=513"));
+        REQUIRE(expect_reject("diagnostic instruction bound", changed, strlen(changed), "bad-number", 1) == 0);
+
+        snprintf(changed, sizeof(changed), "%s\n", DIAGNOSTIC_LINE);
+        at = strstr(changed, "model_pass=dmg-cpu-b");
+        REQUIRE(at != NULL);
+        memcpy(at + strlen("model_pass="), "cgb-cpu-e", strlen("cgb-cpu-e"));
+        REQUIRE(expect_reject("diagnostic model scope", changed, strlen(changed), "diagnostic-model-scope", 1) == 0);
+
+        snprintf(changed, sizeof(changed), "%s input_script=tests/x input_sha256=" D64 "\n", DIAGNOSTIC_LINE);
+        REQUIRE(expect_reject("diagnostic script conflict", changed, strlen(changed), "diagnostic-key-conflict", 1) == 0);
+
+        valid_line(line, sizeof(line), "libbet");
+        snprintf(changed, sizeof(changed), "%s diagnostic_expected=00\n", line);
+        REQUIRE(expect_reject("diagnostic option on progress oracle", changed, strlen(changed),
+                              "diagnostic-key-not-applicable", 1) == 0);
+    }
 
     /* rom_size is accepted at exactly 8 MiB. */
     {
