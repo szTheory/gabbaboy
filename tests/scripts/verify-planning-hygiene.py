@@ -174,6 +174,10 @@ DEFERRAL_PINS = (
 def is_gap_plan(text: str) -> bool:
     """Parse the one supported root boolean; fail closed on aliases or malformed declarations."""
     normalized, _ = yaml_source_lines(text)
+    if normalized.startswith("\ufeff"):
+        normalized = normalized[1:]
+        if normalized.startswith("\ufeff"):
+            return True
     match = GAP_FRONTMATTER.match(normalized)
     if match is None:
         return False
