@@ -8,11 +8,11 @@ GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game 
 
 **Published:** [v0.4.0](https://github.com/szTheory/gabbaboy/releases/tag/v0.4.0), Evidence Floor. Its permanent product source is `3de1b0e427f37a202be4469dd818266f359c8b20`; its 22 published assets and receipts remain unchanged. See [Phase 23 evidence](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md).
 
-**Milestone status:** v0.4 was administratively closed on 2026-11-17 at the owner's direction, with gaps disclosed. Seven of eight original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for their exact admitted diagnostic scope; FIXT-01 remains Pending because neither named game candidate has a complete source/build/ROM/header/mode/runtime evidence chain. Phase 24 Task 7 and the exact-final-head suite were not completed. Phase 20, 21 and 23.1 verification is stale. D-210 authorizes one narrow Task 8 recovery to make the frozen closeout candidate's checks truthful and reconcile it through one protected PR; this does not change the requirement outcomes, release, or accepted gaps.
+**Milestone status:** v0.4 was administratively closed on 2026-11-17 at the owner's direction, with gaps disclosed. Seven of eight original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for their exact admitted diagnostic scope; FIXT-01 remains Pending because neither named game candidate has a complete source/build/ROM/header/mode/runtime evidence chain. Phase 24 Task 7 and the exact-final-head suite were not completed. Phase 20, 21 and 23.1 verification is stale. D-210's bounded Task 8 implementation and focused checks pass, but its sole independent review found a blocker before PR creation: the protected native matrix executes admitted game ROMs, contrary to the explicit no-ROM limit. No PR or matrix was started; the D-210 review allowance is spent. No requirement, release, or accepted-gap outcome changed.
 
 **Diagnostic results:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. Do not replay that lane or claim a proven cause. One `div_inc_timing_a` case is admitted and passed for the DMG-CPU-B software model; 512 other names remain excluded. [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md) and the [milestone audit](v0.4-MILESTONE-AUDIT.md) retain the full scope.
 
-**Next direction:** After D-210's focused recovery, one independent review, one protected PR matrix, and clean-main reconciliation, start v0.5 DMG PPU Timing with `$gsd-new-milestone`. Use a capped first phase to admit exact DMG Mooneye and Mealybug oracle inputs, then plan the pixel FIFO/fetcher and variable mode-3 work under the existing performance budget. Hardware and perceptual claims remain out of scope without corresponding evidence. Both automatic-advance flags remain false.
+**Next direction:** v0.5 DMG PPU Timing remains the recommended next milestone, but cannot start until the owner resolves the D-210 review blocker and the closeout branch is reconciled to clean `main`. The next command is `$gsd-discuss-phase 24` to define or decline any new recovery scope. If later authorized and reconciled, define v0.5 through `$gsd-new-milestone`, beginning with exact DMG Mooneye and Mealybug oracle admission, then plan pixel FIFO/fetcher and variable mode-3 work under the existing performance budget. Hardware and perceptual claims remain out of scope without evidence. Both automatic-advance flags remain false.
 
 ## Closed Milestone: v0.4 Evidence Floor
 
@@ -20,7 +20,7 @@ v0.4 delivered the qualified release, CGB progress/scene contracts, bounded diag
 
 ## Next Milestone Goals
 
-Recommended direction: **v0.5 DMG PPU Timing**. Begin with exact admission of a narrow, rights-clear Mooneye/Mealybug DMG oracle set, then implement the pixel FIFO/fetcher and variable mode-3 timing within the existing performance budget. Write independent renderer controls before the implementation, keep hardware claims out without hardware evidence, and avoid adding a dependency unless the accepted scope requires one. Start with `$gsd-new-milestone` to define fresh requirements and phases.
+Recommended direction after closeout reconciliation: **v0.5 DMG PPU Timing**. Begin with exact admission of a narrow, rights-clear Mooneye/Mealybug DMG oracle set, then implement the pixel FIFO/fetcher and variable mode-3 timing within the existing performance budget. Write independent renderer controls before implementation, keep hardware claims out without hardware evidence, and avoid adding a dependency unless the accepted scope requires one. Start with `$gsd-new-milestone` only from clean `main` after the owner resolves the current recovery blocker.
 
 <details>
 <summary>Completed v0.3 scope and kickoff context</summary>
@@ -205,4 +205,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-11-17 after the owner authorized the bounded D-210 closeout-candidate recovery.
+Last updated: 2026-11-17 after the D-210 candidate review blocked before PR creation.

@@ -35,9 +35,9 @@
     }
   ],
   "next": {
-    "command": "$gsd-execute-phase 24",
-    "label": "Resume D-210 closeout recovery (Task 8 only)",
-    "reason": "D-210 authorizes only Phase 24 Plan 24-01 Task 8. Task 8 is ordered before the deferred Task 7; Task 7 has an explicit owner-authorization precondition. Preserve the Acid2 no-replay stop, FIXT-01 Pending, and the one-review/one-protected-PR-matrix limit."
+    "command": "$gsd-discuss-phase 24",
+    "label": "Resolve the D-210 review blocker before any new recovery",
+    "reason": "The sole D-210 review found that required-native CI executes admitted game ROMs, conflicting with the no-ROM limit, and flagged a mislabeled negative-control count. No PR/matrix started; the review allowance is spent. The owner must define or decline new scope before any further fix, review, CI, or reconciliation."
   },
-  "updated_at": "2026-11-17T21:13:02Z"
+  "updated_at": "2026-11-17T21:26:12Z"
 }

@@ -4,11 +4,11 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: Phase 24 Plan 24-01 Task 8 bounded recovery; Task 7 remains unfinished
-status: in_progress
-stopped_at: Owner-authorized D-210 closeout-candidate recovery
-last_updated: "2026-11-17T21:13:02Z"
-state_head: ea0c0ace8a22e7626b3d3b4fb26e2b167269c3da
+current_plan: Phase 24 D-210 Task 8 recovery blocked after its single independent review; Task 7 remains unfinished
+status: blocked
+stopped_at: D-210 review found required CI would execute admitted game ROMs, outside the authorized no-ROM scope
+last_updated: "2026-11-17T21:26:12Z"
+state_head: 054f2d0d80f4e15c70d43408c026280b93ec6b08
 progress:
   total_phases: 6
   completed_phases: 5
@@ -22,10 +22,10 @@ last_activity: 2026-11-17
 
 ## Current Position
 
-**Milestone stage:** v0.4 — Evidence Floor was administratively closed with accepted gaps under D-209. D-210 now authorizes one narrow Phase 24 Task 8 recovery to fix the frozen closeout candidate's CI and diagnostic receipt contracts before protected PR reconciliation; original requirements and gaps are unchanged. The qualified v0.4.0 product release remains unchanged.
+**Milestone stage:** v0.4 — Evidence Floor was administratively closed with accepted gaps under D-209. D-210 Task 8 implementation and focused checks passed at reviewed candidate `054f2d0d80f4e15c70d43408c026280b93ec6b08`, but its one independent review is `issues_found`: the required native matrix executes admitted game ROMs, violating the explicit no-ROM limit. Its review allowance is spent; no PR or matrix was opened/run. See `/private/tmp/gabbaboy-d210-review-054f2d0.md`. Original requirement outcomes, accepted gaps, and qualified v0.4.0 release are unchanged.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
-**Phase state:** Phase 24 Task 7 and its plan summary remain incomplete; Task 8 is the only authorized active task. Phase 20, 21, and 23.1 verification is stale. The exact-head PR matrix has not yet run. These are disclosed gaps, not passes.
-**Next route:** Complete Task 8's bounded implementation and focused checks, then exactly one independent review and one protected PR matrix. If those pass, reconcile the exact reviewed/tested head to clean `main`; only then start v0.5 DMG PPU Timing with `$gsd-new-milestone`. Begin its first phase with exact DMG oracle admission, then FIFO/fetcher work under the existing performance budget. Both automatic-advance flags remain false.
+**Phase state:** Phase 24 Task 7 and its plan summary remain incomplete; Task 8 implementation and eight focused CTests pass, but the sole review found one Critical scope blocker and one Warning. Phase 20, 21, and 23.1 verification is stale. No PR or protected matrix was started. These remain disclosed gaps, not passes.
+**Next route:** The owner acts next with `$gsd-discuss-phase 24` to resolve the no-game-ROM versus required-CI conflict and decide whether any new recovery scope, fix, review, and matrix are authorized. Do not push/open a PR or start required CI under D-210. If any future scope passes and is reconciled to clean `main`, then start v0.5 DMG PPU Timing with `$gsd-new-milestone`. Both automatic-advance flags remain false.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -53,11 +53,11 @@ Two items had already been acknowledged by an earlier closeout; the audit record
 
 FIXT-01 remains Pending: neither Potion Panic nor µCity has a complete source/build/ROM/header/mode/runtime chain. Do not introduce a third game candidate under the v0.4 requirement. Do not replay the Acid2 comparison or claim its cause. The v0.4.0 tag/assets and published claims remain unchanged. No hardware, perception, mode-3 timing, general compatibility, Linux player, Steam Deck, or live Playstead claim is established by this closeout.
 
-The exact-final-head D-103 gate remains unfulfilled until the one authorized protected PR matrix is captured. Phase 20, 21, and 23.1 verification is stale; Phase 24 Task 7 is incomplete. These remain gaps, not passes. No external outreach, release retry, tag/asset change, Acid2 replay, broad local suite, or worktree cleanup is authorized by D-210. The bounded PR matrix is allowed once after the frozen candidate review; no retry follows. Both automatic advance flags remain false.
+The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 verification is stale; Phase 24 Task 7 is incomplete. These remain gaps, not passes. D-210's one review found that the required native matrix executes `fixtures/libbet/libbet.gb`, conflicting with its no-admitted-ROM limit; a warning also found that two positive notice-overlay controls inflate the negative-control count. No PR or matrix was started. The review allowance is exhausted, so no fix, review, or CI retry is authorized until a new owner scope. No Acid2 replay, release/tag/asset change, broad local suite, or worktree cleanup. Both automatic-advance flags remain false.
 
 ## Owner Handoff
 
-Completed stage: **Phase 24 Task 6 and D-209 v0.4 administrative closeout**, after the qualified v0.4.0 release. D-210 authorizes only Phase 24 Plan 24-01 Task 8 and one review/PR matrix to reconcile the closeout candidate. The current actor is the recovery executor; the owner acts only if review/CI blocks or a new scope is needed. After a successful protected merge and clean-main reconciliation, the next actor starts v0.5 with `$gsd-new-milestone`. Keep Phase 24 Task 7 and FIXT-01 incomplete and do not remove the worktree until its changes are reconciled.
+Completed stage: **Phase 24 Task 8 implementation and focused checks** after the v0.4 D-209 closeout. The sole D-210 review of candidate `054f2d0d80f4e15c70d43408c026280b93ec6b08` found the no-ROM/required-CI conflict and a mislabeled control count. No PR/CI/merge occurred; do not switch to `main` or remove this worktree. The owner acts next with `$gsd-discuss-phase 24` to decide a new bounded scope or leave recovery stopped. Keep Task 7, FIXT-01, and the accepted gaps unchanged.
 
 ## Accumulated Context
 
@@ -108,9 +108,9 @@ Completed stage: **Phase 24 Task 6 and D-209 v0.4 administrative closeout**, aft
 
 ## Session
 
-**Last session:** 2026-11-17T21:13:02Z
-**Stopped at:** D-210 Task 8 implementation and cheap checks; candidate build and exact-head review remain
+**Last session:** 2026-11-17T21:26:12Z
+**Stopped at:** D-210 candidate review; no PR/CI started because required native CI executes admitted game ROMs
 **Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md (historical closeout handoff)
 
 ### Blockers
-Task 8 is active under D-210. Preserve the no-Acid2-replay stop, the exact failed DMG-on-CGB result, FIXT-01 Pending, Phase 24 Task 7 incomplete, and the one-review/one-matrix limits. If review or required PR CI fails, stop without a retry and return the specific blocker to the owner. If the protected merge succeeds, reconcile clean `main`, then start v0.5 with `$gsd-new-milestone`.
+D-210 is blocked after its one review. The required `required-native` matrix executes admitted game ROMs including Libbet, contrary to the D-210 no-ROM limit; reviewer also found two positive notice-overlay cases reported as negative controls. No PR or matrix was started, and no further fix/review/CI cycle is authorized. Owner next: `$gsd-discuss-phase 24` to define a new scope or preserve the stop. Acid2 was not replayed; FIXT-01 stays Pending; Task 7 and v0.4 completion remain incomplete.
