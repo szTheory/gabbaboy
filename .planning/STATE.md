@@ -6,9 +6,9 @@ current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
 current_plan: Not started
 status: completed
-stopped_at: Phase 24 complete; v0.4 audit gaps_found; owner decision next
-last_updated: "2026-11-17T01:58:21.356Z"
-state_head: a2e873544e5d4054436cb3c6acbedf5368004294
+stopped_at: Phase 23.1 context gathered; preserve historical verification as stale; no follow-up phase authorized
+last_updated: "2026-11-17T02:38:32.734Z"
+state_head: 17836abe470f0dc2075e0950a97fe70050637d14
 progress:
   total_phases: 6
   completed_phases: 6
@@ -106,12 +106,13 @@ Current handoff: Phase 24 — Resolve remaining v0.4 evidence and verification g
 - [Phase 24]: D-205 remains the exact one-plan Phase 24 exception within the 40-plan ceiling; the assessment completes no original requirement and does not satisfy D-103.
 - [Phase 24]: The configured phase1 tests are restricted to plan_cap and planning_hygiene_controls at the committed candidate; preserve the 30-second timeout and 125-control floor.
 - [Phase 24]: D-07–D-10 authorized exactly one same-plan Task 4 and one independent exact-candidate review for the BOM plan-cap bypass. Task 4, the clean review, the two focused CTests, and Phase 24 verification passed; all phase plans are complete. Continue the existing v0.4 authorization with `$gsd-autonomous --from 23.1`, preserving the four Pending requirements and D-103 stop.
+- [Phase 23.1]: Phase 23.1 verification remains a historical 18/18 result and stale after Phase 24 changed the shared checker; no new recovery scope is authorized. — Phase 24 passed its own focused checks and verification under D-205. Refreshing Phase 23.1 would conflate its former fifth-phase criterion with the approved six-phase cap. Keep the four requirements Pending, v0.4 open, and D-103 unfulfilled.
 
 ## Session
 
-**Last session:** 2026-11-17T01:58:21.099Z
-**Stopped at:** Phase 24 complete; v0.4 audit gaps_found; owner decision next
-**Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md
+**Last session:** 2026-11-17T02:38:32.498Z
+**Stopped at:** Phase 23.1 context gathered; preserve historical verification as stale; no follow-up phase authorized
+**Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-CONTEXT.md
 
 ### Blockers
 None blocking the completed Phase 24 scope. The open milestone audit conditions and preserved suite, fixture, rights, D-103, and archival limits are listed under Owner Handoff.
