@@ -3748,7 +3748,8 @@ add_test(NAME phase22_acid2_controls
 add_test(NAME phase22_fixture_admission_contract
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test)
 add_test(NAME phase22_fixture_admission_controls
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test-controls)
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test-controls
+    --runner "$<TARGET_FILE:gabbaboy-runner>")
 add_test(NAME phase22_admission_assessment
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}"
     --check-assessment --repo-root "${PROJECT_SOURCE_DIR}")

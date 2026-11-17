@@ -1348,6 +1348,44 @@ class AdmissionContractTests(unittest.TestCase):
 
 
 class AdmissionControlTests(unittest.TestCase):
+    runner_path: pathlib.Path | None = None
+
+    def test_compiled_runner_shared_diagnostic_positive_and_negative(self) -> None:
+        if self.runner_path is None:
+            self.skipTest("no compiled runner supplied")
+        if not self.runner_path.is_file():
+            self.fail("compiled diagnostic runner is missing")
+
+        def run_case(actual: int, expected: int, terminal: int) -> subprocess.CompletedProcess[bytes]:
+            with tempfile.TemporaryDirectory(prefix="gbb-shared-diagnostic-control-") as name:
+                root = pathlib.Path(name)
+                rom = bytearray(32768)
+                rom[0x100:0x104] = bytes((0x00, 0xC3, 0x50, 0x01))  # entry: NOP; JP $0150
+                rom[0x150:0x15E] = bytes((
+                    0x3E, actual, 0xE0, 0x80,  # FF80 actual
+                    0x3E, expected, 0xE0, 0x81,  # FF81 expected
+                    0x3E, terminal, 0xE0, 0x82,  # FF82 terminal
+                    0x18, 0xFE,  # bounded post-terminal loop
+                ))
+                rom_path = root / "synthetic.gb"
+                rom_path.write_bytes(rom)
+                case = (
+                    "id=synthetic rom=synthetic.gb rom_sha256=" + sha256(rom) +
+                    " rom_size=32768 oracle=diagnostic-shared-ff80-ff82 diagnostic_expected=00"
+                    " budget_half_dots=1024 instruction_limit=64 event_limit=512 model_pass=dmg-cpu-b\n"
+                )
+                (root / "cases.txt").write_text(case, encoding="ascii")
+                return subprocess.run(
+                    [str(self.runner_path), "--acceptance", "cases.txt", "--case", "synthetic"],
+                    cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=5, check=False)
+
+        passed = run_case(0, 0, 1)
+        self.assertEqual(passed.returncode, 0, passed.stdout.decode("utf-8", "replace"))
+        self.assertIn(b"status=pass", passed.stdout)
+        failed = run_case(1, 0, 255)
+        self.assertEqual(failed.returncode, 1, failed.stdout.decode("utf-8", "replace"))
+        self.assertIn(b"reason=observed-mismatch", failed.stdout)
+
     def _diagnostic_closeout_inputs(self) -> tuple[dict[str, Any], dict[str, Any]]:
         record = _json_without_duplicates(
             (ROOT / DIAGNOSTIC_CLOSEOUT_PATH).read_bytes(), "diagnostic-closeout")
@@ -1702,6 +1740,8 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--self-test-tracer requires --runner")
         return run_tracer(args.runner.resolve())
     if args.self_test or args.self_test_controls:
+        if args.runner is not None:
+            AdmissionControlTests.runner_path = args.runner.resolve()
         suite_class = AdmissionContractTests if args.self_test else AdmissionControlTests
         suite = unittest.defaultTestLoader.loadTestsFromTestCase(suite_class)
         result = unittest.TextTestRunner(verbosity=2).run(suite)
