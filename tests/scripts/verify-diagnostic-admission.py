@@ -76,7 +76,7 @@ GBMICROTEST_SELECTED_ROM_SHA256 = "1530b5a34af78e182c8b1f5f9043f8e5ae3e9f2fac13d
 GBMICROTEST_SELECTED_DERIVATIVE_SHA256 = "53b0624af64524fe7cdf9b0aed3456ca60c7b30fe25cd5202b6b77855f57ffa8"
 GBMICROTEST_REVIEW_DIR = pathlib.Path("build/phase24/source-review/gbmicrotest")
 GBMICROTEST_FIXTURE_DIR = pathlib.Path("fixtures/gbmicrotest")
-GBMICROTEST_ADMISSION_COMMIT = "ce0cdca22b8338442a574f030e47f59f04c99fc2"
+GBMICROTEST_ADMISSION_COMMIT = "3c31824e61e5f2b0b88912e8e7e29acf42a5a8ab"
 GBMICROTEST_MANIFEST_SHA256 = "d3aedaa5d89f583bea2951a9a58a3190ff2314fafbfa53b7e63e98ed6349cb7c"
 GBMICROTEST_BUNDLE_SHA256 = "b810271e7bde4ffb05104c5d3aa772731118b45be3c93f38d2bb797e66e59780"
 GBMICROTEST_IDENTITY_SHA256 = "c18a7118c6172a3202893db5212f00eea67d015b309248da50884e4f4f6059e3"
@@ -932,7 +932,8 @@ def _validate_acid2_runtime_result(value: object) -> dict[str, Any]:
             or value["fixture_admission_commit"] != ACID2_FIXTURE_ADMISSION_COMMIT
             or value["manifest_sha256"] != ACID2_FIXTURE_MANIFEST_SHA256
             or value["bundle_sha256"] != ACID2_FIXTURE_BUNDLE_SHA256
-            or value["evidence_path"] != DIAGNOSTIC_RUNTIME_PREFLIGHT_PATH):
+            or value["evidence_path"] not in (ACID2_RUNTIME_EVIDENCE_PATH,
+                                               DIAGNOSTIC_RUNTIME_PREFLIGHT_PATH)):
         raise AdmissionRefused("diagnostic-closeout-acid2-runtime-result-identity-invalid")
     comparisons = value["comparisons"]
     if (not isinstance(comparisons, list) or len(comparisons) != len(ACID2_COMPARISON_PROFILES)
@@ -1001,13 +1002,27 @@ def _validate_acid2_runtime_evidence(root: pathlib.Path, runtime: dict[str, Any]
     if sha256(raw) != runtime["evidence_sha256"]:
         raise AdmissionRefused("diagnostic-closeout-acid2-runtime-evidence-digest-mismatch")
     evidence = _json_without_duplicates(raw, "acid2-runtime-evidence")
-    if (evidence.get("schema") != "gabbaboy-diagnostic-runtime-evidence-v1"
-            or evidence.get("source_revision") != source_revision
-            or evidence.get("closeout_record_sha256") != runtime["closeout_record_sha256"]
-            or evidence.get("acid2", {}).get("status") != runtime["status"]
-            or evidence.get("acid2", {}).get("comparisons") != runtime["comparisons"]
-            or evidence.get("runner_sha256") != runtime["runner_sha256"]
-            or evidence.get("qualification_sha256") != runtime["qualification_sha256"]):
+    if runtime["evidence_path"] == ACID2_RUNTIME_EVIDENCE_PATH:
+        matches_runtime = (
+            evidence.get("schema") == "gabbaboy-acid2-runtime-evidence-v1"
+            and evidence.get("source_revision") == source_revision
+            and evidence.get("closeout_record_sha256") == runtime["closeout_record_sha256"]
+            and evidence.get("status") == runtime["status"]
+            and evidence.get("comparisons") == runtime["comparisons"]
+            and evidence.get("runner_sha256") == runtime["runner_sha256"]
+            and evidence.get("qualification_sha256") == runtime["qualification_sha256"]
+        )
+    else:
+        matches_runtime = (
+            evidence.get("schema") == "gabbaboy-diagnostic-runtime-evidence-v1"
+            and evidence.get("source_revision") == source_revision
+            and evidence.get("closeout_record_sha256") == runtime["closeout_record_sha256"]
+            and evidence.get("acid2", {}).get("status") == runtime["status"]
+            and evidence.get("acid2", {}).get("comparisons") == runtime["comparisons"]
+            and evidence.get("runner_sha256") == runtime["runner_sha256"]
+            and evidence.get("qualification_sha256") == runtime["qualification_sha256"]
+        )
+    if not matches_runtime:
         raise AdmissionRefused("diagnostic-closeout-acid2-runtime-evidence-binding-mismatch")
 
 
@@ -2691,7 +2706,21 @@ class AdmissionControlTests(unittest.TestCase):
         record = _json_without_duplicates(
             (ROOT / DIAGNOSTIC_CLOSEOUT_PATH).read_bytes(), "diagnostic-closeout")
         # Admission mutation controls always start from the pre-runtime state. The
-        # committed closeout may now carry a truthful one-case runtime receipt.
+        # committed closeout may carry truthful Stage A and selected-case receipts.
+        acid2 = record.get("acid2")
+        if isinstance(acid2, dict) and acid2.get("status") in ("executed", "runtime-failed"):
+            acid2["status"] = "admitted-before-runtime"
+            acid2["runtime"] = {
+                "status": "pending", "source_revision": None,
+                "closeout_record_sha256": None,
+                "fixture_admission_commit": ACID2_FIXTURE_ADMISSION_COMMIT,
+                "manifest_sha256": ACID2_FIXTURE_MANIFEST_SHA256,
+                "bundle_sha256": ACID2_FIXTURE_BUNDLE_SHA256,
+                "runner_sha256": None, "qualification_sha256": None,
+                "evidence_path": None, "evidence_sha256": None, "comparisons": [],
+            }
+        if isinstance(record.get("gbmicrotest"), dict):
+            record["status"] = "admitted-before-runtime"
         gbmicrotest = record.get("gbmicrotest")
         if isinstance(gbmicrotest, dict) and gbmicrotest.get("status") in ("executed", "runtime-failed"):
             gbmicrotest["status"] = "admitted-before-runtime"

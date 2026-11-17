@@ -56,19 +56,107 @@
       "rights_input_commit": "508f37f191ec76506d75921e97430148f4909209"
     },
     "runtime": {
-      "bundle_sha256": "bd7f78881d6964e9396128814c769f93ef661030290c5e66b9b8fda5b040f5cb",
-      "closeout_record_sha256": null,
-      "comparisons": [],
-      "evidence_path": null,
-      "evidence_sha256": null,
+      "status": "mismatch",
+      "source_revision": "fe725bfe996a2fff2c57a0e2164a3243ca6d8cb8",
+      "closeout_record_sha256": "4486c2382e94a06680e9188734833a180ce20b3b41b53af53f0a19929860227a",
       "fixture_admission_commit": "3d0587d49e7d88815c6af7dc36f4810579a8dc48",
       "manifest_sha256": "7f198d5964a8547d1a122d5d64d395547ba6f365264cdb00abf190a5880c5da6",
-      "qualification_sha256": null,
-      "runner_sha256": null,
-      "source_revision": null,
-      "status": "pending"
+      "bundle_sha256": "bd7f78881d6964e9396128814c769f93ef661030290c5e66b9b8fda5b040f5cb",
+      "runner_sha256": "986dd0fce4a967d03beea2d0c7462d3f5d91ab4e6d064569a78adecfe39e91e7",
+      "qualification_sha256": "2efe8ec58eade93c3dffae10751be3910a24bd3a313291f69e49666d1f302e48",
+      "evidence_path": "build/phase24/acid2-runtime.json",
+      "evidence_sha256": "4eccc78349f01a85d6f374984f590b46f4af3a63aad6d7e938f9e9d49b40ba55",
+      "comparisons": [
+        {
+          "detail": "acid2 result=match masked_pixels=3200",
+          "differing_unmasked_pixels": 0,
+          "elapsed_seconds": 0.093658,
+          "guest_budget_half_dots": 4213440,
+          "hardware_claim": false,
+          "mask": {
+            "compared_pixels": 19840,
+            "masked_pixels": 3200,
+            "path": "masks/dmg.bin",
+            "sha256": "bfc6ae61c3ab4753ac5c11f5c5bac8a7d6d6873767737a72e6c5d31ae0937098"
+          },
+          "mode": "dmg",
+          "profile": "dmg",
+          "reference": {
+            "path": "source/dmg/img/reference-dmg.png",
+            "sha256": "ca966d50895c7efef05838590d148c2cbfd7fba57dab986f25b35b4da71abb57",
+            "size_bytes": 787
+          },
+          "rom": {
+            "path": "derivatives/dmg-acid2.gb",
+            "sha256": "6d3e5aca5f6d2ba31337ae61c1994e56f1780196c96cc645d54de378d39bbe82",
+            "size_bytes": 32768
+          },
+          "rom_kind": "dmg",
+          "runner_model": "dmg-cpu-b",
+          "runner_sha256": "986dd0fce4a967d03beea2d0c7462d3f5d91ab4e6d064569a78adecfe39e91e7",
+          "verdict": "pass"
+        },
+        {
+          "detail": "acid2 result=differs unmasked_pixels=19840",
+          "differing_unmasked_pixels": 19840,
+          "elapsed_seconds": 0.096013,
+          "guest_budget_half_dots": 4213440,
+          "hardware_claim": false,
+          "mask": {
+            "compared_pixels": 19840,
+            "masked_pixels": 3200,
+            "path": "masks/dmg.bin",
+            "sha256": "bfc6ae61c3ab4753ac5c11f5c5bac8a7d6d6873767737a72e6c5d31ae0937098"
+          },
+          "mode": "dmg",
+          "profile": "dmg-on-cgb",
+          "reference": {
+            "path": "source/dmg/img/reference-cgb.png",
+            "sha256": "cbf039fd613a6db3c3d830a6a1d887efbc892aea4578ffc569b61f66a9e07ced",
+            "size_bytes": 882
+          },
+          "rom": {
+            "path": "derivatives/dmg-acid2.gb",
+            "sha256": "6d3e5aca5f6d2ba31337ae61c1994e56f1780196c96cc645d54de378d39bbe82",
+            "size_bytes": 32768
+          },
+          "rom_kind": "dmg",
+          "runner_model": "cgb-cpu-e",
+          "runner_sha256": "986dd0fce4a967d03beea2d0c7462d3f5d91ab4e6d064569a78adecfe39e91e7",
+          "verdict": "mismatch"
+        },
+        {
+          "detail": "acid2 result=match masked_pixels=3328",
+          "differing_unmasked_pixels": 0,
+          "elapsed_seconds": 0.114,
+          "guest_budget_half_dots": 4213440,
+          "hardware_claim": false,
+          "mask": {
+            "compared_pixels": 19712,
+            "masked_pixels": 3328,
+            "path": "masks/cgb.bin",
+            "sha256": "95219a5b1d6d5df70de9af7896cb9bc9c2194e133e1070c67e4414aa58d227a9"
+          },
+          "mode": "cgb",
+          "profile": "cgb",
+          "reference": {
+            "path": "source/cgb/img/reference.png",
+            "sha256": "9ea9c262c5383353e77d715d021a0f7c5ccbe438f88082cb225756e50c4fdf01",
+            "size_bytes": 870
+          },
+          "rom": {
+            "path": "derivatives/cgb-acid2.gbc",
+            "sha256": "62a93fce12ef60938eefce81d02113a75e1a52b2631aa3d6f16388dc697837e2",
+            "size_bytes": 32768
+          },
+          "rom_kind": "cgb",
+          "runner_model": "cgb-cpu-e",
+          "runner_sha256": "986dd0fce4a967d03beea2d0c7462d3f5d91ab4e6d064569a78adecfe39e91e7",
+          "verdict": "pass"
+        }
+      ]
     },
-    "status": "admitted-before-runtime"
+    "status": "runtime-failed"
   },
   "gbmicrotest": {
     "accounting": {
@@ -10574,7 +10662,7 @@
         "manifest_sha256": "d3aedaa5d89f583bea2951a9a58a3190ff2314fafbfa53b7e63e98ed6349cb7c",
         "original_rom_bundled": false,
         "status": "committed-review-bundle-one-case-output-scope-supported",
-        "commit": "ce0cdca22b8338442a574f030e47f59f04c99fc2"
+        "commit": "3c31824e61e5f2b0b88912e8e7e29acf42a5a8ab"
       }
     },
     "status": "admitted-before-runtime"
@@ -10586,5 +10674,5 @@
     "size_bytes": 39813
   },
   "schema": "gabbaboy-diagnostic-closeout-v1",
-  "status": "admitted-before-runtime"
+  "status": "runtime-failed"
 }
