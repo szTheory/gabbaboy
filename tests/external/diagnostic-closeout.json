@@ -567,9 +567,7 @@
       "runtime_results": []
     },
     "blocked_by": [
-      "prebuilt-roms",
-      "embedded-logo",
-      "case-applicability"
+      "prebuilt-rom-output-scope"
     ],
     "cases": [
       {
@@ -860,18 +858,16 @@
       {
         "disposition": {
           "blocked_by": [
-            "prebuilt-roms",
-            "embedded-logo",
-            "case-applicability"
+            "prebuilt-rom-output-scope"
           ],
-          "reason": "Source review found an independent DIV expectation, but no ROM bytes, component output grants, per-case model evidence, or runner terminal bound are admitted.",
+          "reason": "The pinned original ROM and logo-free review derivative were hash-checked locally, and the case supports a DMG-CPU-B software diagnostic scope; no component-specific repository/public-CI grant for the compiled ROM output is established. No fixture was admitted, staged, or run.",
           "status": "blocked-candidate"
         },
         "name": "div_inc_timing_a",
         "prebuilt_rom": {
           "git_blob_sha1": "8ff913924540b1bbc4363744f020b38e96c94a3a",
           "path": "bin/div_inc_timing_a.gb",
-          "sha256": null,
+          "sha256": "1530b5a34af78e182c8b1f5f9043f8e5ae3e9f2fac13d43f3c5714eece282706",
           "size_bytes": 32768
         },
         "protocol_kind": "shared-verdict-macros",
@@ -10334,6 +10330,113 @@
       "tree_truncated": false
     },
     "source_review": {
+      "build_script": {
+        "commit": "463eb6bc0fe31d61781ef63060ad6d74090c0255",
+        "execution_status": "not-run; WLA-DX version is not pinned",
+        "git_blob_sha1": "eb0ddc1368e3a777ef9787dc056d756e95c19102",
+        "path": "build.sh",
+        "repository": "https://github.com/aappleby/gbmicrotest",
+        "sha256": "c726ca6214cb3861fef0da43da2eebc69f7c63e944b61746be5ec028db977488",
+        "size_bytes": 308
+      },
+      "header": {
+        "commit": "463eb6bc0fe31d61781ef63060ad6d74090c0255",
+        "git_blob_sha1": "aba48b4af33aabedc8e86adad5e5e692f6f4a348",
+        "path": "tests/header.inc",
+        "repository": "https://github.com/aappleby/gbmicrotest",
+        "sha256": "380ab2e41fee82c23881b13650e6301b79809e7baa1d3c828363156a70ba9afd",
+        "size_bytes": 956,
+        "url": "https://raw.githubusercontent.com/aappleby/gbmicrotest/463eb6bc0fe31d61781ef63060ad6d74090c0255/tests/header.inc"
+      },
+      "local_rom_review": {
+        "admission_status": "not-attempted",
+        "derivative": {
+          "kind": "local bootless header derivative; not admitted or staged",
+          "path": "derived/div_inc_timing_a.bootless.gb",
+          "sha256": "53b0624af64524fe7cdf9b0aed3456ca60c7b30fe25cd5202b6b77855f57ffa8",
+          "size_bytes": 32768
+        },
+        "original": {
+          "git_blob_sha1": "8ff913924540b1bbc4363744f020b38e96c94a3a",
+          "global_checksum_0x014E_0x014F": "0x2C3E",
+          "global_checksum_valid": true,
+          "header_checksum_0x014D": "0x07",
+          "header_checksum_valid": true,
+          "logo_range_sha256": "daf4cabdc852baa0291849203f0b41fd0b4ecd58e0d7aff4a509f5de4d7f9a2e",
+          "path": "bin/div_inc_timing_a.gb",
+          "sha256": "1530b5a34af78e182c8b1f5f9043f8e5ae3e9f2fac13d43f3c5714eece282706",
+          "size_bytes": 32768
+        },
+        "review_area": "build/phase24/source-review/gbmicrotest (ignored local review only)",
+        "runtime_status": "not-run",
+        "source_commit": "463eb6bc0fe31d61781ef63060ad6d74090c0255",
+        "staging_status": "not-staged",
+        "transform": {
+          "all_changed_offsets_allowlisted": true,
+          "all_other_bytes_identical": true,
+          "changed_offset_count": 44,
+          "changed_offset_ranges": [
+            [
+              "0x0104",
+              "0x0109"
+            ],
+            [
+              "0x010B",
+              "0x010D"
+            ],
+            [
+              "0x010F",
+              "0x010F"
+            ],
+            [
+              "0x0111",
+              "0x0111"
+            ],
+            [
+              "0x0113",
+              "0x0113"
+            ],
+            [
+              "0x0115",
+              "0x0119"
+            ],
+            [
+              "0x011B",
+              "0x0133"
+            ],
+            [
+              "0x014E",
+              "0x014F"
+            ]
+          ],
+          "derivative_global_checksum_0x014E_0x014F": "0x16F8",
+          "derivative_global_checksum_valid": true,
+          "header_checksum_0x014D_preserved": true,
+          "logo_range_zeroed": true,
+          "recomputed_global_checksum_range": [
+            "0x014E",
+            "0x014F"
+          ],
+          "zero_range": [
+            "0x0104",
+            "0x0133"
+          ]
+        }
+      },
+      "logo_scope": {
+        "current_derivative_status": "logo bytes removed from local review derivative",
+        "derivative_range_all_zero": true,
+        "original_logo_range_sha256": "daf4cabdc852baa0291849203f0b41fd0b4ecd58e0d7aff4a509f5de4d7f9a2e",
+        "source_directive": ".nintendologo",
+        "source_header_git_blob_sha1": "aba48b4af33aabedc8e86adad5e5e692f6f4a348",
+        "source_header_path": "tests/header.inc",
+        "source_header_sha256": "380ab2e41fee82c23881b13650e6301b79809e7baa1d3c828363156a70ba9afd",
+        "t5_upstream_component_outcome": "unresolved",
+        "zeroed_range": [
+          "0x0104",
+          "0x0133"
+        ]
+      },
       "macros": {
         "commit": "463eb6bc0fe31d61781ef63060ad6d74090c0255",
         "git_blob_sha1": "085c7d472fbaa724756968936ea84861962af8f1",
@@ -10345,7 +10448,34 @@
       },
       "model_applicability": {
         "candidate_scope": "DMG-CPU-B software diagnostic only",
-        "reason": "The pinned suite statement is uncertain and suite-wide; it does not establish this case's hardware revision or CGB applicability.",
+        "cgb_applicability": "not-established",
+        "evidence": [
+          "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/tests/div_inc_timing_a.s",
+          "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/tests/header.inc",
+          "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/tests/macros.inc"
+        ],
+        "hardware_applicability": "not-established; no hardware or DMG-CPU-08 claim",
+        "reason": "The exact case says pass - dmg, selects a DMG header with .romdmg, and declares DIV=0 after its stated operations. This supports using the source-defined vector against the project's DMG-CPU-B software model only. The README's uncertain DMG-CPU-08 statement is suite-wide and is not used as case-level hardware evidence.",
+        "status": "supported"
+      },
+      "output_scope": {
+        "component": "compiled bootless ROM output",
+        "finding": "The pinned MIT notice grants broad rights to the undefined term Software; the README identifies prebuilt ROMs in bin/ and an unpinned WLA-DX build instruction but gives no explicit license scope for prebuilt or generated ROM outputs. No component-specific repository/public-CI output grant is established by these texts.",
+        "readme": {
+          "git_blob_sha1": "e184a72ed5f6f1b76f5124762c6ed3f79f139e4e",
+          "path": "README.md",
+          "sha256": "15610d3e922658503b5250f1e9e0106d3ad6bdee7ff43003147f5871a81a3b92",
+          "size_bytes": 1616,
+          "url": "https://raw.githubusercontent.com/aappleby/gbmicrotest/463eb6bc0fe31d61781ef63060ad6d74090c0255/README.md"
+        },
+        "required_evidence": "An authoritative component-specific grant or source statement that the pinned prebuilt/compiled ROM output may be redistributed in the repository and public CI.",
+        "root_license": {
+          "git_blob_sha1": "ca05fdbac9ec607636037171ee3856ea2a3378dd",
+          "path": "LICENSE",
+          "sha256": "0b3557142dfcce65428fafb9c8254d9d59c027a008af4810867efd7342b77c25",
+          "size_bytes": 1065,
+          "url": "https://raw.githubusercontent.com/aappleby/gbmicrotest/463eb6bc0fe31d61781ef63060ad6d74090c0255/LICENSE"
+        },
         "status": "unresolved"
       },
       "protocol": {

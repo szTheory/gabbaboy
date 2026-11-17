@@ -67,6 +67,17 @@ GBMICROTEST_SELECTED_SOURCE_SHA256 = "ea6017487ac860fa29e54c43d2d1a73659ed3662b7
 GBMICROTEST_MACROS_BLOB = "085c7d472fbaa724756968936ea84861962af8f1"
 GBMICROTEST_MACROS_SIZE = 6175
 GBMICROTEST_MACROS_SHA256 = "d3964ffc94d5ef110b3536b7bb9448840ef88d718ebca1ee662670680164c3a3"
+GBMICROTEST_SELECTED_ROM_BLOB = "8ff913924540b1bbc4363744f020b38e96c94a3a"
+GBMICROTEST_SELECTED_ROM_SHA256 = "1530b5a34af78e182c8b1f5f9043f8e5ae3e9f2fac13d43f3c5714eece282706"
+GBMICROTEST_SELECTED_DERIVATIVE_SHA256 = "53b0624af64524fe7cdf9b0aed3456ca60c7b30fe25cd5202b6b77855f57ffa8"
+GBMICROTEST_LICENSE_BLOB = "ca05fdbac9ec607636037171ee3856ea2a3378dd"
+GBMICROTEST_LICENSE_SHA256 = "0b3557142dfcce65428fafb9c8254d9d59c027a008af4810867efd7342b77c25"
+GBMICROTEST_README_BLOB = "e184a72ed5f6f1b76f5124762c6ed3f79f139e4e"
+GBMICROTEST_README_SHA256 = "15610d3e922658503b5250f1e9e0106d3ad6bdee7ff43003147f5871a81a3b92"
+GBMICROTEST_HEADER_BLOB = "aba48b4af33aabedc8e86adad5e5e692f6f4a348"
+GBMICROTEST_HEADER_SHA256 = "380ab2e41fee82c23881b13650e6301b79809e7baa1d3c828363156a70ba9afd"
+GBMICROTEST_BUILD_BLOB = "eb0ddc1368e3a777ef9787dc056d756e95c19102"
+GBMICROTEST_BUILD_SHA256 = "c726ca6214cb3861fef0da43da2eebc69f7c63e944b61746be5ec028db977488"
 GBMICROTEST_INLINE_CASES = frozenset(("mbc1_ram_banks", "mbc1_rom_banks"))
 GBMICROTEST_INITIAL_EXCLUSIONS = frozenset((
     "000-oam_lock", "000-write_to_x8000", "001-vram_unlocked", "002-vram_locked",
@@ -563,6 +574,65 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
         expected_source_review = {
             "selected_case": GBMICROTEST_SELECTED_CASE,
             "selection_basis": "One DIV-counter software diagnostic selected from the pinned shared-macro protocol group before any emulator outcome was observed.",
+            "build_script": {
+                "commit": GBMICROTEST_COMMIT,
+                "git_blob_sha1": GBMICROTEST_BUILD_BLOB,
+                "path": "build.sh",
+                "repository": "https://github.com/aappleby/gbmicrotest",
+                "sha256": GBMICROTEST_BUILD_SHA256,
+                "size_bytes": 308,
+                "execution_status": "not-run; WLA-DX version is not pinned",
+            },
+            "header": {
+                "repository": "https://github.com/aappleby/gbmicrotest",
+                "commit": GBMICROTEST_COMMIT,
+                "path": "tests/header.inc",
+                "git_blob_sha1": GBMICROTEST_HEADER_BLOB,
+                "size_bytes": 956,
+                "sha256": GBMICROTEST_HEADER_SHA256,
+                "url": f"https://raw.githubusercontent.com/aappleby/gbmicrotest/{GBMICROTEST_COMMIT}/tests/header.inc",
+            },
+            "local_rom_review": {
+                "review_area": "build/phase24/source-review/gbmicrotest (ignored local review only)",
+                "source_commit": GBMICROTEST_COMMIT,
+                "admission_status": "not-attempted",
+                "staging_status": "not-staged",
+                "runtime_status": "not-run",
+                "original": {
+                    "path": "bin/div_inc_timing_a.gb",
+                    "git_blob_sha1": GBMICROTEST_SELECTED_ROM_BLOB,
+                    "sha256": GBMICROTEST_SELECTED_ROM_SHA256,
+                    "size_bytes": 32768,
+                    "header_checksum_0x014D": "0x07",
+                    "header_checksum_valid": True,
+                    "global_checksum_0x014E_0x014F": "0x2C3E",
+                    "global_checksum_valid": True,
+                    "logo_range_sha256": "daf4cabdc852baa0291849203f0b41fd0b4ecd58e0d7aff4a509f5de4d7f9a2e",
+                },
+                "derivative": {
+                    "path": "derived/div_inc_timing_a.bootless.gb",
+                    "sha256": GBMICROTEST_SELECTED_DERIVATIVE_SHA256,
+                    "size_bytes": 32768,
+                    "kind": "local bootless header derivative; not admitted or staged",
+                },
+                "transform": {
+                    "zero_range": ["0x0104", "0x0133"],
+                    "recomputed_global_checksum_range": ["0x014E", "0x014F"],
+                    "changed_offset_count": 44,
+                    "changed_offset_ranges": [
+                        ["0x0104", "0x0109"], ["0x010B", "0x010D"],
+                        ["0x010F", "0x010F"], ["0x0111", "0x0111"],
+                        ["0x0113", "0x0113"], ["0x0115", "0x0119"],
+                        ["0x011B", "0x0133"], ["0x014E", "0x014F"],
+                    ],
+                    "all_changed_offsets_allowlisted": True,
+                    "all_other_bytes_identical": True,
+                    "header_checksum_0x014D_preserved": True,
+                    "logo_range_zeroed": True,
+                    "derivative_global_checksum_0x014E_0x014F": "0x16F8",
+                    "derivative_global_checksum_valid": True,
+                },
+            },
             "source": {
                 "repository": "https://github.com/aappleby/gbmicrotest",
                 "commit": GBMICROTEST_COMMIT,
@@ -581,6 +651,37 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
                 "sha256": GBMICROTEST_MACROS_SHA256,
                 "url": f"https://raw.githubusercontent.com/aappleby/gbmicrotest/{GBMICROTEST_COMMIT}/tests/macros.inc",
             },
+            "output_scope": {
+                "status": "unresolved",
+                "component": "compiled bootless ROM output",
+                "root_license": {
+                    "path": "LICENSE",
+                    "git_blob_sha1": GBMICROTEST_LICENSE_BLOB,
+                    "size_bytes": 1065,
+                    "sha256": GBMICROTEST_LICENSE_SHA256,
+                    "url": f"https://raw.githubusercontent.com/aappleby/gbmicrotest/{GBMICROTEST_COMMIT}/LICENSE",
+                },
+                "readme": {
+                    "path": "README.md",
+                    "git_blob_sha1": GBMICROTEST_README_BLOB,
+                    "size_bytes": 1616,
+                    "sha256": GBMICROTEST_README_SHA256,
+                    "url": f"https://raw.githubusercontent.com/aappleby/gbmicrotest/{GBMICROTEST_COMMIT}/README.md",
+                },
+                "finding": "The pinned MIT notice grants broad rights to the undefined term Software; the README identifies prebuilt ROMs in bin/ and an unpinned WLA-DX build instruction but gives no explicit license scope for prebuilt or generated ROM outputs. No component-specific repository/public-CI output grant is established by these texts.",
+                "required_evidence": "An authoritative component-specific grant or source statement that the pinned prebuilt/compiled ROM output may be redistributed in the repository and public CI.",
+            },
+            "logo_scope": {
+                "t5_upstream_component_outcome": "unresolved",
+                "current_derivative_status": "logo bytes removed from local review derivative",
+                "source_header_path": "tests/header.inc",
+                "source_header_git_blob_sha1": GBMICROTEST_HEADER_BLOB,
+                "source_header_sha256": GBMICROTEST_HEADER_SHA256,
+                "source_directive": ".nintendologo",
+                "original_logo_range_sha256": "daf4cabdc852baa0291849203f0b41fd0b4ecd58e0d7aff4a509f5de4d7f9a2e",
+                "zeroed_range": ["0x0104", "0x0133"],
+                "derivative_range_all_zero": True,
+            },
             "protocol": {
                 "initial_operations": ["clear DIV", "execute 60 NOPs", "read DIV"],
                 "expected_div": 0,
@@ -591,9 +692,16 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
                 "runtime_status": "not-run",
             },
             "model_applicability": {
-                "status": "unresolved",
+                "status": "supported",
                 "candidate_scope": "DMG-CPU-B software diagnostic only",
-                "reason": "The pinned suite statement is uncertain and suite-wide; it does not establish this case's hardware revision or CGB applicability.",
+                "evidence": [
+                    f"https://github.com/aappleby/gbmicrotest/blob/{GBMICROTEST_COMMIT}/tests/div_inc_timing_a.s",
+                    f"https://github.com/aappleby/gbmicrotest/blob/{GBMICROTEST_COMMIT}/tests/header.inc",
+                    f"https://github.com/aappleby/gbmicrotest/blob/{GBMICROTEST_COMMIT}/tests/macros.inc",
+                ],
+                "reason": "The exact case says pass - dmg, selects a DMG header with .romdmg, and declares DIV=0 after its stated operations. This supports using the source-defined vector against the project's DMG-CPU-B software model only. The README's uncertain DMG-CPU-08 statement is suite-wide and is not used as case-level hardware evidence.",
+                "hardware_applicability": "not-established; no hardware or DMG-CPU-08 claim",
+                "cgb_applicability": "not-established",
             },
         }
         if gbmicrotest.get("status") != "blocked-before-admission":
@@ -605,7 +713,7 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-source-mutated")
         if gbmicrotest.get("source_review") != expected_source_review:
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-source-review-mutated")
-        if gbmicrotest.get("blocked_by") != ["prebuilt-roms", "embedded-logo", "case-applicability"]:
+        if gbmicrotest.get("blocked_by") != ["prebuilt-rom-output-scope"]:
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-blockers-mutated")
         if gbmicrotest.get("cohort_status") != "blocked-before-admission":
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-cohort-status-mutated")
@@ -623,8 +731,8 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
             if name == GBMICROTEST_SELECTED_CASE:
                 disposition = {
                     "status": "blocked-candidate",
-                    "blocked_by": ["prebuilt-roms", "embedded-logo", "case-applicability"],
-                    "reason": "Source review found an independent DIV expectation, but no ROM bytes, component output grants, per-case model evidence, or runner terminal bound are admitted.",
+                    "blocked_by": ["prebuilt-rom-output-scope"],
+                    "reason": "The pinned original ROM and logo-free review derivative were hash-checked locally, and the case supports a DMG-CPU-B software diagnostic scope; no component-specific repository/public-CI grant for the compiled ROM output is established. No fixture was admitted, staged, or run.",
                 }
             else:
                 excluded_names.append(name)
@@ -639,7 +747,8 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
                 "prebuilt_rom": {"path": rom_identity["path"],
                                  "git_blob_sha1": rom_identity["git_blob_sha1"],
                                  "size_bytes": rom_identity["size_bytes"],
-                                 "sha256": None},
+                                 "sha256": (GBMICROTEST_SELECTED_ROM_SHA256
+                                            if name == GBMICROTEST_SELECTED_CASE else None)},
                 "protocol_kind": item["protocol"]["kind"],
                 "disposition": disposition,
             })
@@ -658,8 +767,7 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-accounting-mutated")
         if cohort_cases != expected_rows:
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-case-accounting-mutated")
-        blockers.extend(("gbmicrotest-rom-byte-and-logo-rights-unresolved",
-                         "gbmicrotest-case-applicability-unresolved"))
+        blockers.append("gbmicrotest-rom-output-scope-unresolved")
     if record.get("status") != "blocked-before-admission":
         raise AdmissionRefused("diagnostic-closeout-status-mutated")
     record["_blockers"] = blockers
@@ -1281,6 +1389,47 @@ class AdmissionControlTests(unittest.TestCase):
         self.assertEqual(accounting["blocked_candidate_names"], [GBMICROTEST_SELECTED_CASE])
         self.assertEqual(len(accounting["excluded_names"]), GBMICROTEST_CASE_COUNT - 1)
         self.assertFalse(accounting["final_execution_accounting_complete"])
+        self.assertEqual(validated["_blockers"], ["gbmicrotest-rom-output-scope-unresolved"])
+        review = validated["gbmicrotest"]["source_review"]
+        self.assertEqual(review["model_applicability"]["status"], "supported")
+        self.assertEqual(review["model_applicability"]["hardware_applicability"],
+                         "not-established; no hardware or DMG-CPU-08 claim")
+        selected = next(item for item in validated["gbmicrotest"]["cases"]
+                        if item["name"] == GBMICROTEST_SELECTED_CASE)
+        self.assertEqual(selected["prebuilt_rom"]["sha256"], GBMICROTEST_SELECTED_ROM_SHA256)
+        self.assertEqual(selected["disposition"]["blocked_by"], ["prebuilt-rom-output-scope"])
+
+    def test_gbmicrotest_local_derivative_digest_and_offset_allowlist_are_bound(self) -> None:
+        inventory = validate_gbmicrotest_inventory(ROOT)
+        for field, value in (
+                ("sha256", "a" * 64),
+                ("all_changed_offsets_allowlisted", False)):
+            record, rights = self._diagnostic_closeout_inputs()
+            review = record["gbmicrotest"]["source_review"]["local_rom_review"]
+            if field == "sha256":
+                review["derivative"][field] = value
+            else:
+                review["transform"][field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(
+                    AdmissionRefused, "diagnostic-closeout-gbmicrotest-source-review-mutated"):
+                validate_diagnostic_closeout_record(record, rights, "gbmicrotest", inventory)
+
+    def test_gbmicrotest_output_scope_cannot_be_promoted_by_root_mit_label(self) -> None:
+        record, rights = self._diagnostic_closeout_inputs()
+        inventory = validate_gbmicrotest_inventory(ROOT)
+        record["gbmicrotest"]["source_review"]["output_scope"]["status"] = "supported"
+        with self.assertRaisesRegex(AdmissionRefused, "diagnostic-closeout-gbmicrotest-source-review-mutated"):
+            validate_diagnostic_closeout_record(record, rights, "gbmicrotest", inventory)
+
+    def test_gbmicrotest_software_scope_does_not_promote_hardware_or_cgb_claims(self) -> None:
+        inventory = validate_gbmicrotest_inventory(ROOT)
+        for field, value in (("hardware_applicability", "supported"),
+                             ("cgb_applicability", "supported")):
+            record, rights = self._diagnostic_closeout_inputs()
+            record["gbmicrotest"]["source_review"]["model_applicability"][field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(
+                    AdmissionRefused, "diagnostic-closeout-gbmicrotest-source-review-mutated"):
+                validate_diagnostic_closeout_record(record, rights, "gbmicrotest", inventory)
 
     def test_gbmicrotest_accounting_refuses_candidate_promotion(self) -> None:
         record, rights = self._diagnostic_closeout_inputs()
