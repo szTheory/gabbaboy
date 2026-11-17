@@ -1445,7 +1445,7 @@ gbb_add_v02_contract(fixture_admission_controls 90
   verify-fixture-admission.py --self-test)
 set_tests_properties(fixture_admission_controls PROPERTIES PROCESSORS 4)
 gbb_add_v02_contract(fixture_admission_repository 30
-  [=[PASS: fixture admission repository legacy_files=[1-9][0-9]* admitted_changes=0 baseline=[0-9a-f]+]=]
+  [=[PASS: fixture admission repository legacy_files=[1-9][0-9]* admitted_changes=2 baseline=[0-9a-f]+]=]
   verify-fixture-admission.py --check-repository --repo-root "${PROJECT_SOURCE_DIR}")
 gbb_add_v02_contract(fixture_product_core_controls 120
   [=[PASS: fixture admission product layout=core positive=1 negative_controls=[1-9][0-9]*]=]

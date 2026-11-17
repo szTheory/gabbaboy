@@ -39,5 +39,5 @@
     "label": "Resume D-210 closeout recovery (Task 8 only)",
     "reason": "D-210 authorizes only Phase 24 Plan 24-01 Task 8. Task 8 is ordered before the deferred Task 7; Task 7 has an explicit owner-authorization precondition. Preserve the Acid2 no-replay stop, FIXT-01 Pending, and the one-review/one-protected-PR-matrix limit."
   },
-  "updated_at": "2026-11-17T21:08:48Z"
+  "updated_at": "2026-11-17T21:13:02Z"
 }
