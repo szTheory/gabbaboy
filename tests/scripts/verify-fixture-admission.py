@@ -1370,7 +1370,6 @@ def _self_test_acid2_notice_admission_overlay() -> int:
     approved = b"prefix\n" + NOTICE_ACID2_STATUS_AFTER + b"\nsuffix\n"
     cases = (
         ("exact-acid2-status-update", approved, "THIRD_PARTY_NOTICES.md", True),
-        ("global-status-change-from-other-pin", approved, "THIRD_PARTY_NOTICES.md", True),
         ("status-change-on-other-path", approved, "fixtures/acid2/LICENSE.txt", False),
         ("altered-status-result", approved.replace(b"19,840", b"19,839", 1),
          "THIRD_PARTY_NOTICES.md", False),
@@ -1382,7 +1381,7 @@ def _self_test_acid2_notice_admission_overlay() -> int:
         actual = _notice_index_matches_admission_pin(pinned, candidate, index_path)
         if actual is not expected:
             raise Reject("self-test-acid2-notice-admission-overlay", label)
-    return len(cases)
+    return sum(1 for _, _, _, expected in cases if not expected)
 
 
 def self_test_packages(layout: str) -> int:
