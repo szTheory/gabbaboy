@@ -943,7 +943,8 @@ def _validate_acid2_runtime_result(value: object) -> dict[str, Any]:
     for row, profile in zip(comparisons, ACID2_COMPARISON_PROFILES, strict=True):
         expected = ACID2_PROFILE_EXPECTATIONS[profile]
         kind = expected["rom_kind"]
-        derivative_path, derivative_sha, model = ACID2_DERIVATIVES[kind]
+        derivative_path, derivative_sha, _derivative_model = ACID2_DERIVATIVES[kind]
+        model = expected["runner_model"]
         rom = row.get("rom") if isinstance(row, dict) else None
         reference = row.get("reference") if isinstance(row, dict) else None
         mask = row.get("mask") if isinstance(row, dict) else None
