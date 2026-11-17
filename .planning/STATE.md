@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 milestone_name: Evidence Floor
-current_phase: GB-24
+current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: 01
-status: in_progress
-stopped_at: Phase 24 plan execution and bounded regression gates complete; phase verification pending
-last_updated: "2026-11-17T01:02:29Z"
-state_head: 56b7b62025929d9ddddb5bcca03de5b2f6505e49
+current_plan: Not started
+status: completed
+stopped_at: Phase 24 complete — v0.4 milestone audit and closeout remain open
+last_updated: "2026-11-17T01:25:13Z"
+state_head: 5231897f5b9fb1ab5e826904af23197bf4fe2678
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 33
   completed_plans: 33
-  percent: 83
+  percent: 100
 last_activity: 2026-11-16
 ---
 
@@ -22,13 +22,13 @@ last_activity: 2026-11-16
 
 ## Current Position
 
-**Current Phase:** GB-24
+**Current Phase:** 24
 **Current Phase Name:** Resolve remaining v0.4 evidence and verification gaps
-**Current Plan:** 1 of 1
-**Status:** Plan 24-01 and its bounded recovery gates are complete; phase verification is next
-**Progress:** [████████░░] 83%
+**Current Plan:** Not started
+**Status:** All six planned phases are complete; v0.4 milestone audit and closeout remain open
+**Progress:** [██████████] 100%
 
-Completed stages: Phase 23.1 verification passed 18/18 after the owner confirmed the recorded Task 11 → clean review → verification-only order. Phase 24 Plan 01 Tasks 1–4, shared closure, one clean exact-candidate recovery review, and the two authorized focused CTests are complete. The BOM bypass was fixed at `65b31a69840bfec232806f808f03fb44c6e21174`; its 632-control self-test, six-phase/40-plan cap check, configure-only inventory, and focused `plan_cap`/`planning_hygiene_controls` run passed. Phase verification is next. Preserve the 40-plan ceiling and every suite, lifecycle, release, fixture, rights, and milestone stop. The v0.4 audit remains open with `gaps_found`; all four requirements remain Pending, Phase 20/21 stay stale, and D-103 remains unfulfilled.
+Completed stages: Phase 23.1 verification passed 18/18 after the owner confirmed the recorded Task 11 → clean review → verification-only order. Phase 24 Plan 01 Tasks 1–4, shared closure, one clean exact-candidate recovery review, and the two authorized focused CTests are complete. The BOM bypass was fixed at `65b31a69840bfec232806f808f03fb44c6e21174`; its 632-control self-test, six-phase/40-plan cap check, configure-only inventory, and focused `plan_cap`/`planning_hygiene_controls` run passed. Phase 24 verification passed 6/6 and all six planned phases are complete. The v0.4 milestone audit remains `gaps_found`; all four requirements remain Pending, Phase 20/21 stay stale, and D-103 remains unfulfilled. During `phase.complete`, GSD inferred completion of all phase-frontmatter requirement IDs and changed the four assessment-only requirements to Complete; those tracker changes were reverted to Pending, as required by the Phase 24 scope. Preserve the 40-plan ceiling and every suite, lifecycle, release, fixture, rights, and milestone stop. The existing authorized continuation is `$gsd-autonomous --from 23.1`; it must stop at any unresolved owner or D-103 gate.
 
 Historical D-200 snapshot: Task 8 corrected YAML syntax-whitespace handling and passed its bounded checks at candidate `9991327df736f668bd8c98f4fd9441a4c563905b`. At that time, the D-200 review and phase verification were pending; later D-201–D-203 recoveries are recorded below and in the Phase 23.1 artifacts.
 
@@ -55,13 +55,13 @@ The **v0.4 milestone audit remains open with gaps found**. Phase 22 has a histor
 
 Diagnostics remain metadata-only: 513 names, seven unresolved gates, admitted=0, executed=0; 482 protocol candidates remain blocked and 31 initial exclusions do not complete suite accounting. Potion Panic stopped before a ref/commit was returned from its creator-linked repository, and its fork is not source authority. µCity 1.3's required source include has no identified grant/notice under the recorded scope. Neither outcome establishes permission or a license prohibition.
 
-Phase 23.1 is complete with verification passed 18/18. D-203 Task 11 fixed CR-07; the sole exact-candidate review was clean; the owner confirmed the recorded execution order. Only `plan_cap` and `planning_hygiene_controls` ran at that final regression gate. Phase 24 Plan 01 and its D-07–D-10 recovery gates are complete; the exact-candidate review is clean and both focused CTests passed. The phase verifier is next. All four requirements remain Pending under their original owners. D-103's exact-final-head broad suite remains unfulfilled; no broad local suite or third local lifecycle retest is permitted. The owner chose to keep v0.4 open without accepting any requirement gaps. Next actor: the orchestrator, which dispatches the phase verifier without repeating the capped review or broad regression gate; after its report is passed, `$gsd-verify-work 24` can consume that result and complete the phase transition.
+Phase 23.1 is complete with verification passed 18/18. D-203 Task 11 fixed CR-07; the sole exact-candidate review was clean; the owner confirmed the recorded execution order. Only `plan_cap` and `planning_hygiene_controls` ran at that final regression gate. Phase 24 Plan 01 and its D-07–D-10 recovery gates are complete; the exact-candidate review is clean, both focused CTests passed, and the verifier passed 6/6. All six planned phases are complete, but v0.4 remains open with `gaps_found`; all four requirements remain Pending under their original owners. D-103's exact-final-head broad suite remains unfulfilled; no broad local suite or third local lifecycle retest is permitted. The owner chose not to accept any requirement gaps. The GSD phase-completion command briefly promoted all requirement IDs from Phase 24's plan despite its assessment-only contract; those four tracker rows were restored to Pending. Next actor: the orchestrator, continuing the already-authorized `$gsd-autonomous --from 23.1` route through the milestone audit while preserving every existing stop.
 
 Historical D-199 checkpoint (superseded): The tested source candidate was `7fda5b2fb11d62a680dc4a7340eee7c85e2caf90`: the exact-candidate self-test passed with `controls=314`, the immutable report and handoff stages passed against original baseline `1d74b032d8106516b0fd22d6cd02ddaf916b2031`, the 125/124 wrapper boundary behaved as required, SUMMARY coverage and shared UAT closure passed, and only `plan_cap` plus `planning_hygiene_controls` passed after configure-only generation bound to that full candidate. The first handoff wording check failed; the required stop/route/phase terms were committed at `653ed2b3e501bc31c8a12e99ef800822889e08ff`, and the handoff recheck passed at the tested candidate. At that point, Task 7 checks were complete; the sole exact-candidate review was pending and phase verification had not run. D-103's exact-final-head full-suite gate remains unfulfilled; no broad local suite, no third local lifecycle retest, no release retry, and no tag/asset/rights action is permitted. The owner-only audit route is `/gsd-audit-milestone v0.4`. At that checkpoint Phase 23.1 and v0.4 were open; four requirements were Pending and no next phase was selected. See the current handoff above for the later D-203 result.
 
 Superseded Phase 24 handoff (before the fresh review): Plan execution and automated closure were complete, and the configured independent reviews and phase verifier had not run. This earlier route was superseded when the exact-candidate review found CR-01.
 
-Current handoff: Phase 24 Plan 01 and its one authorized Task 4 correction, exact-candidate review, and focused regression gate are complete. Candidate `65b31a69840bfec232806f808f03fb44c6e21174` passed the 632-control self-test, the six-phase/40-plan cap check, clean independent review, and the two configured focused CTests. The next actor is the orchestrator, which dispatches the phase verifier once using these existing results; it must not rerun code review or the configured broad regression. After verification status is `passed`, run `$gsd-verify-work 24` to complete the phase transition. The immutable assessment input is `f511baa8c0330f5cd90d56da55d79dbc873b0559`; the protected baseline is `f6fe166a7c2a3668f5a412a82b648dd062329d3c`; the fixed and reviewed candidate is `65b31a69840bfec232806f808f03fb44c6e21174`. FIXT-01 — Pending, original owner Phase 21. RIGHTS-01 — Pending, original owner Phase 20. DIAG-01 — Pending, original owner Phase 22. DIAG-02 — Pending, original owner Phase 22. The v0.4 audit remains open with `gaps_found`; Phase 20 and Phase 21 are stale; D-103 is unfulfilled. No broad local suite, no third local lifecycle retest, no release retry, no tag/asset/rights action, and no fixture admission. Evidence: [24-EVIDENCE.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-EVIDENCE.md), [24-01-SUMMARY.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-SUMMARY.md), [24-VALIDATION.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md), [24-RECOVERY-REVIEW.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-RECOVERY-REVIEW.md), and [24-UAT.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-UAT.md).
+Current handoff: Phase 24 is verified and complete. The corrected candidate `65b31a69840bfec232806f808f03fb44c6e21174` passed the 632-control self-test, six-phase/40-plan cap check, clean independent review, and only the two configured focused CTests; [24-VERIFICATION.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VERIFICATION.md) passed 6/6. The four assessment-only requirements remain Pending; Phase 20/21 remain stale; v0.4 remains open with `gaps_found`; D-103 remains unfulfilled. `phase.complete` incorrectly promoted those four requirement rows from the Phase 24 plan's requirements list, so they were restored to Pending. No Phase 25 has been selected. The next actor is the orchestrator, continuing `$gsd-autonomous --from 23.1` toward the milestone audit and stopping at unresolved owner or D-103 gates. No broad local suite, third local lifecycle retest, release retry, tag/asset/rights action, or fixture admission is authorized. Evidence: [24-EVIDENCE.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-EVIDENCE.md), [24-01-SUMMARY.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-SUMMARY.md), [24-VALIDATION.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md), [24-RECOVERY-REVIEW.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-RECOVERY-REVIEW.md), and [24-VERIFICATION.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VERIFICATION.md).
 
 ## Accumulated Context
 
@@ -105,13 +105,13 @@ Current handoff: Phase 24 Plan 01 and its one authorized Task 4 correction, exac
 - [Phase 24]: Phase 24 assessment keeps each original v0.4 criterion, owner, tracker status, audit status, historical outcome, freshness, boundary, and remaining gate distinct.
 - [Phase 24]: D-205 remains the exact one-plan Phase 24 exception within the 40-plan ceiling; the assessment completes no original requirement and does not satisfy D-103.
 - [Phase 24]: The configured phase1 tests are restricted to plan_cap and planning_hygiene_controls at the committed candidate; preserve the 30-second timeout and 125-control floor.
-- [Phase 24]: D-07–D-10 authorized exactly one same-plan Task 4 and one independent exact-candidate review for the BOM plan-cap bypass. Task 4, the clean review, and the two focused CTests are complete; next dispatch the phase verifier without repeating the exhausted review or broad regression gate, then run `$gsd-verify-work 24` after the report is passed.
+- [Phase 24]: D-07–D-10 authorized exactly one same-plan Task 4 and one independent exact-candidate review for the BOM plan-cap bypass. Task 4, the clean review, the two focused CTests, and Phase 24 verification passed; all phase plans are complete. Continue the existing v0.4 authorization with `$gsd-autonomous --from 23.1`, preserving the four Pending requirements and D-103 stop.
 
 ## Session
 
-**Last session:** 2026-11-17T01:02:29Z
-**Stopped at:** Phase 24 plan execution and authorized recovery gates complete; phase verification pending
+**Last session:** 2026-11-17T01:25:13Z
+**Stopped at:** Phase 24 complete — v0.4 milestone audit and closeout remain open
 **Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md
 
 ### Blockers
-None
+The v0.4 audit remains `gaps_found`; FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remain Pending, Phase 20/21 are stale, and D-103's exact-final-head suite is unfulfilled. No broad suite, third lifecycle retest, release retry, fixture admission, rights action, or milestone archival is authorized by the current evidence.

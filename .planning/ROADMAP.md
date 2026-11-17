@@ -22,7 +22,7 @@ Numbering continues after completed Phase 19. Decimal phases are reserved for ex
 - [x] **Phase 22: Synthetic Composition and Diagnostic Gate Assessment** — Preserve synthetic composition evidence and machine-check why the real diagnostic candidates remain unadmitted. Completed 2026-11-03; DIAG-01, DIAG-02, and RIGHTS-01 remain pending because all seven real-fixture gates remain unresolved.
 - [x] **Phase 23: Qualified v0.4.0 Release** — Published artifacts and support records carry only the evidence actually established. (completed 2026-11-13)
 - [x] **Phase 23.1: Close v0.4 requirement and verification gaps** (completed 2026-11-16)
-- [ ] **Phase 24: Resolve remaining v0.4 evidence and verification gaps**
+- [x] **Phase 24: Resolve remaining v0.4 evidence and verification gaps** (completed 2026-11-16)
 
 ## Phase Details
 
@@ -249,4 +249,4 @@ Phase 20 completed with no admitted fixture; RIGHTS-01 remains pending. Phase 21
 Plans:
 - [x] 24-01-PLAN.md — Add the immutable all-eight gap assessment, causal controls and exact D-205 cap exception; finish the owner-authorized BOM recovery within the same plan and record only the two focused CTests and shared automated closure.
 
-**Current handoff:** Plan 24-01 and its authorized recovery are complete. The clean exact-candidate review and the two focused CTests passed at `65b31a69840bfec232806f808f03fb44c6e21174`; the phase verifier is next. The verifier should consume these exact review and regression results without dispatching another review or the configured broad suite. After the verifier reports `passed`, use `$gsd-verify-work 24` to complete the phase transition. All four requirements remain Pending, Phase 20/21 remain stale, v0.4 stays open with `gaps_found`, D-103 remains unfulfilled, and existing limits remain in force.
+**Current handoff:** Phase 24 is complete; its verification passed 6/6 after the clean exact-candidate review and two focused CTests at `65b31a69840bfec232806f808f03fb44c6e21174`. All six planned phases are complete, but no Phase 25 has been selected and v0.4 remains open with `gaps_found`. The four requirements remain Pending, Phase 20/21 remain stale, and D-103 remains unfulfilled. Continue the existing authorized route with `$gsd-autonomous --from 23.1`; do not repeat Phase 24 review/tests or cross any suite, lifecycle, release, fixture, rights, or milestone stop.
