@@ -16,6 +16,13 @@ ROM-output statement. This interpretation does not cover the original ROM, the
 removed logo, the other 512 test ROMs, other sources, hardware behavior, or CGB
 behavior, and is not legal certainty. See fixtures/gbmicrotest/SOURCES.md.
 
+The Acid2 fixture contains reproduced DMG and CGB derivatives, unchanged pinned
+reference images, source-derived text masks, and complete notices. D-207 accepts
+the root MIT grant only for the exact pinned `img/` trees; that bounded inference
+does not extend to other commits or content. The mgblib font and Nintendo logo
+bytes are excluded. Runtime comparison has not been performed yet. See
+fixtures/acid2/SOURCES.md.
+
 GitHub generated source archives retain the admitted licensed fixtures and
 their notices, so every third-party fixture below travels with a source archive
 together with its license text. Installed core packages carry exactly the
@@ -31,6 +38,7 @@ that is actually present in the repository tree.
 | Material | Rights and distribution | Source / manifest SHA-256 | ROM SHA-256 | Notice SHA-256 |
 |---|---|---|---|---|
 | Original WRAM tracer | GabbaBoy contributors, MIT; RGBDS 1.0.1 is a build-time tool and is not bundled | `fixtures/tracer/manifest.json`: `59284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c`; source `tracer.asm`: `0c50c8020a7b18d65b17730bd599f1e55754ceb749b3bb2895cfb123e0f58d0b` | `ded6a499118b57539710892d58b4d7ced2269f08d447eed1451201d8ad65ec8d` | `fixtures/tracer/LICENSE.txt`: `8eb246a5af0a83cbc4a264018ea0af31a859540fe5dcf2ec65a46c067d4d144a` |
+| Acid2 controlled-composition fixtures (DMG and CGB) | Exact pinned Acid2 root MIT notices; D-207 bounded inference applies only to each exact `img/` tree; repository test fixture, not installed or packaged; mgblib font and Nintendo logo excluded | `fixtures/acid2/manifest.json`: `7f198d5964a8547d1a122d5d64d395547ba6f365264cdb00abf190a5880c5da6`; per-member pins in `derivatives.tar#build-manifest.json` | DMG `6d3e5aca5f6d2ba31337ae61c1994e56f1780196c96cc645d54de378d39bbe82`; CGB `62a93fce12ef60938eefce81d02113a75e1a52b2631aa3d6f16388dc697837e2` | `fixtures/acid2/LICENSE.txt`: `2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044` |
 | Original visible demo | GabbaBoy contributors, MIT; RGBDS 1.0.1 is build-time only | `fixtures/visible-demo/manifest.json`: `8c695ef04d4f65e286aa444d0dfbbc98b354b944fef0dc6ac6dc453c264a31a3`; source `demo.asm`: `930a92621fe3b5a862a50aee6f79bdae3f6bb8d8fe24f546a5d5ab737782d1ee` | `38afb54b40f4b6612906c7a68e367199d8bff135508a39d7acdc996bf3d86530` | `fixtures/visible-demo/LICENSE.txt`: `3ba0e4a2894cdab4de168266be80463105cde267051443fd046946e846d12e96` |
 | Original MBC1 continuation fixture | GabbaBoy contributors, MIT; original software fixture, not derived from a commercial game | `fixtures/mbc1-continuation/manifest.json`: `1c25c570be98ece42ff9069635fb07cf4559b578817373ec3bd4d3552e8809d1`; source `continuation.asm`: `ad82e0cd51eeb6d536421d20c4a5b88ee0c019a4e699c2c75de077a20c82ba94` | `f89bf3884ff10a702aa117f2963e6fe9ea8aeac3a9bc003f52b6c5ca6abfbbd2` | `fixtures/mbc1-continuation/LICENSE.txt`: `dcd87663c88f74f55d61a403e752985e8bc63cfa1341d499bb7a521e22a91b20` |
 | Libbet and the Magic Floor v0.08 test fixture | Third-party game, zlib; credits Damian Yerrick (program, 2018-2024) and Martin Korth (concept, 2002, 2012); `src/hardware.inc` in its build closure is CC0-1.0; per-asset rights rest on single-author history plus the repository-wide zlib licence, not a per-asset upstream grant; repository test fixture only, not installed or packaged | `fixtures/libbet/manifest.json`: `512d1b4de7656795dba07dc81b025593bd57a74288605eac88684da6b744f08a`; pinned upstream commit `46a765a2c01701bffb8c0b7dd6e4be3a6b193090` | `3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9` | `fixtures/libbet/LICENSE.txt`: `e4fb3c0ef61a0258517e2df3dea5cd7df9d2a2f2c51c9b5082de922b35eea65c` |
@@ -51,6 +59,7 @@ changed manifest or notice makes this table stale and fails the adoption check.
 
 | Fixture directory | `manifest.json` SHA-256 | `LICENSE.txt` SHA-256 |
 |---|---|---|
+| `acid2` | `7f198d5964a8547d1a122d5d64d395547ba6f365264cdb00abf190a5880c5da6` | `2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044` |
 | `gbmicrotest` | `d3aedaa5d89f583bea2951a9a58a3190ff2314fafbfa53b7e63e98ed6349cb7c` | `0b3557142dfcce65428fafb9c8254d9d59c027a008af4810867efd7342b77c25` |
 | `age` | `52a022327cc9b6eb9df2a6383b77cf8c006fca26e789c757c15dc2c58e1e4791` | `f369002da7f08e78ebfc2d9febbfb0316c78f535569e63b84cca8804a234fcef` |
 | `cgb-banking` | `99777e6c8ea35df41c25dab2c9e68d72ba3e7255bf174373492d7c2dd5d2cb2d` | `e9c731fc409c8d8d54d361a2bc8fec6029a65119f5508ce111c8a14f7c42985f` |
