@@ -8,6 +8,14 @@ is a third-party, zlib-licensed game used only by repository acceptance tests;
 it is not installed or packaged. The MIT-licensed Mooneye mbc2/mbc5 derivative ROMs are likewise repository test fixtures only. Each fixture's source, rights, build identity,
 and ROM digest are recorded in its manifest and local notice.
 
+The gbmicrotest fixture contains only the source-selected div_inc_timing_a case
+as one bootless derivative with Nintendo logo bytes removed. Its inclusion uses
+a bounded interpretation of the pinned root MIT notice for this modified copy,
+with the complete notice included; the upstream README does not make an explicit
+ROM-output statement. This interpretation does not cover the original ROM, the
+removed logo, the other 512 test ROMs, other sources, hardware behavior, or CGB
+behavior, and is not legal certainty. See fixtures/gbmicrotest/SOURCES.md.
+
 GitHub generated source archives retain the admitted licensed fixtures and
 their notices, so every third-party fixture below travels with a source archive
 together with its license text. Installed core packages carry exactly the
@@ -43,6 +51,7 @@ changed manifest or notice makes this table stale and fails the adoption check.
 
 | Fixture directory | `manifest.json` SHA-256 | `LICENSE.txt` SHA-256 |
 |---|---|---|
+| `gbmicrotest` | `d3aedaa5d89f583bea2951a9a58a3190ff2314fafbfa53b7e63e98ed6349cb7c` | `0b3557142dfcce65428fafb9c8254d9d59c027a008af4810867efd7342b77c25` |
 | `age` | `52a022327cc9b6eb9df2a6383b77cf8c006fca26e789c757c15dc2c58e1e4791` | `f369002da7f08e78ebfc2d9febbfb0316c78f535569e63b84cca8804a234fcef` |
 | `cgb-banking` | `99777e6c8ea35df41c25dab2c9e68d72ba3e7255bf174373492d7c2dd5d2cb2d` | `e9c731fc409c8d8d54d361a2bc8fec6029a65119f5508ce111c8a14f7c42985f` |
 | `cgb-colour` | `d5ea2b36abb53b9efea4f004bdfaae70dc4e126eb323008e559196adea1854bc` | `8f193ab468875468a514ac17a6cfec9a2e99a7cb9e2c5222f57dd9c646cab6e4` |

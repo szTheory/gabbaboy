@@ -1,0 +1,56 @@
+{
+  "case": {
+    "name": "div_inc_timing_a",
+    "original_rom_blob_sha1": "8ff913924540b1bbc4363744f020b38e96c94a3a",
+    "original_rom_sha256": "1530b5a34af78e182c8b1f5f9043f8e5ae3e9f2fac13d43f3c5714eece282706",
+    "original_rom_size_bytes": 32768,
+    "source_blob_sha1": "8b6d36902ca5ff2fee6f98c308639dfb309272cc",
+    "source_sha256": "ea6017487ac860fa29e54c43d2d1a73659ed3662b7ba3c7c91cc41faf5ef6deb"
+  },
+  "model_scope": "DMG-CPU-B software diagnostic only; no hardware, DMG-CPU-08, or CGB claim",
+  "output": {
+    "kind": "bootless header derivative",
+    "nintendo_logo_bytes_in_bundle": false,
+    "original_rom_in_bundle": false,
+    "sha256": "53b0624af64524fe7cdf9b0aed3456ca60c7b30fe25cd5202b6b77855f57ffa8",
+    "size_bytes": 32768
+  },
+  "output_rights_interpretation": {
+    "basis": [
+      "pinned root MIT grant applies to Software without a source-only restriction",
+      "OSI OSD permits compiled-form distribution and derived works",
+      "complete pinned MIT notice is included"
+    ],
+    "limit": "The upstream README does not explicitly state a binary-output license. This interpretation covers only this source-bound bootless derivative; it excludes the original ROM, removed logo, other 512 ROMs, and other sources, and is not legal certainty.",
+    "references": [
+      "https://opensource.org/license/mit",
+      "https://opensource.org/osd"
+    ],
+    "status": "bounded-inference-for-this-modified-copy-only"
+  },
+  "schema": "gabbaboy-gbmicrotest-one-case-identity-v1",
+  "source": {
+    "commit": "463eb6bc0fe31d61781ef63060ad6d74090c0255",
+    "repository": "https://github.com/aappleby/gbmicrotest",
+    "tree": "9b692d1a028beea00a9fc08b89bc6160dd268efa"
+  },
+  "transform": {
+    "allowed_changed_ranges": [
+      "0x0104-0x0133",
+      "0x014E-0x014F"
+    ],
+    "changed_offset_count": 44,
+    "global_checksum": "0x16F8",
+    "global_checksum_valid": true,
+    "header_checksum_0x014D_preserved": true,
+    "header_checksum_valid": true,
+    "recompute_global_checksum_inclusive": [
+      "0x014E",
+      "0x014F"
+    ],
+    "zero_bytes_inclusive": [
+      "0x0104",
+      "0x0133"
+    ]
+  }
+}

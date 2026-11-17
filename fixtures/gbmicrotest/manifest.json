@@ -1,0 +1,116 @@
+{
+  "build": {
+    "recipe": "No upstream WLA-DX build is claimed. The supplied ROM was transformed only by zeroing 0x0104-0x0133 and recomputing 0x014E-0x014F; exact output identity and changed-offset proof are in identity.json.",
+    "tools": [
+      {
+        "component": null,
+        "covered_paths": [],
+        "disposition": "build_only",
+        "name": "verify-diagnostic-admission.py bootless-header-transform",
+        "revision": "511140c4edffc3f00e512fef3e1a09727a28ebcc",
+        "source_repository": "https://github.com/szTheory/gabbaboy",
+        "terms": "GabbaBoy MIT",
+        "version": "1"
+      }
+    ]
+  },
+  "components": {
+    "art": {
+      "presence": "absent",
+      "reason": "Nintendo logo bytes are removed; no reference art is included."
+    },
+    "audio_driver": {
+      "presence": "absent",
+      "reason": "The selected DIV diagnostic has no audio driver."
+    },
+    "build_inputs": {
+      "presence": "absent",
+      "reason": "No unpinned WLA-DX build closure or reproducible build is claimed."
+    },
+    "code": {
+      "covered_paths": [
+        "fixtures/gbmicrotest/cohort.tar",
+        "fixtures/gbmicrotest/SOURCES.md",
+        "fixtures/gbmicrotest/identity.json"
+      ],
+      "evidence": {
+        "path": "fixtures/gbmicrotest/LICENSE.txt",
+        "sha256": "0b3557142dfcce65428fafb9c8254d9d59c027a008af4810867efd7342b77c25"
+      },
+      "presence": "present",
+      "scope": {
+        "public_ci": true,
+        "repository": true
+      },
+      "terms": "MIT; bounded interpretation for this one modified copy only"
+    },
+    "notices": {
+      "covered_paths": [
+        "fixtures/gbmicrotest/LICENSE.txt"
+      ],
+      "evidence": {
+        "path": "fixtures/gbmicrotest/LICENSE.txt",
+        "sha256": "0b3557142dfcce65428fafb9c8254d9d59c027a008af4810867efd7342b77c25"
+      },
+      "presence": "present",
+      "scope": {
+        "public_ci": true,
+        "repository": true
+      },
+      "terms": "MIT"
+    }
+  },
+  "decision": {
+    "component_rationale": {
+      "code": "Only the pinned case source and one bootless derivative are included.",
+      "notices": "The complete pinned upstream MIT notice accompanies the derivative."
+    },
+    "rationale": "One source-selected DMG-CPU-B software diagnostic with a logo-free output and a narrowly bounded MIT compiled-copy interpretation.",
+    "reviewer_role": "project-maintainer",
+    "status": "approved"
+  },
+  "files": [
+    {
+      "path": "fixtures/gbmicrotest/LICENSE.txt",
+      "sha256": "0b3557142dfcce65428fafb9c8254d9d59c027a008af4810867efd7342b77c25",
+      "size_bytes": 1065
+    },
+    {
+      "path": "fixtures/gbmicrotest/SOURCES.md",
+      "sha256": "81831f6dd558eac5cd6544efc9447db002c7c6c0073d094a7cf89287fbf78fce",
+      "size_bytes": 1012
+    },
+    {
+      "path": "fixtures/gbmicrotest/cohort.tar",
+      "sha256": "b810271e7bde4ffb05104c5d3aa772731118b45be3c93f38d2bb797e66e59780",
+      "size_bytes": 61440
+    },
+    {
+      "path": "fixtures/gbmicrotest/identity.json",
+      "sha256": "c18a7118c6172a3202893db5212f00eea67d015b309248da50884e4f4f6059e3",
+      "size_bytes": 2142
+    }
+  ],
+  "fixture_kind": "gbmicrotest-bootless-diagnostic",
+  "inputs": [
+    {
+      "path": "fixtures/gbmicrotest/cohort.tar",
+      "sha256": "b810271e7bde4ffb05104c5d3aa772731118b45be3c93f38d2bb797e66e59780",
+      "size_bytes": 61440
+    }
+  ],
+  "notices": {
+    "index_path": "THIRD_PARTY_NOTICES.md",
+    "local_path": "fixtures/gbmicrotest/LICENSE.txt",
+    "sha256": "0b3557142dfcce65428fafb9c8254d9d59c027a008af4810867efd7342b77c25"
+  },
+  "permissions": {
+    "public_ci": true,
+    "repository": true
+  },
+  "schema_version": 1,
+  "source": {
+    "repository": "https://github.com/aappleby/gbmicrotest",
+    "revision": "463eb6bc0fe31d61781ef63060ad6d74090c0255"
+  }
+}
