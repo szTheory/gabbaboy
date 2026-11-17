@@ -8,7 +8,7 @@
       "ref": "gbcompo25",
       "commit": "321b8365d31a3239d3d7f54831d0339991e2c49c",
       "root_tree_sha1": "a999f0b5774cad61057eb07cae38a89ce5375772",
-      "relationship": "The creator page labels the linked Potion Panic (GB Compo 2025 demo) code MIT and assets CC BY-NC-SA 4.0, and offers a ROM plus LICENSE. The pinned gbcompo25 README identifies the same competition demo. D-207 accepts the asset category label for the exact visual/music folders; no ROM bytes or source-to-ROM build identity has yet been acquired.",
+      "relationship": "The creator page labels its no-cost ROM download “ROM file (GB Compo 2025 demo)” (response filename potionpanic_jam.gbc, 262144 bytes, SHA-256 86922a48308031d5ca7e79cecbfbe3b4d41c8f094e0c2a5f90b6ced362d708f8) and offers a LICENSE sidecar (1083 bytes, SHA-256 05a737cab7911cce77ab9057d1129c241b02d69b00e5f1ef1409f5626fe4d55b), byte-identical to the pinned source root MIT LICENSE. The page links the pinned Codeberg project, and its README identifies the same GB Compo 2025 entry; this is creator-linked release/source association only, with no build receipt binding these ROM bytes to commit 321b8365d31a3239d3d7f54831d0339991e2c49c. The locally reviewed bootless derivative has SHA-256 186ba4b7ba0f755eeb2feeaaf4c204a8152757d5fd2200de2d6bdaeea90c86bb; the exact logo/checksum transform is recorded in tests/data/cgb-candidates/evidence/potion-panic-build-review.json. Raw and derivative payloads remain in ignored review storage; no source build, fixture admission, or candidate runtime was performed because the only pinned build invokes the separately attributed WLE converter excluded by D-207 and no reviewed source-build closure omitting it was identified.",
       "components": [
         {
           "id": "source-code",
@@ -36,7 +36,9 @@
           ],
           "evidence": [
             "https://deved.itch.io/potion-panic",
-            "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/Main.asm"
+            "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/Main.asm",
+            "tests/data/cgb-candidates/evidence/potion-panic-asset-notice.txt",
+            "tests/data/cgb-candidates/evidence/potion-panic-build-review.json"
           ],
           "obligations": [
             "Retain the MIT copyright and permission notice with redistributed copies or substantial portions of the covered code."
@@ -125,10 +127,10 @@
           },
           "notices": [
             {
-              "path": "fixtures/v04-games/LICENSE.txt",
-              "object_id": "6e9a3ac22b4ecd5b49b217c1c59007c19c05a5a9",
-              "size_bytes": 2002,
-              "sha256": "2c3e582ca44c15131d61d4e09b7393e442d348157c0b32e5eaf77567b9787581",
+              "path": "tests/data/cgb-candidates/evidence/potion-panic-asset-notice.txt",
+              "object_id": "1d97bbc1103705246f4d2e04261cc2b1648ff45f",
+              "size_bytes": 2084,
+              "sha256": "7660c7fd8b22b271a36a033830d0531f6f1c994d937a09b1a82917438873a43b",
               "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
             }
           ],
@@ -159,10 +161,10 @@
           },
           "notices": [
             {
-              "path": "fixtures/v04-games/LICENSE.txt",
-              "object_id": "6e9a3ac22b4ecd5b49b217c1c59007c19c05a5a9",
-              "size_bytes": 2002,
-              "sha256": "2c3e582ca44c15131d61d4e09b7393e442d348157c0b32e5eaf77567b9787581",
+              "path": "tests/data/cgb-candidates/evidence/potion-panic-asset-notice.txt",
+              "object_id": "1d97bbc1103705246f4d2e04261cc2b1648ff45f",
+              "size_bytes": 2084,
+              "sha256": "7660c7fd8b22b271a36a033830d0531f6f1c994d937a09b1a82917438873a43b",
               "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
             }
           ],
@@ -779,19 +781,34 @@
   "ordered_games": {
     "primary": "potion-panic-gbcompo25",
     "fallback": "ucity-1.3",
-    "primary_outcome": "rights-unresolved",
-    "fallback_outcome": "rights-unresolved",
+    "primary_outcome": "rights-no-go",
+    "fallback_outcome": "not-attempted-after-primary",
     "builds_performed": false,
-    "rom_payloads_acquired": false,
+    "rom_payloads_acquired": true,
     "candidate_payloads_staged": false,
-    "admission_performed": false
+    "admission_performed": false,
+    "primary_prebuilt_review": {
+      "metadata_path": "tests/data/cgb-candidates/evidence/potion-panic-build-review.json",
+      "metadata_sha256": "2ac08bec57e239effc247ad9e0af673873b40279c506abe2102449f986d82ecc",
+      "review_storage": "build/phase24/source-review/potion-panic-official/",
+      "original_filename": "potionpanic_jam.gbc",
+      "original_size_bytes": 262144,
+      "original_sha256": "86922a48308031d5ca7e79cecbfbe3b4d41c8f094e0c2a5f90b6ced362d708f8",
+      "sidecar_filename": "LICENSE",
+      "sidecar_sha256": "05a737cab7911cce77ab9057d1129c241b02d69b00e5f1ef1409f5626fe4d55b",
+      "derivative_filename": "potion-panic-bootless.gbc",
+      "derivative_sha256": "186ba4b7ba0f755eeb2feeaaf4c204a8152757d5fd2200de2d6bdaeea90c86bb",
+      "candidate_payload_staged": false,
+      "admission_performed": false,
+      "runtime_performed": false
+    }
   },
   "requirements": [
     {
       "id": "FIXT-01",
       "owner": "Phase 21",
       "status": "Pending",
-      "reason": "Both named candidates have unresolved component rights, and no exact build, ROM digest, cartridge header, or native CGB mode evidence was produced."
+      "reason": "Potion Panic source and creator-published ROM/sidecar metadata are observed, but the required local source build is blocked because pinned build.sh invokes the D-207-excluded WLE converter and no reviewed source-build closure omits it. The downloaded ROM is not bound to the pinned source commit by a build receipt; candidate ROM admission, native-mode execution and progress remain unobserved. The sole µCity fallback is not attempted until the primary no-go is committed and accepted."
     },
     {
       "id": "RIGHTS-01",
@@ -816,7 +833,7 @@
     {
       "source_id": "potion-panic-gbcompo25",
       "status": "not-observed",
-      "reason": "build.sh names RGBDS and SuperFamiconv, but no exact tool version/archive identity was established and no tool was installed or executed."
+      "reason": "No build tool was installed or executed. The source-build route was stopped before tool invocation because pinned build.sh requires Tools/convertmap.py, whose attributed WLE encoder is excluded by D-207; RGBDS and SuperFamiconv versions/archives are not pinned."
     },
     {
       "source_id": "ucity-1.3",

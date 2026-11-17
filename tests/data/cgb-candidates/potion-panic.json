@@ -6,26 +6,1746 @@
   "stage": "final",
   "partial": false,
   "source": {
-    "state": "not_observed",
-    "blocked_by": "rights",
-    "reason": "Rights cutoff before source acquisition: the creator-linked Codeberg repository was unavailable, so no exact revision, recursive inputs, component inventory, or build recipe was observed."
+    "state": "observed",
+    "value": {
+      "repository": "https://codeberg.org/DevEd/potion-panic",
+      "revision": "321b8365d31a3239d3d7f54831d0339991e2c49c",
+      "submodules": [
+        {
+          "path": "hardware.inc",
+          "repository": "https://github.com/gbdev/hardware.inc",
+          "revision": "97e979bd977b469c6dbefae15f581b27d1ba8e35"
+        }
+      ],
+      "inventory": [
+        {
+          "path": ".gitignore",
+          "sha256": "54d327f14881e93e335df0304e45a2ebc2c744a46f192a3e61206cde14c07249",
+          "size_bytes": 1548
+        },
+        {
+          "path": ".gitmodules",
+          "sha256": "63500e54a4278d97bdd008f08ac6deca8cbfbccfcb63630f954094a09a5c7136",
+          "size_bytes": 96
+        },
+        {
+          "path": "Audio/Audio.asm",
+          "sha256": "2be1790da3a3a7e96659db3012ddd9af4444e66ea278c92649dd506f5694d4d1",
+          "size_bytes": 396
+        },
+        {
+          "path": "Audio/DevSFX.asm",
+          "sha256": "154a88f991b0c8f79aefaa2a0b729a719b7ec5988349f9c09b65f8c7004b2fa2",
+          "size_bytes": 18802
+        },
+        {
+          "path": "Audio/GBMod_Player.asm",
+          "sha256": "800098146c426471ba723f115b87bb534da2d1145588db37c8d39b1ba140a9a6",
+          "size_bytes": 55015
+        },
+        {
+          "path": "Audio/Modules/DarkForest.xm",
+          "sha256": "4d48210b5436caacda7771b9e7b93c733dc0ad82256152b6a459ddf3f9c73d40",
+          "size_bytes": 51303
+        },
+        {
+          "path": "Audio/Modules/Desert.xm",
+          "sha256": "0d69a3c72eb8f33b03b228c3b46794e75c5d82ad1ca29a40a944e757f97725ed",
+          "size_bytes": 41137
+        },
+        {
+          "path": "Audio/Modules/DevEdGames.xm",
+          "sha256": "32f23190132d6fe264786c970ca866f0fda6b1faff2cf4ae8b67193a0a0412ae",
+          "size_bytes": 40559
+        },
+        {
+          "path": "Audio/Modules/LostInTranslation.xm",
+          "sha256": "b21c9682ca4a024d52467251f3c415427dd54e1e517d99c30b45c2b71fd10c32",
+          "size_bytes": 49202
+        },
+        {
+          "path": "Audio/Modules/Scraps/DarkForest-OLD.xm",
+          "sha256": "bb434208fd7e14f7609a1aa90a7a56bd3c2d141b2257dff4a37ca14ee2e754ec",
+          "size_bytes": 41243
+        },
+        {
+          "path": "Audio/Modules/WorldMap.xm",
+          "sha256": "2db10e65ab099d237e219fc1564f3c936d0015f10cc18459cbd7a296303b3b6d",
+          "size_bytes": 43956
+        },
+        {
+          "path": "Audio/SFX/BellyBump_CH2.asm",
+          "sha256": "1a222cac020f3d01dcdfec1395d3d670dc3026812a9f5ab378519b47ef2040fa",
+          "size_bytes": 205
+        },
+        {
+          "path": "Audio/SFX/BellyBump_CH4.asm",
+          "sha256": "2e50ad414521e85358664f06603bbf78332b357fbcf74ec03fb0228c9b5c1afe",
+          "size_bytes": 112
+        },
+        {
+          "path": "Audio/SFX/BigBump_CH2.asm",
+          "sha256": "f7cfd5d06c6bf37d1fc851a7c9e2c332c725fb607180f6a7138e03f31ad63eb5",
+          "size_bytes": 451
+        },
+        {
+          "path": "Audio/SFX/BigBump_CH4.asm",
+          "sha256": "7c0b20fec6eec60180d6b90b84e7399dc759c13b10df9722635cff197a0843ba",
+          "size_bytes": 633
+        },
+        {
+          "path": "Audio/SFX/GetFat.asm",
+          "sha256": "3aaf917daa86c903926d483cb3d65a1e134ba00ff736123c34ea181195056c29",
+          "size_bytes": 314
+        },
+        {
+          "path": "Audio/SFX/Hurt.asm",
+          "sha256": "b36d2298d91927782c49ae973c6be258df3f29e68af37005a94449f694806322",
+          "size_bytes": 361
+        },
+        {
+          "path": "Audio/SFX/JumpFat.asm",
+          "sha256": "59ac9119fd3dc1374b87d6ec93f4fbeb2fa7fb3081b6dd10ae112a0c27f349ee",
+          "size_bytes": 289
+        },
+        {
+          "path": "Audio/SFX/JumpNormal.asm",
+          "sha256": "f1ba7f84829deecf80561dddef9d637389dedaf3a9c2112823e85e8f3db36a01",
+          "size_bytes": 172
+        },
+        {
+          "path": "Audio/SFX/JumpTiny.asm",
+          "sha256": "2c5d800ee6c305d9fcc0f75edf97babba765e193b36401225059a9c109fd50c8",
+          "size_bytes": 168
+        },
+        {
+          "path": "Audio/SFX/MenuCursor.asm",
+          "sha256": "af45d2a89df1ccd350207e64cece1868ad5d90619782c6c94be3e943af645b3a",
+          "size_bytes": 523
+        },
+        {
+          "path": "Audio/SFX/MenuSelect.asm",
+          "sha256": "9e90408b79d19cac6b30bcf8e8cceca581e28783901367ed46f73b6595b09e94",
+          "size_bytes": 1243
+        },
+        {
+          "path": "Audio/SFX/PauseCH1.asm",
+          "sha256": "4a121aa57ed96a236f1d97ee6889ef9ea8ce79f07c9d16e26e8cc1064571d006",
+          "size_bytes": 271
+        },
+        {
+          "path": "Audio/SFX/PauseCH2.asm",
+          "sha256": "659725f6390ef4cb21628870a80e954b73962d124cf0bcb062c43b4421046b2f",
+          "size_bytes": 267
+        },
+        {
+          "path": "Audio/SFX/PauseCH3.asm",
+          "sha256": "4f08b6a03bfe6372b0679195aa503e5d2b8209ee05389300dfee432a2df36fcd",
+          "size_bytes": 568
+        },
+        {
+          "path": "Audio/SFX/Pointers.inc",
+          "sha256": "272c7e57b14666b99367c3b45ad1a4c072edd429f689cf7c66874c0901eba880",
+          "size_bytes": 1309
+        },
+        {
+          "path": "Audio/SFX/drafts.fur",
+          "sha256": "4750746ee46d4df7e37a8bcb56a64c9c14db3704748f5d64adc6bc1b5e5fecf9",
+          "size_bytes": 1024
+        },
+        {
+          "path": "Engine/Canvas.asm",
+          "sha256": "fe318229fe8617a7b6c7a12b3c8f0894aeff3fd843402072600445470e3b77c8",
+          "size_bytes": 7034
+        },
+        {
+          "path": "Engine/ErrorHandler.asm",
+          "sha256": "ab35aab4b533259924d7f048b4a5f8d677ae1a8ab08ce6adbb403c290c859650",
+          "size_bytes": 7360
+        },
+        {
+          "path": "Engine/Math.asm",
+          "sha256": "ca643a19debdec6bf9804ad44cc25ef0ed6b2a3811a0e08444eda5d36857f2ca",
+          "size_bytes": 16496
+        },
+        {
+          "path": "Engine/Metatile.asm",
+          "sha256": "6a1a93bfd3e8ba91b76d29d243b455dde71db2ec7b3ad44c79b651a1fa03840f",
+          "size_bytes": 3037
+        },
+        {
+          "path": "Engine/Object.asm",
+          "sha256": "9bd0e44dfd6defa6eb92dd407feca8a7c3fb6efd2487e9a9e91cbe02e4757f24",
+          "size_bytes": 9153
+        },
+        {
+          "path": "Engine/PerFade.asm",
+          "sha256": "3890720e33059b0842d7f8da814d2fe763ed9b46cddf4f639bd5d53ba1d88972",
+          "size_bytes": 16524
+        },
+        {
+          "path": "Engine/Player.asm",
+          "sha256": "499e43e14741cbc2bc6e3f12cc83b1837ef72c03ec5a104c221c7148d0053f5e",
+          "size_bytes": 59280
+        },
+        {
+          "path": "Engine/PotionEffects.asm",
+          "sha256": "4f23e1be42290190f0703d8c320bf4187710fe49bb8878dfc84aa9ecfe173174",
+          "size_bytes": 4478
+        },
+        {
+          "path": "Engine/WLE_Decode.asm",
+          "sha256": "bb03dda9ded9e63b6ce7a4031555106367b959542d5f8c9ab5c4a7811fbfebe2",
+          "size_bytes": 1615
+        },
+        {
+          "path": "GFX/Credits1.png",
+          "sha256": "cdc156b2f7df3d08eb0f6e29a2f27ef04bfbce4c7850c02228c2b9dcdbdfdae2",
+          "size_bytes": 4397
+        },
+        {
+          "path": "GFX/Credits2.png",
+          "sha256": "cc0bc03ff0beb1d0bd92c5a575bb425831d034c638213929cbc3d2447633a3dc",
+          "size_bytes": 2262
+        },
+        {
+          "path": "GFX/Credits3.png",
+          "sha256": "e94bc63551687d648365872a8bfcd5d869e86349743dffc4334403814485d4fe",
+          "size_bytes": 3015
+        },
+        {
+          "path": "GFX/Credits4.png",
+          "sha256": "d63d6fe0cfbd900c2cfa7ef3502d235488d90eb0e7654dfaffc339e7b686b0f5",
+          "size_bytes": 3965
+        },
+        {
+          "path": "GFX/DevEdPresents.2bpp",
+          "sha256": "c109decaa1f4419421aa2fa321b0b363274123655120464b13be008956b20190",
+          "size_bytes": 1424
+        },
+        {
+          "path": "GFX/DevEdPresents.2bpp.wle",
+          "sha256": "10b5f6dab286633ff42249c2711b8ac4fe084e35c3bac62eeb97655b064196db",
+          "size_bytes": 844
+        },
+        {
+          "path": "GFX/DevEdPresents.map",
+          "sha256": "60134e083f335e5da2f03ac1c93bff9f71a81a17938d0676e375b123a29d51ba",
+          "size_bytes": 720
+        },
+        {
+          "path": "GFX/DevEdPresents.pal",
+          "sha256": "792793bb972d26db7afb3641212fc80f4bfac169b3d884278fdce21208d2c938",
+          "size_bytes": 48
+        },
+        {
+          "path": "GFX/DevEdPresents.png",
+          "sha256": "52e8d98c40c996d314241f3a97de3b9d5713ceb8f4a2bf4f3dc5959ef1dc4067",
+          "size_bytes": 1995
+        },
+        {
+          "path": "GFX/EndOfDemo.png",
+          "sha256": "ee0abb02c31005b82d9c34ec5b6ee726204318596c706930fb9317eef9c6a0b3",
+          "size_bytes": 2967
+        },
+        {
+          "path": "GFX/Enemies/Workfiles/fly1.png",
+          "sha256": "a759002a398c8822746e1805fab3148383b801b12f88f6028653df5d830d89cc",
+          "size_bytes": 214
+        },
+        {
+          "path": "GFX/Enemies/Workfiles/fly2.png",
+          "sha256": "26737790cbffd3d89512a1b0c22eee321b0fd43b719153256aeec86ee8ada08d",
+          "size_bytes": 221
+        },
+        {
+          "path": "GFX/Enemies/Workfiles/fly3.png",
+          "sha256": "693a03fe728dad7ca19e223966024d9373558975cd28eec4face1db95cee43e2",
+          "size_bytes": 228
+        },
+        {
+          "path": "GFX/Enemies/Workfiles/frog_blink.png",
+          "sha256": "5df0f4a353de48e8ccfe218b26ea49a6ddb3214fff94dffb5233a0e865dcdb48",
+          "size_bytes": 249
+        },
+        {
+          "path": "GFX/Enemies/Workfiles/frog_croak.png",
+          "sha256": "b30df13fd1be1fa0b98f2274e31fe4b76d2b5c964da4777ac6b32347271aa5a4",
+          "size_bytes": 254
+        },
+        {
+          "path": "GFX/Enemies/Workfiles/frog_hop.png",
+          "sha256": "ae2d320601c559e5440c5b5539fce4809c42a556ea8341e3a3b6ce489128834d",
+          "size_bytes": 269
+        },
+        {
+          "path": "GFX/Enemies/Workfiles/frog_idle.png",
+          "sha256": "83253382eddf0fdf47695b60c10c6c6ed02d69cbc01906faf211025f10f41a16",
+          "size_bytes": 252
+        },
+        {
+          "path": "GFX/Enemies/Workfiles/frog_mockup.gif",
+          "sha256": "f1e32162d89fcb343bb75fcd1c2aa0ee3fa84a96524142aa7078cee556bb22a6",
+          "size_bytes": 8010
+        },
+        {
+          "path": "GFX/Enemies/Workfiles/frog_mouthopen.png",
+          "sha256": "1b6371369e1795c86c2448e7afeb622bfdba889a19fe2c9ca7bd34823c075006",
+          "size_bytes": 252
+        },
+        {
+          "path": "GFX/Enemies/Workfiles/frog_prehop.png",
+          "sha256": "60fa616b616197f5a5416a957883a80e59b35e178ad257787cd76a4b5c211fa8",
+          "size_bytes": 248
+        },
+        {
+          "path": "GFX/Enemies/Workfiles/frog_tounge_horizontal.png",
+          "sha256": "0c8e451ab6084d39cfe33c4791f44f6d152716caa2d438988a8bc34e3bc222ed",
+          "size_bytes": 275
+        },
+        {
+          "path": "GFX/Enemies/fireball.png",
+          "sha256": "565664687dc1c7c78ad952876075629ceec898f284dfb1f728d87c8769a1d755",
+          "size_bytes": 263
+        },
+        {
+          "path": "GFX/Enemies/fly.2bpp",
+          "sha256": "ce42381de9335423f5ca39d27e056884c2c67f95573909a407c3e379b831aeaf",
+          "size_bytes": 96
+        },
+        {
+          "path": "GFX/Enemies/fly.2bpp.wle",
+          "sha256": "f4beda3c45fc92d7286bfa460c30a2b1cd97386103b54b0f0cb92762530f9a34",
+          "size_bytes": 21
+        },
+        {
+          "path": "GFX/Enemies/fly.png",
+          "sha256": "4b22cdcbdca9ebd354ed330f665e8d1c00d1c8c7419c05141daa8181b5e9847c",
+          "size_bytes": 226
+        },
+        {
+          "path": "GFX/Enemies/frog.2bpp",
+          "sha256": "9c8d8d78241e3a8a18f60941f40d471f52a917c0465e7d302ef3eb3d59512d83",
+          "size_bytes": 352
+        },
+        {
+          "path": "GFX/Enemies/frog.2bpp.wle",
+          "sha256": "d8667c91237c05ae5b55ab7e58096d54febfacd799d1fc459eb57632467b2db6",
+          "size_bytes": 157
+        },
+        {
+          "path": "GFX/Enemies/frog.pal",
+          "sha256": "9dd0078d59952fcd23063ec09b9f00524ded340ad1236efdd778369fbbe2618a",
+          "size_bytes": 16
+        },
+        {
+          "path": "GFX/Enemies/frog.png",
+          "sha256": "1c0b34c9c9df46e7d65592ac817b82b482b48d849f9f9885071dde2c07ebaaa1",
+          "size_bytes": 441
+        },
+        {
+          "path": "GFX/Enemies/imp.2bpp",
+          "sha256": "b110ee85854b19ad4d89cbe3f6a0141b83f93d5064f1a73ea294d558eb1553c5",
+          "size_bytes": 256
+        },
+        {
+          "path": "GFX/Enemies/imp.2bpp.wle",
+          "sha256": "05ee4ba8a4ddc3b38397ccd82ea386f4d86ec2dc8cfea5a4e6207105aaa0787e",
+          "size_bytes": 141
+        },
+        {
+          "path": "GFX/Enemies/imp.png",
+          "sha256": "5f781ff771413e15e47a465654d3fd7925cfd75ee92a530f3b540afc8f910f41",
+          "size_bytes": 407
+        },
+        {
+          "path": "GFX/Enemies/jackolantern.2bpp",
+          "sha256": "7958cd5431a2f0b5e37e1314a6c8e6139a5198f1012da0f2a81eee428161df5c",
+          "size_bytes": 256
+        },
+        {
+          "path": "GFX/Enemies/jackolantern.2bpp.wle",
+          "sha256": "e6c327a2e205086af007856ace5277bc8f5368659d453f1172811eb2a3ca589a",
+          "size_bytes": 165
+        },
+        {
+          "path": "GFX/Enemies/jackolantern.pal",
+          "sha256": "df47d59bfe4b78b9ddcfb87d4f16950fba65f82b08ef4a95c8ed12328218d25d",
+          "size_bytes": 8
+        },
+        {
+          "path": "GFX/Enemies/jackolantern.png",
+          "sha256": "92c2a48eace3d977f92a09a2ad8d1e75eeaaca89cf63ab98370fa44fba42b177",
+          "size_bytes": 354
+        },
+        {
+          "path": "GFX/Enemies/slime.2bpp",
+          "sha256": "fe8143914c3211bf62640a4a92af4d29411008ab236e8e08f76fcf2252d3defb",
+          "size_bytes": 896
+        },
+        {
+          "path": "GFX/Enemies/slime.2bpp.wle",
+          "sha256": "7c956346caff9c20aeb377dc5b67cb660d22b9042e2e40a58270745c62ed852b",
+          "size_bytes": 305
+        },
+        {
+          "path": "GFX/Enemies/slime.png",
+          "sha256": "821d5e9c2fecb55e1afea25089061bdf7b7df15bb78b450192b4c022b4ecc979",
+          "size_bytes": 522
+        },
+        {
+          "path": "GFX/PauseText.png",
+          "sha256": "d3ca97c3238022ca0f00c8950c9b3df92635a0d5b8175dbc32a5f77d1e5f1dc6",
+          "size_bytes": 394
+        },
+        {
+          "path": "GFX/PauseText_Rare.png",
+          "sha256": "2522eb4effca83088c28c1ec8e60db396fee6c0738552c1ebcb9889ba808aa51",
+          "size_bytes": 394
+        },
+        {
+          "path": "GFX/PauseText_Secret.png",
+          "sha256": "74eef3a56075c339220c95ceb2cd83f1dd0607b4d114f46064a406236f722a3e",
+          "size_bytes": 508
+        },
+        {
+          "path": "GFX/Player/boris_flyoff_layer1.png",
+          "sha256": "a7425397645864784c18f752f3fc4c47ee7b08874885f497ee40daa31232232e",
+          "size_bytes": 273
+        },
+        {
+          "path": "GFX/Player/boris_flyoff_layer2.png",
+          "sha256": "9d8f3ecdfa138690956c1dcd445ead8ae58598a63ed318e5a49afaaa271b5bba",
+          "size_bytes": 259
+        },
+        {
+          "path": "GFX/Player/placeholder.png",
+          "sha256": "a702bae8ec6fe44ee3cdc755f37adc0a04e74e0a15dfa95199e08034760824b9",
+          "size_bytes": 330
+        },
+        {
+          "path": "GFX/Player/player_broom_layer1.png",
+          "sha256": "f81c89b37d88d21a224f958caac5ea6b2ace1e2a81ad6c3f876a7afa752d43ab",
+          "size_bytes": 369
+        },
+        {
+          "path": "GFX/Player/player_broom_layer2.png",
+          "sha256": "604e6e22892a71c5b19cdde75f1fc8f9344a9782903d8da8717d567bad346163",
+          "size_bytes": 252
+        },
+        {
+          "path": "GFX/Player/player_broom_layer2.png.2bpp.wle",
+          "sha256": "f729364c907a063a30db52b0bc83270b86bb4d7c9a44070be3bcace244526e31",
+          "size_bytes": 34
+        },
+        {
+          "path": "GFX/Player/player_casual_pose_layer1.png",
+          "sha256": "6148f7bb84c4eac98502495bffd36c022f94d1b624e3dd2c3963e41c76cc4fb0",
+          "size_bytes": 322
+        },
+        {
+          "path": "GFX/Player/player_casual_pose_layer2.png",
+          "sha256": "34f4b0af76758432c6465d5830f10ce03042e1b2d0e23fcdaf96572036183e9a",
+          "size_bytes": 260
+        },
+        {
+          "path": "GFX/Player/player_death_fat_layer1.png",
+          "sha256": "b2cf17ce366ca39c26ed76a18232bfc9abf589bde4428088c06cb60aa2d5cf79",
+          "size_bytes": 350
+        },
+        {
+          "path": "GFX/Player/player_death_layer1.png",
+          "sha256": "7b5093bd58d9074b0b7eb93d800bde60c5541dd3e3fe1eba2ddcfa5803d5fa43",
+          "size_bytes": 341
+        },
+        {
+          "path": "GFX/Player/player_fall0.png",
+          "sha256": "db34f6157a5a9ddb0daea81e8c5fe0f9ab4b93322d80e8c62f88ee6bd8152428",
+          "size_bytes": 327
+        },
+        {
+          "path": "GFX/Player/player_fall1.png",
+          "sha256": "c20a6820dd89cd96e133b84c219570fea25aaf42f2392ebfe5df2665a132bc64",
+          "size_bytes": 322
+        },
+        {
+          "path": "GFX/Player/player_fall2.png",
+          "sha256": "04eaf993e31ee1b33aea1fa946ba3b0c0f3ac851b4f6751af4916c06606d5d86",
+          "size_bytes": 327
+        },
+        {
+          "path": "GFX/Player/player_fall3.png",
+          "sha256": "17dd93eee96bf3daf0fa7dbd7e4a53aaf29cc543f13e9ce541097ccc3609178e",
+          "size_bytes": 324
+        },
+        {
+          "path": "GFX/Player/player_fall4.png",
+          "sha256": "c3310d24ee330e9a3d65bdb3ca422ac8e1d3ef64c4f3f105b2f65ac77e25286a",
+          "size_bytes": 324
+        },
+        {
+          "path": "GFX/Player/player_fat_casual_pose_layer1.png",
+          "sha256": "c649aca1657945619675e5384901a738611f64681b18d65ba82d81e1127317f5",
+          "size_bytes": 338
+        },
+        {
+          "path": "GFX/Player/player_fat_casual_pose_layer2.png",
+          "sha256": "5016f1ea4d4667d4e4fa00cbfb9390bd13fa06a2097589848752d19fed5c9031",
+          "size_bytes": 266
+        },
+        {
+          "path": "GFX/Player/player_fat_fall0.png",
+          "sha256": "5f6f6f5e739e643dc83fe8142cfc7a03152d171f4061e83d09b095f2a4d9535d",
+          "size_bytes": 339
+        },
+        {
+          "path": "GFX/Player/player_fat_fall1.png",
+          "sha256": "cd3b33269e96581445e9d14858547334ca0e481a6826b28c9dba5fec092d6eec",
+          "size_bytes": 330
+        },
+        {
+          "path": "GFX/Player/player_fat_fall2.png",
+          "sha256": "8cf56422b66c9ed45654c2405f38cffe893e95996fa21c91e90a39ed34f4744c",
+          "size_bytes": 337
+        },
+        {
+          "path": "GFX/Player/player_fat_fall3.png",
+          "sha256": "6b658be453bd8d8f8e9ebf63370f08a361882bb46e35218f18f3f658fa793796",
+          "size_bytes": 344
+        },
+        {
+          "path": "GFX/Player/player_fat_fall4.png",
+          "sha256": "0179be1a12104b6c3f314b409da6b33657869c227f89571b4b79c5279c9b6335",
+          "size_bytes": 345
+        },
+        {
+          "path": "GFX/Player/player_fat_idle1.png",
+          "sha256": "3da07f06aae94d1886358ca145ed676e6de1cd3a40668429fb286fdd46fc6ff7",
+          "size_bytes": 334
+        },
+        {
+          "path": "GFX/Player/player_fat_idle2.png",
+          "sha256": "d111149276016cad68b142b887403f935bca62b212547d13cada2d18b133dedd",
+          "size_bytes": 330
+        },
+        {
+          "path": "GFX/Player/player_fat_idle3.png",
+          "sha256": "1ed328040f5f0505e765d99b60a8c6676e1f99e2f76279f9243d49f21fe38e54",
+          "size_bytes": 333
+        },
+        {
+          "path": "GFX/Player/player_fat_jump.png",
+          "sha256": "191922f71cb6fbb0622e510981dc26f2430bb51e0e9681ba6398d61bcf3d6058",
+          "size_bytes": 335
+        },
+        {
+          "path": "GFX/Player/player_fat_walk1.png",
+          "sha256": "a655aba5d56f42f90f3e8d2b7ad3012190feca2c4ef486b9a4ff6b2812632fb8",
+          "size_bytes": 335
+        },
+        {
+          "path": "GFX/Player/player_fat_walk2.png",
+          "sha256": "c51c45cd63baa11e273fb5ecd4cdc5bda575e82b87b7dc6b17165bde320ad78a",
+          "size_bytes": 325
+        },
+        {
+          "path": "GFX/Player/player_fat_walk3.png",
+          "sha256": "a3c799cd9b7832e30ce960fab0e8d8a614de24889611be3d528c6b3bcd0e2e9a",
+          "size_bytes": 324
+        },
+        {
+          "path": "GFX/Player/player_fat_walk4.png",
+          "sha256": "319405e97e6036b02f6344abc2504fcd2b68e5bbe2733c08155b26d43e20991c",
+          "size_bytes": 325
+        },
+        {
+          "path": "GFX/Player/player_fat_walk5.png",
+          "sha256": "e82674b11599ed33ac2fcb51727b37689f91cfec0a00ac4021997096fa9f117e",
+          "size_bytes": 331
+        },
+        {
+          "path": "GFX/Player/player_fat_walk6.png",
+          "sha256": "fbb2f07237abf7f61fa7f8eafc2d726eef8488b9cf16077c2aeb7cf0285237f2",
+          "size_bytes": 320
+        },
+        {
+          "path": "GFX/Player/player_fat_walk7.png",
+          "sha256": "85e543ac6cd91f2f392be87923cd2c4ac0aaad7007c64d792eb3bbb59e995150",
+          "size_bytes": 324
+        },
+        {
+          "path": "GFX/Player/player_fat_walk8.png",
+          "sha256": "3fa495db2afde26745cca182e8a2de3f47d91d65d0612a1498028ae7e7b04bc3",
+          "size_bytes": 325
+        },
+        {
+          "path": "GFX/Player/player_fat_wand_left.png",
+          "sha256": "3af5bd4ac49cff656daa3f092cc22701b6e5f0c9baf992ac25c3bf85361021b8",
+          "size_bytes": 346
+        },
+        {
+          "path": "GFX/Player/player_fat_wand_right.png",
+          "sha256": "b9c56c78b620c750cc51a60a43a764068d4c8aea6a2335dd2b6e3b962de8c0a9",
+          "size_bytes": 338
+        },
+        {
+          "path": "GFX/Player/player_fatten_1.png",
+          "sha256": "5d0121ae59d0a0be9b78315c4551effe4b051591d28deb94969ef626acf977bb",
+          "size_bytes": 326
+        },
+        {
+          "path": "GFX/Player/player_fatten_2.png",
+          "sha256": "7bb452f8674d729261fa8bdca23cfba376986930cb8774dfbae092b404419c22",
+          "size_bytes": 330
+        },
+        {
+          "path": "GFX/Player/player_fatten_3.png",
+          "sha256": "a21a1d027904c0c63c17542f318b41fbcbfae278ea5df5e87935fe4f145e96f7",
+          "size_bytes": 332
+        },
+        {
+          "path": "GFX/Player/player_fatten_4.png",
+          "sha256": "955076952ae355584dde5ca06aae1f93c6d8bd58e4129e9c4ef3d4f69e82420a",
+          "size_bytes": 331
+        },
+        {
+          "path": "GFX/Player/player_fatten_5.png",
+          "sha256": "3be447f14056a2ab317e1981ba3fee20a77bad814d0464c31a32a0cfe88b8373",
+          "size_bytes": 337
+        },
+        {
+          "path": "GFX/Player/player_fatten_6.png",
+          "sha256": "71507bdbf94698d257f653b9fc125c5cd65013fc2fd68fbc69fe52d5310e9f7b",
+          "size_bytes": 336
+        },
+        {
+          "path": "GFX/Player/player_fatten_7.png",
+          "sha256": "459b1cf0f926434fcde17eef8c243ea4e20d823cfaed151700ad9502723a3390",
+          "size_bytes": 336
+        },
+        {
+          "path": "GFX/Player/player_hurt_fat_layer1.png",
+          "sha256": "e952f852338d88e7f606ca784bd63353bb3c10c0c88cb96d796eca09e757bd2c",
+          "size_bytes": 346
+        },
+        {
+          "path": "GFX/Player/player_hurt_layer1.png",
+          "sha256": "524d9c31059255718cdf1270da224291dac67f20ab94ecbefaefba39229bba84",
+          "size_bytes": 343
+        },
+        {
+          "path": "GFX/Player/player_hurt_layer2.png",
+          "sha256": "4ab33979e0a733f0bbe6ae3b314712b3ec549df4b49bf39c5bc2a392c03ba6a5",
+          "size_bytes": 219
+        },
+        {
+          "path": "GFX/Player/player_hurt_layer2.png.2bpp.wle",
+          "sha256": "ab61d2dffa507ca6e738cd8e7f1a8c6c0964dba223f50e8316006ea14bd7a6fe",
+          "size_bytes": 22
+        },
+        {
+          "path": "GFX/Player/player_idle1.png",
+          "sha256": "8a5ad7cf78e8fd489cdc44462323ed02d53b73f2ef953b2f9f499fae6fdfcf07",
+          "size_bytes": 330
+        },
+        {
+          "path": "GFX/Player/player_idle2.png",
+          "sha256": "12d7be9552d5314f4f0f82614fda80d1d6af56d22662c4d28e3a450f40a47d10",
+          "size_bytes": 327
+        },
+        {
+          "path": "GFX/Player/player_idle3.png",
+          "sha256": "f4481faaf9654bc78e80a9b69c1972dcc17338ac2124ce8befadedb87acab7b7",
+          "size_bytes": 328
+        },
+        {
+          "path": "GFX/Player/player_jump.png",
+          "sha256": "a7e445d67a93699935d8b40ddb7d53d757d8f0d086ef54c2fb84dc963c7fc288",
+          "size_bytes": 327
+        },
+        {
+          "path": "GFX/Player/player_shrink_1.png",
+          "sha256": "fc427d2c63a8823fc2e2010b2aec5e82ada8c170b5217b7327c91de56a50ed6e",
+          "size_bytes": 306
+        },
+        {
+          "path": "GFX/Player/player_shrink_2.png",
+          "sha256": "38ebac68f593a92ee5008f3ed6701bfc0454ed2f9abbdc5cdbb6102f3158a889",
+          "size_bytes": 284
+        },
+        {
+          "path": "GFX/Player/player_shrink_3.png",
+          "sha256": "23bd76e516f6f348d7c1b0b473431abcfbde03d1b96ea28c28019611689eba31",
+          "size_bytes": 259
+        },
+        {
+          "path": "GFX/Player/player_shrink_4.png",
+          "sha256": "4f51eaaf43379ca8c362d51898d219ad9d903a31b5d696a98e13ce5249bbf5ef",
+          "size_bytes": 252
+        },
+        {
+          "path": "GFX/Player/player_shrink_fatten_0.png",
+          "sha256": "1fdf9c592f88cd25abfc72bac0db91da38b88263355b7a540ba4bde314cd6a62",
+          "size_bytes": 334
+        },
+        {
+          "path": "GFX/Player/player_tiny_1.png",
+          "sha256": "664537c70263ea1c28addd36dc4db3aff9c8f801372705212816331c599534b3",
+          "size_bytes": 233
+        },
+        {
+          "path": "GFX/Player/player_tiny_2.png",
+          "sha256": "d3957089599e80f3c7527a80c43361874570f5150d05c35a6e1d4703ef1634bb",
+          "size_bytes": 233
+        },
+        {
+          "path": "GFX/Player/player_tiny_jump.png",
+          "sha256": "ce33b147332ebdea89318713fd3f0fba3aba7231c12a35a253db46304ed8a77d",
+          "size_bytes": 233
+        },
+        {
+          "path": "GFX/Player/player_tiny_wand.png",
+          "sha256": "715129c4c23f358768c33b47648248aab5a85a389ea9783738f37e57b8e33792",
+          "size_bytes": 233
+        },
+        {
+          "path": "GFX/Player/player_twirl1.png",
+          "sha256": "c8d503007841ff03d0b6718bec59ed5b47577e185f4b482a9513777460d2b508",
+          "size_bytes": 331
+        },
+        {
+          "path": "GFX/Player/player_twirl2.png",
+          "sha256": "93a1034a7fa914d6feb4d1514e64b77c002d152efffe44214ff8341273a6baf5",
+          "size_bytes": 335
+        },
+        {
+          "path": "GFX/Player/player_twirl3.png",
+          "sha256": "d86d6091654ec760cbefdd5c9da0cb0c83021359f9025e09356a1d0963f674a5",
+          "size_bytes": 329
+        },
+        {
+          "path": "GFX/Player/player_twirl4.png",
+          "sha256": "beea6a357993fc7bb3d5c30153c92f0783d2466e924e1b77ed83c907398e95cb",
+          "size_bytes": 311
+        },
+        {
+          "path": "GFX/Player/player_twirl5.png",
+          "sha256": "521581bb11ce3044220d6f03f86822413baef1bdd5a69f96c72a7f77e5aa99f2",
+          "size_bytes": 318
+        },
+        {
+          "path": "GFX/Player/player_twirl6.png",
+          "sha256": "9a3cdf22717bcab32e1c6d6ceb5b402822aebfe4312e437b143f24f8268d6b42",
+          "size_bytes": 322
+        },
+        {
+          "path": "GFX/Player/player_twirl7.png",
+          "sha256": "a0d0ac96bea9cfb7efd5f9d6f91335e67b685e296182b8f3ad371564cdeb6d45",
+          "size_bytes": 322
+        },
+        {
+          "path": "GFX/Player/player_twirl8.png",
+          "sha256": "efa1ccbf20002f05a7fdcb9ba191f73aef41496c853637a02f852b67efa05961",
+          "size_bytes": 310
+        },
+        {
+          "path": "GFX/Player/player_walk1.png",
+          "sha256": "2877fb55d0342a9779e76e98816efd4dbf88b3fe3a1626dfea39257f72844df9",
+          "size_bytes": 325
+        },
+        {
+          "path": "GFX/Player/player_walk2.png",
+          "sha256": "47fca44613ba4c04e0d98eeee105fa493ddc147ff2d91d5a327308280f2f01a3",
+          "size_bytes": 314
+        },
+        {
+          "path": "GFX/Player/player_walk3.png",
+          "sha256": "d4bfcd9a519b8d707a0bb30615ddab7c6bd8e530041c18a9cdfbfe55dce553b7",
+          "size_bytes": 314
+        },
+        {
+          "path": "GFX/Player/player_walk4.png",
+          "sha256": "5aebd19d410af614b181ebf92bc304c28c5d441c3b79fccf59280012bc0d4d7e",
+          "size_bytes": 326
+        },
+        {
+          "path": "GFX/Player/player_walk5.png",
+          "sha256": "f5e8241fec23ff8752b135fe4c21adfeab340c5e87eefa755379d6dd1e855fc2",
+          "size_bytes": 315
+        },
+        {
+          "path": "GFX/Player/player_walk6.png",
+          "sha256": "df3655cb06f2e4cd5b5578aaae65168c6a072f72b60db8f88cddaa22183b695d",
+          "size_bytes": 311
+        },
+        {
+          "path": "GFX/Player/player_walk7.png",
+          "sha256": "d91f4411444d9406cc4dac251de6aa08670c9a010303cc2a44b3574b768bcc36",
+          "size_bytes": 317
+        },
+        {
+          "path": "GFX/Player/player_walk8.png",
+          "sha256": "b98ba887319afaa04fd368c03da22fa48259ed862c0383450bd4688781c843b7",
+          "size_bytes": 327
+        },
+        {
+          "path": "GFX/Player/player_wand_left.png",
+          "sha256": "948d32779c9b471b76b1aeab953a76d9e9db318604d7fa2d42569879c9efe0e5",
+          "size_bytes": 336
+        },
+        {
+          "path": "GFX/Player/player_wand_right.png",
+          "sha256": "872daf14b7af0f8c6720f73c23a82a40cedef807755c3bff1159b15f18b9421c",
+          "size_bytes": 330
+        },
+        {
+          "path": "GFX/bigfont.2bpp",
+          "sha256": "a3703cd3571675a5843d069dd30664b55a6f976cbd6a4dbea367b368174a2f6c",
+          "size_bytes": 1152
+        },
+        {
+          "path": "GFX/bigfont.2bpp.wle",
+          "sha256": "602b034ab017da27dddc0c09d179bf8250d4ce48b0aa27e9f9ac3d605d71a7f2",
+          "size_bytes": 580
+        },
+        {
+          "path": "GFX/bigfont.pal",
+          "sha256": "2d8caa788e1252eb210050b629b511340eb3669cdce99459afa898bc00a5fcc1",
+          "size_bytes": 8
+        },
+        {
+          "path": "GFX/bigfont.png",
+          "sha256": "347958294d938f21504b46ddd65d9a513d00be32809f80d83cd3ee0d92303884",
+          "size_bytes": 785
+        },
+        {
+          "path": "GFX/cauldron.png",
+          "sha256": "2330bcba6fcd81dce875d68b2b92f8bd0b8d85226188f9fc0ba0577b94574d25",
+          "size_bytes": 294
+        },
+        {
+          "path": "GFX/copyright.2bpp",
+          "sha256": "8525b5a6ee5a97b3f7050d9692dd13a1be69f37a1444fe29a7daa8d09fc0f3b7",
+          "size_bytes": 3264
+        },
+        {
+          "path": "GFX/copyright.2bpp.wle",
+          "sha256": "7b686df9a5ba71fc9cd046b1a81fb070d3dbe36e281ab1acece8714b4fc75ad5",
+          "size_bytes": 2589
+        },
+        {
+          "path": "GFX/copyright.map",
+          "sha256": "bfa7dbdd4f17c7cb4db686dae505f59014d8c5e44c6a8e0dd4c38055df242c2b",
+          "size_bytes": 720
+        },
+        {
+          "path": "GFX/copyright.pal",
+          "sha256": "65fcf5c5e93fefaec3b22e1b6175cee314df82bade345840cb7f2ef61f7986c7",
+          "size_bytes": 8
+        },
+        {
+          "path": "GFX/copyright.png",
+          "sha256": "1f8e961d348e509634421a514812abe71f9d1d3d5263896ccfee2677704f944e",
+          "size_bytes": 3201
+        },
+        {
+          "path": "GFX/credits.2bpp",
+          "sha256": "9680660bd6a77213ee6722ed6b19cd8a7b11c7252dd6726c25e2fa9a8a025eda",
+          "size_bytes": 448
+        },
+        {
+          "path": "GFX/credits.2bpp.wle",
+          "sha256": "420709296423d87793ac532ab77afd051e14335a602b1e17eac0c5274ed63c88",
+          "size_bytes": 239
+        },
+        {
+          "path": "GFX/credits1.2bpp",
+          "sha256": "b2510292f6121c327e6ca0eb280e2c5c6c0f76f773477bd8c56ca3b01d61054b",
+          "size_bytes": 2768
+        },
+        {
+          "path": "GFX/credits1.2bpp.wle",
+          "sha256": "eb8f05424997c3c7af40561cb247e0da9fc312a58390bc55d99f3e0d65ea1859",
+          "size_bytes": 1879
+        },
+        {
+          "path": "GFX/credits1.map",
+          "sha256": "01ee3fdf38ab19fc16b0ce0cd1a75eccafa4fa90f6509d67dd123ab8a02cee9a",
+          "size_bytes": 720
+        },
+        {
+          "path": "GFX/credits1.pal",
+          "sha256": "15e73d3f65544086a9bd25c72f0488f7903bbe037508763ec312dc9e5e3fa583",
+          "size_bytes": 64
+        },
+        {
+          "path": "GFX/credits2.2bpp",
+          "sha256": "7780251a7fa6158ff7d5f42dfd3e21a6bab01f7d53fe0eb72ae5cc94e83c3ef1",
+          "size_bytes": 1440
+        },
+        {
+          "path": "GFX/credits2.2bpp.wle",
+          "sha256": "5f16ba0828d1ba9feee4e7ab3ed137dcebcca1e56da78e35eb836c9857561bcd",
+          "size_bytes": 870
+        },
+        {
+          "path": "GFX/credits2.map",
+          "sha256": "b4179caedde6c9f989f5a88eee34627228d6a570602c0088070d018f08681383",
+          "size_bytes": 720
+        },
+        {
+          "path": "GFX/credits2.pal",
+          "sha256": "4431f27a11d14e8d3ca84cd5019a406ba89eb4a0f6e94edc8d1efe00d99ee2e8",
+          "size_bytes": 48
+        },
+        {
+          "path": "GFX/credits3.2bpp",
+          "sha256": "01c63a022200e8dd7ad236fe10c7f801b57786b06a379e9dca039b9e1fb49c75",
+          "size_bytes": 1728
+        },
+        {
+          "path": "GFX/credits3.2bpp.wle",
+          "sha256": "eacb20e87f897befb94e1e49586b77bbf896c726837bc260117609abc23a1b30",
+          "size_bytes": 1248
+        },
+        {
+          "path": "GFX/credits3.map",
+          "sha256": "46be9da1c0d1fd41abab4a141fed771c33bcf06299025f276405c3b37a91b4fe",
+          "size_bytes": 720
+        },
+        {
+          "path": "GFX/credits3.pal",
+          "sha256": "7b134fdb965f87e497811ee7d006674ca6a02a7622e924e3a1a0bf006cd881b5",
+          "size_bytes": 56
+        },
+        {
+          "path": "GFX/credits4.2bpp",
+          "sha256": "20257d2564274da3db5cf5f9bec8773fc84caf38fbd1d6bfbef9492211b4b270",
+          "size_bytes": 2592
+        },
+        {
+          "path": "GFX/credits4.2bpp.wle",
+          "sha256": "3e5db1f917cd12218e7261c15a7098dcbbe22ad587ad63ab7cd0ab9b15f607c2",
+          "size_bytes": 1777
+        },
+        {
+          "path": "GFX/credits4.map",
+          "sha256": "f7123ac82ae2cceb2fddc20e680d298633ab1a8ff0ad38e3a559a07d3038422d",
+          "size_bytes": 720
+        },
+        {
+          "path": "GFX/credits4.pal",
+          "sha256": "970bfbd328436fc9fc8108ec4cb8eea2c5699b4024dbd5f6768c1cfa3cca3d15",
+          "size_bytes": 56
+        },
+        {
+          "path": "GFX/dmglockout.2bpp",
+          "sha256": "c258ee29ab12fceaeb70448d207fed4fb175c0d6fb306251344b6ddc09ffd8d9",
+          "size_bytes": 1232
+        },
+        {
+          "path": "GFX/dmglockout.2bpp.wle",
+          "sha256": "1b1c8a9de7d69007ba97797881d1418989502f28c73cc7ef2e3f42d71720f5bf",
+          "size_bytes": 797
+        },
+        {
+          "path": "GFX/dmglockout.map",
+          "sha256": "664dacf272d4f8355c7167e2376cce7cf64e7d5978da1bc4809b85747275048b",
+          "size_bytes": 200
+        },
+        {
+          "path": "GFX/dmglockout.png",
+          "sha256": "91ed525de72de7fcc1b4c28ef367a28f7f074ed62fb7eaf502c3d83374d47955",
+          "size_bytes": 745
+        },
+        {
+          "path": "GFX/emulockout.2bpp",
+          "sha256": "12b46ac8f9b8362cb3cdace43d078e4267151f42ea3e2b765698f2383da9ea72",
+          "size_bytes": 1264
+        },
+        {
+          "path": "GFX/emulockout.2bpp.wle",
+          "sha256": "5f6a909f2a83e3c8049aaf766dacbe0dfe416ce02321c1591b77d88d89ecb786",
+          "size_bytes": 787
+        },
+        {
+          "path": "GFX/emulockout.map",
+          "sha256": "e0900fbc5f6006d074f128e246a28e77a054c1355f677f02d1f2e1e955989452",
+          "size_bytes": 200
+        },
+        {
+          "path": "GFX/emulockout.pal",
+          "sha256": "8b2e2f9a72a7f49cca1252be0cdbd9c9a50e1beecfdd6a7af7946cc91fdc12a6",
+          "size_bytes": 8
+        },
+        {
+          "path": "GFX/endofdemo.2bpp",
+          "sha256": "d0328b0d32ec869dc79e0f72b6113eb4f71a7689c7250292bca8e53a066de546",
+          "size_bytes": 2032
+        },
+        {
+          "path": "GFX/endofdemo.2bpp.wle",
+          "sha256": "506689c1a43f1cc13404769759a641eb7228db5154fc497e909556ba4a2e5856",
+          "size_bytes": 1238
+        },
+        {
+          "path": "GFX/endofdemo.map",
+          "sha256": "4a9e82ce574bdd7880d8f578b69ecab29b680eceb7b9fd9a3227bccc72d0e6dc",
+          "size_bytes": 720
+        },
+        {
+          "path": "GFX/endofdemo.pal",
+          "sha256": "e868a86b7ae7d7271b1395ccdb3211d233464f92ab9ddd64e32bae3770493937",
+          "size_bytes": 64
+        },
+        {
+          "path": "GFX/explosion.2bpp",
+          "sha256": "4a9cebf9eeb790579c619e40dc6ed56f113c9e24ca5b859459bed3229b303680",
+          "size_bytes": 256
+        },
+        {
+          "path": "GFX/explosion.2bpp.wle",
+          "sha256": "48b3bb78607243b129429e9f018ee8cfdd64230f98ad4e9d21fd2a2fad639ecb",
+          "size_bytes": 108
+        },
+        {
+          "path": "GFX/explosion.pal",
+          "sha256": "bfcec95d1ae006fe6c38efeded5c8ae86eec8a0110b14d2aea40db341920f97a",
+          "size_bytes": 8
+        },
+        {
+          "path": "GFX/explosion.png",
+          "sha256": "7ff5717e86a6eb895cb09bb2a7982380afb83ac53f38075fe8bd53f249ae2f96",
+          "size_bytes": 301
+        },
+        {
+          "path": "GFX/fireball.2bpp",
+          "sha256": "71ae584bfa9b4304e812c88e4974c9bc09947617eace0cba38b189281d7097b3",
+          "size_bytes": 32
+        },
+        {
+          "path": "GFX/fireball.2bpp.wle",
+          "sha256": "17e467e2f3e8b95dda73e1ae6fd6c991f118283e3b60d95ddf5db0b9c2808538",
+          "size_bytes": 15
+        },
+        {
+          "path": "GFX/fireball.png",
+          "sha256": "c1e8f50689b55b936bc16ea1193b40db535ce80a47f3512d2d8c938c44c67ffd",
+          "size_bytes": 231
+        },
+        {
+          "path": "GFX/font.1bpp",
+          "sha256": "b48b97b8c11758907f73fc82a872d49277216c09a3cd1eaf2d5c0b3cb03706af",
+          "size_bytes": 768
+        },
+        {
+          "path": "GFX/font8.png",
+          "sha256": "c24f176c20f0e102bf9a790181a0b98fa6692155211adf9224e92864f3fe4c28",
+          "size_bytes": 1261
+        },
+        {
+          "path": "GFX/font8x16.png",
+          "sha256": "5278ae0bf22cd13a9f23164e6f9b8936ca6b111a360e56a13ce0c7a3e7c664b1",
+          "size_bytes": 3040
+        },
+        {
+          "path": "GFX/gbcompo25.2bpp",
+          "sha256": "30d9aa9ab5d69ee38765a18b78a331d1ea51f6b8e5de6cf392bacb23a86b192b",
+          "size_bytes": 2672
+        },
+        {
+          "path": "GFX/gbcompo25.2bpp.wle",
+          "sha256": "35c3fa9e3c0caee1099b9330a6aba3d99a74a696e842c29b2df8c3314c6572be",
+          "size_bytes": 2049
+        },
+        {
+          "path": "GFX/gbcompo25.map",
+          "sha256": "94aa9e08e720a9cf5e1651ec0ecf3c0e47a665a14a57e8da39a6fc4171d918de",
+          "size_bytes": 720
+        },
+        {
+          "path": "GFX/gbcompo25.pal",
+          "sha256": "647b2398d35fc7761d80bc32eeb3881992e1b2922702300bf6f3ffd5ca54d16f",
+          "size_bytes": 56
+        },
+        {
+          "path": "GFX/gbcompo25.png",
+          "sha256": "6cc105e666ffe9f3afd06760f373040ee83176a16fb85ddba9fe334a93de472e",
+          "size_bytes": 4506
+        },
+        {
+          "path": "GFX/hud.2bpp",
+          "sha256": "642ffb85d10ab837a0a0e49142298feb4b5c4d4804f684b2415eceb65174bf28",
+          "size_bytes": 608
+        },
+        {
+          "path": "GFX/hud.2bpp.wle",
+          "sha256": "1bb52bf8db0ae6f16b521d2c66d159c613c36da3a110a351d1f05a9b4262e22a",
+          "size_bytes": 410
+        },
+        {
+          "path": "GFX/hud.pal",
+          "sha256": "fcb2922e5153f7c3c858201cec7e7263b56ca427d05a70f280622b9351adb420",
+          "size_bytes": 16
+        },
+        {
+          "path": "GFX/hud.png",
+          "sha256": "0fd7baaa3a4b379df62623ac609c953416cacb7287002ebf94b5fc2291862773",
+          "size_bytes": 635
+        },
+        {
+          "path": "GFX/logo.2bpp",
+          "sha256": "9be16cffd5fbc0ad89b1f2a91408212d5c1bce9899d3a0f0131f295438aa40a8",
+          "size_bytes": 1600
+        },
+        {
+          "path": "GFX/logo.2bpp.wle",
+          "sha256": "365d57b17564111a0284969409a482595a0f0f15108adeca933ef60350e5ae45",
+          "size_bytes": 1179
+        },
+        {
+          "path": "GFX/logo.map",
+          "sha256": "c13a3b725d8061ac5eb5e03d0379596b6f0152105d6577e85b3fbf61070eeb76",
+          "size_bytes": 256
+        },
+        {
+          "path": "GFX/logo.png",
+          "sha256": "593f083959f0142cdc713109ced2e51e03ee080f700a7ea91eca9d1a93bafcb3",
+          "size_bytes": 1071
+        },
+        {
+          "path": "GFX/logo_mono.2bpp",
+          "sha256": "13d74bcfbc4bacf8732b94e76975b6ade779b9d58c8750caa26af127d86114a4",
+          "size_bytes": 1536
+        },
+        {
+          "path": "GFX/logo_mono.2bpp.wle",
+          "sha256": "dd1976e5317da6c60382b0b972ea7aeb093f84d2a847bf8fff275564fb9e9d99",
+          "size_bytes": 1179
+        },
+        {
+          "path": "GFX/logo_mono.map",
+          "sha256": "84791593e8632b208f35d0fd70040b1b7d8f9eeac653bd75166072e2efe27e65",
+          "size_bytes": 160
+        },
+        {
+          "path": "GFX/logo_mono.pal",
+          "sha256": "8b2e2f9a72a7f49cca1252be0cdbd9c9a50e1beecfdd6a7af7946cc91fdc12a6",
+          "size_bytes": 8
+        },
+        {
+          "path": "GFX/logo_mono.png",
+          "sha256": "05b96a893bd25555c84c8da20f049dca4ff770af3982d5928e0f4011a7e546d5",
+          "size_bytes": 1243
+        },
+        {
+          "path": "GFX/mainmenu.png",
+          "sha256": "06ce1e7c6367fd20209e93953b8c52994ffba45223e861a344ae8a9297625f45",
+          "size_bytes": 750
+        },
+        {
+          "path": "GFX/menu_options_credits.png",
+          "sha256": "0c03832d28f5fe67a0cb96de0ddca7cbcb9633826b6dddfd98171c4b09f77300",
+          "size_bytes": 417
+        },
+        {
+          "path": "GFX/menu_options_music.png",
+          "sha256": "7887b9ad213b2cd67a48efe3ea0dea53ae39368ed379792657976756bc484505",
+          "size_bytes": 377
+        },
+        {
+          "path": "GFX/menu_options_onoff.png",
+          "sha256": "ee7772524c1f904dc3f24d09ba1fd9652118ffed4701e2c7814a2f35769567d5",
+          "size_bytes": 410
+        },
+        {
+          "path": "GFX/menu_options_sfx.png",
+          "sha256": "b355ccb6e0132b0967d5bed371ba62eb841f25b41b620acdd339a52e343f9b97",
+          "size_bytes": 346
+        },
+        {
+          "path": "GFX/menu_title_options.png",
+          "sha256": "b3194e2d9e464a7015db71926de61d2c39bc6a7cacbf9cc1a3108740d1b12dc3",
+          "size_bytes": 441
+        },
+        {
+          "path": "GFX/menu_title_startgame.png",
+          "sha256": "c64bb7d7d3939e860b0a8ef083a4e5e1dfa122e1a4cc424b6761bb6ad15aad1f",
+          "size_bytes": 499
+        },
+        {
+          "path": "GFX/menubg.2bpp",
+          "sha256": "e328d514c78c87e97747cc1d9947f923f961e7f0b95eda5ee8b3d01e18ff4961",
+          "size_bytes": 2048
+        },
+        {
+          "path": "GFX/menubg.2bpp.wle",
+          "sha256": "b4697db9aafad5ccbdf6b9759249511c660327c554493606e44dca482e648d9f",
+          "size_bytes": 846
+        },
+        {
+          "path": "GFX/menubg.atr",
+          "sha256": "b6adbb1504a2d026091b232c91ab13d9e176b057a5d1db77707d62a0ea89d11b",
+          "size_bytes": 1024
+        },
+        {
+          "path": "GFX/menubg.atr.wle",
+          "sha256": "1d71148ee4b652d745bbc6e68cbad0d3b65834d066328cb0a4bc1c8e268a7f81",
+          "size_bytes": 53
+        },
+        {
+          "path": "GFX/menubg.map",
+          "sha256": "7f4ae5dd23ad1dbee902d378da5d93e5c6b4241ec4f076d306399dc81de877d3",
+          "size_bytes": 1024
+        },
+        {
+          "path": "GFX/menubg.map.wle",
+          "sha256": "f6b482b62b6a08fb7c4451383f6391323aaba759380241c9f076061a9de3eada",
+          "size_bytes": 90
+        },
+        {
+          "path": "GFX/menubg.png",
+          "sha256": "02d8b534d3e56e761d76ef64e67046bd0b3373301fcbf2127441732b4c95b476",
+          "size_bytes": 760
+        },
+        {
+          "path": "GFX/music.2bpp",
+          "sha256": "b4e0ce3be8f37961dfb567d495469c1a9e99a1a85cbec3e2993e49fe1ff9d155",
+          "size_bytes": 320
+        },
+        {
+          "path": "GFX/music.2bpp.wle",
+          "sha256": "4e75bca7b445c63d45236849dffc2726bd39bb56a50d32621107ee148548955c",
+          "size_bytes": 201
+        },
+        {
+          "path": "GFX/onoff.2bpp",
+          "sha256": "8b06d0ee41f51e5a722a923eb1016b1e99fae5a5dfa6d1b86f817c8209a2cfd2",
+          "size_bytes": 384
+        },
+        {
+          "path": "GFX/onoff.2bpp.wle",
+          "sha256": "e2367dc71d784551a3bb7feb13c8a0b97e85c3e5d74c0fdbe3ca3ea4802180b0",
+          "size_bytes": 242
+        },
+        {
+          "path": "GFX/options.2bpp",
+          "sha256": "9fbfd3a197a79d4f595d5911faa6939f9c2661acb5224d00675f21ce069e180f",
+          "size_bytes": 512
+        },
+        {
+          "path": "GFX/options.2bpp.wle",
+          "sha256": "b1adf079db5b5314cd56d15ebe6329fbe0f39acc8fb3b1d5110398d2eeb56c42",
+          "size_bytes": 254
+        },
+        {
+          "path": "GFX/pausetext.2bpp",
+          "sha256": "b97f6f8d110a7cf0e0461d21d70102c877b9e0ed56f105844dd4480f7bbcd39d",
+          "size_bytes": 192
+        },
+        {
+          "path": "GFX/pausetext.2bpp.wle",
+          "sha256": "40d974c45fa220d7e51bf2227888c61082c20c5ab4b17096136501c0c873ef26",
+          "size_bytes": 141
+        },
+        {
+          "path": "GFX/pausetext.pal",
+          "sha256": "e70d6cefe6af7a1999120325527c3394353716f9dd7fd6a121979100d22068d6",
+          "size_bytes": 32
+        },
+        {
+          "path": "GFX/pausetext_rare.pal",
+          "sha256": "74d884290150c807dae98699c3b39d4f430ada676b2cfbb39f39637fcae5ecf4",
+          "size_bytes": 32
+        },
+        {
+          "path": "GFX/player.pal",
+          "sha256": "2c069e7857a508a234974a8b7a969d4c2a74df2cb48e8568a24c9cb58aa66ffa",
+          "size_bytes": 8
+        },
+        {
+          "path": "GFX/player2.pal",
+          "sha256": "feece486b034a37772128006364455327c76ee9deaf2fc3b8f3c6ff5fa0ad593",
+          "size_bytes": 8
+        },
+        {
+          "path": "GFX/potion.2bpp",
+          "sha256": "543e5594600bca70790b8df2bb0030b9db04a59f4a8fec1098fc9b8ccf658eaf",
+          "size_bytes": 64
+        },
+        {
+          "path": "GFX/potion.2bpp.wle",
+          "sha256": "f55858ad8f73afaa5295a5ef5d90c8aba9a600719dd8ced48ee9897a584b4e0d",
+          "size_bytes": 50
+        },
+        {
+          "path": "GFX/potion.png",
+          "sha256": "6253074c7becdcd61bbaacb8bbd6ca9d6fffbcd4f2bd2e96bd781df17c9c897b",
+          "size_bytes": 252
+        },
+        {
+          "path": "GFX/potions.png",
+          "sha256": "e95ae65d466c4f295bcdc162b44e8747fd72d9051a59368015db84cacdcdc268",
+          "size_bytes": 412
+        },
+        {
+          "path": "GFX/puffofsmoke.2bpp",
+          "sha256": "d0773b105f19105a40c01d5ebc7e69d01ee2fa34caed45fc49de1ca319ba25e5",
+          "size_bytes": 192
+        },
+        {
+          "path": "GFX/puffofsmoke.2bpp.wle",
+          "sha256": "b70f825a95268d56902fb07d0ab3313daf6049d7feb580517429573e959f103d",
+          "size_bytes": 138
+        },
+        {
+          "path": "GFX/puffofsmoke.png",
+          "sha256": "7551d41b9db35fb510f7d073b7016adeaefabdbc58ed275e4f9a10e0cac9e59a",
+          "size_bytes": 310
+        },
+        {
+          "path": "GFX/sfx.2bpp",
+          "sha256": "3fea2d101d22d4415dba4ac5638cd0c81fa67d4c173ef1cc6e744b80db813c28",
+          "size_bytes": 256
+        },
+        {
+          "path": "GFX/sfx.2bpp.wle",
+          "sha256": "a553f15c27077111551331a801622e2f17bede102451021f68225565790202ec",
+          "size_bytes": 136
+        },
+        {
+          "path": "GFX/star.2bpp",
+          "sha256": "53c49dd1b58b3f367e883d34f9a1f7e6ad91c18049098cf70b3bf62344461578",
+          "size_bytes": 384
+        },
+        {
+          "path": "GFX/star.2bpp.wle",
+          "sha256": "6ec1a926a5198041438f2c5a0b41425290350222852cfc821056cc64df54034d",
+          "size_bytes": 100
+        },
+        {
+          "path": "GFX/star.pal",
+          "sha256": "590cf766ff4fcef60b6946fe90455ff506f9f08a25af3ff37c7c732678a21293",
+          "size_bytes": 8
+        },
+        {
+          "path": "GFX/star.png",
+          "sha256": "33f3043deebc8b7f70a1be8c84cd6a8d044a2c08fc17809bade894a2d162e914",
+          "size_bytes": 328
+        },
+        {
+          "path": "GFX/startgame.2bpp",
+          "sha256": "fbb4a8f39a0e35f01a4ec01c60dc2a8483fae67c911f39674f5f266db5af8f48",
+          "size_bytes": 640
+        },
+        {
+          "path": "GFX/startgame.2bpp.wle",
+          "sha256": "f2cfcf5b4fa7327cc1b119ff7cf6b93a5b52e7e35a9025c4244273ab5ffb0308",
+          "size_bytes": 407
+        },
+        {
+          "path": "GFX/title.png",
+          "sha256": "3fea098a275c4bd87d9637404ca61e2574602cddfbefea0c94490bc3a4abff15",
+          "size_bytes": 1313
+        },
+        {
+          "path": "GFX/titlemenu.pal",
+          "sha256": "5db1d56e77314b9fb9852c420a7051520bc028dd6c82ffc5de9f2227b310f58f",
+          "size_bytes": 8
+        },
+        {
+          "path": "GFX/vbalockout.png",
+          "sha256": "1df9ee7c4f1555d3f128f14be6d9edbf33ec45f4a0d4ccf04392daeb0231faed",
+          "size_bytes": 722
+        },
+        {
+          "path": "GameModes/CanvasTest.asm",
+          "sha256": "590eb1274d5db225d9d762b9ccfeb56ef6d253d521d9ec6c0c014454dbf290a3",
+          "size_bytes": 1118
+        },
+        {
+          "path": "GameModes/Copyright.asm",
+          "sha256": "cb08b03bfeb247894237a811f9b52a8a67bf0a3ca7bbc0b924c1c5a2c703c63e",
+          "size_bytes": 2180
+        },
+        {
+          "path": "GameModes/Credits.asm",
+          "sha256": "84e0aa05ea3ad19a93149a1e6f6bad269854dba1361ce1de0e7b2c77e92200d4",
+          "size_bytes": 3544
+        },
+        {
+          "path": "GameModes/DebugMenu.asm",
+          "sha256": "28c450cf6ef7cd8ef94462c4bef6cec0951c2975cb53808fc3730b9f33bff61a",
+          "size_bytes": 5845
+        },
+        {
+          "path": "GameModes/DevEdPresentsSplash.asm",
+          "sha256": "49a3f8c8c8db4936b41fe20e9abc33a0915a8de123b20b5969855e3e86e4ca07",
+          "size_bytes": 2482
+        },
+        {
+          "path": "GameModes/GBCompo25Splash.asm",
+          "sha256": "1195edb1e8f117ed4b9c069d5df897f17b6839ea2a51531036354e0069a0605a",
+          "size_bytes": 2380
+        },
+        {
+          "path": "GameModes/Level.asm",
+          "sha256": "a8f189693e1fecbf7f2c7dee941ee7722148b8d29c292230ff33bd9d4c6bf4ee",
+          "size_bytes": 30558
+        },
+        {
+          "path": "GameModes/Lockout.asm",
+          "sha256": "660ef6937c87949a1f344e74a62c1d1340864446927515285ee350931e15dd57",
+          "size_bytes": 1474
+        },
+        {
+          "path": "GameModes/TitleScreen.asm",
+          "sha256": "58dda753dff114137d9646c79fcf66e9d262d42fe64cc7d3fa7efbc52661f077",
+          "size_bytes": 19526
+        },
+        {
+          "path": "LICENSE",
+          "sha256": "05a737cab7911cce77ab9057d1129c241b02d69b00e5f1ef1409f5626fe4d55b",
+          "size_bytes": 1083
+        },
+        {
+          "path": "Levels/DarkForest1.json",
+          "sha256": "05f154317f05402dc963d20decbe5cc11ebbbbc325457dc7f5da7615404fa006",
+          "size_bytes": 5425
+        },
+        {
+          "path": "Levels/DarkForest2.json",
+          "sha256": "bf8fdfebcd13f63fafddf683f4bc312843842e73e0f1b5dcf68b570a5f98ad63",
+          "size_bytes": 6356
+        },
+        {
+          "path": "Levels/DarkForest3.json",
+          "sha256": "a8223aabdfbe59ca19d92d258e520f302aa4c020a32e730bc2e33d910b0b64e9",
+          "size_bytes": 5862
+        },
+        {
+          "path": "Levels/DarkForest4.json",
+          "sha256": "00300f96f4e16ba4dc0bae2c0f5a160653546c5d595169d7530cf63a0232f904",
+          "size_bytes": 6908
+        },
+        {
+          "path": "Levels/DarkForest5.json",
+          "sha256": "565d8f1894c11ac142c212ac58c1cc199ee7e2b6e596d99f2c8fa768a0759227",
+          "size_bytes": 6875
+        },
+        {
+          "path": "Levels/ProjectFiles/DarkForest.tsx",
+          "sha256": "75161351176a760595d2f755252c8afd8ea431dc49d5b272270dfb12b1c75c11",
+          "size_bytes": 253
+        },
+        {
+          "path": "Levels/ProjectFiles/DarkForest1.tmx",
+          "sha256": "2620a807912d2e147b70b7f26260e2bfed1359df10660c645b957b5ad532e014",
+          "size_bytes": 2078
+        },
+        {
+          "path": "Levels/ProjectFiles/DarkForest2.json",
+          "sha256": "0c5a5ced7f44e74d303cfecbe89a90b13c4873dc866a7c411aa7fb7c58470a95",
+          "size_bytes": 6461
+        },
+        {
+          "path": "Levels/ProjectFiles/DarkForest2.tmx",
+          "sha256": "0dcc77f892a841d6d3bbf7f4e9acc1ba531e97476b44c4567c51085daaffafba",
+          "size_bytes": 2235
+        },
+        {
+          "path": "Levels/ProjectFiles/DarkForest3.tmx",
+          "sha256": "e85d92aedd01a6150d6a171d1bb38b182a5de0789de16643ed8cb39e81fb329a",
+          "size_bytes": 2185
+        },
+        {
+          "path": "Levels/ProjectFiles/DarkForest4.tmx",
+          "sha256": "85c7606927f9ac407a3c48f91a8073a6961727292c928530055ba18c36372e0f",
+          "size_bytes": 2358
+        },
+        {
+          "path": "Levels/ProjectFiles/DarkForest5.tmx",
+          "sha256": "95036a3440939f8c5242052301872fe2f7de2267dbc943d465ed9177658379c5",
+          "size_bytes": 2324
+        },
+        {
+          "path": "Levels/ProjectFiles/TestTileset.tsx",
+          "sha256": "80a42c8da2ef0bf14569c68c4287dc13b880108cd5f0e80ec52cf1de99e86d59",
+          "size_bytes": 255
+        },
+        {
+          "path": "Levels/ProjectFiles/testlevel.tmx",
+          "sha256": "11348cf6f72055f3428029ea63f86e90d8c029035a53c460a413566a548861d5",
+          "size_bytes": 1658
+        },
+        {
+          "path": "Levels/ProjectFiles/testmap.tiled-project",
+          "sha256": "d6085e79f3eab6fd80d5bcfd08b3f5903c34b85345d5435b5a8c67fd09a80385",
+          "size_bytes": 237
+        },
+        {
+          "path": "Levels/ProjectFiles/testmap.tiled-session",
+          "sha256": "71586f37a785edf592303ed212ecd3d4cdeda2a7cc92c3eabdb59817e4a15588",
+          "size_bytes": 1625
+        },
+        {
+          "path": "Levels/testlevel.json",
+          "sha256": "86c8e92686d3376ac7f1560f9006c89b44f30a38b2c1eeb7357e543cb8cdeb01",
+          "size_bytes": 3717
+        },
+        {
+          "path": "Main.asm",
+          "sha256": "b41b09d58e14c23cefc8e808e05f20fc89c8da7f0faf91d6aa53c83c394d6f34",
+          "size_bytes": 18340
+        },
+        {
+          "path": "Objects/BigText.asm",
+          "sha256": "51343f64af7a690d2770a8be67c96be69374ed6e8d3b2e865605c8f10ca56939",
+          "size_bytes": 9871
+        },
+        {
+          "path": "Objects/Explosion.asm",
+          "sha256": "8da99b9845bc3dd7660ecb9eb62f98529a0f74e620faffd1052bb4f6850c0078",
+          "size_bytes": 3211
+        },
+        {
+          "path": "Objects/Frog.asm",
+          "sha256": "d6b44a295204e04a8e8aa506cce3680375516396edf181b99ef0de93498f0367",
+          "size_bytes": 18176
+        },
+        {
+          "path": "Objects/Imp.asm",
+          "sha256": "34376f3a8d23eced36fe6e5a9e8cbb61e4d10d955562d7d8c4ff6c78ce7d867a",
+          "size_bytes": 12763
+        },
+        {
+          "path": "Objects/ImpFireball.asm",
+          "sha256": "d751ffafc5b2794496b3fe672abb644749501c28450fb09787ef49d03629c17d",
+          "size_bytes": 3600
+        },
+        {
+          "path": "Objects/JackOLantern.asm",
+          "sha256": "a078b79696c358822a98a29a125618bdfd28daf571cb715efc9907ba82bfe574",
+          "size_bytes": 12194
+        },
+        {
+          "path": "Objects/Pointers.asm",
+          "sha256": "e2043aa664b39a06a0d6b15540e16d78a481d88ee6cea59b7474fb3ce804b7c6",
+          "size_bytes": 297
+        },
+        {
+          "path": "Objects/Potion.asm",
+          "sha256": "d31f674588d8539162331364e2b9b3185103184544d075424bb3b160a16bd4e6",
+          "size_bytes": 4854
+        },
+        {
+          "path": "Objects/PuffOfSmoke.asm",
+          "sha256": "da25162bae4337042d6f93b0cb924409a849e5c0b5a9af4561025b3507afdfa2",
+          "size_bytes": 3775
+        },
+        {
+          "path": "Objects/Slime.asm",
+          "sha256": "f664526bdfc349d5974a2c2a5ed07643c99256fec219629ea3073c4b8b8e36fc",
+          "size_bytes": 10144
+        },
+        {
+          "path": "Objects/Sparkle.asm",
+          "sha256": "65bc89bc58612462bbcda7b92acd3fb68a93123c38744dc35f0ea0159d8cae0a",
+          "size_bytes": 2681
+        },
+        {
+          "path": "Objects/Template.asm",
+          "sha256": "808d8983c69b93467b0f732c32b1110247645e68e4f34b40f64ee989fbcae914",
+          "size_bytes": 1401
+        },
+        {
+          "path": "Potion effect notes.txt",
+          "sha256": "0c183c302b6c646f715c09b6287ca6df5d060320096c57a0cf78246f0657b6db",
+          "size_bytes": 1876
+        },
+        {
+          "path": "README.md",
+          "sha256": "92e1258a0535adbfdc305e82e2774162d871af7a634f6e5eef038a780b1ca353",
+          "size_bytes": 792
+        },
+        {
+          "path": "Tilesets/DarkForest.2bpp",
+          "sha256": "f0842376ab92889866afbcc630a7669d7b4c00a745fd075d705c8274f05a425d",
+          "size_bytes": 1648
+        },
+        {
+          "path": "Tilesets/DarkForest.2bpp.wle",
+          "sha256": "423767542cfe660ec65c5486cc4204ff0a70ee2ef70003c4129a0a9df2343c7f",
+          "size_bytes": 1368
+        },
+        {
+          "path": "Tilesets/DarkForest.blk",
+          "sha256": "6afeef2be8b9b8b1d8bcea15eccde8b402340e785a5731bebc6e7e6bc4c1be9d",
+          "size_bytes": 2048
+        },
+        {
+          "path": "Tilesets/DarkForest.pal",
+          "sha256": "5a9a3b00113a91d11fffc14f9420f8c9f1f06d79354d143af6458ccd9f77d981",
+          "size_bytes": 32
+        },
+        {
+          "path": "Tilesets/DarkForest.png",
+          "sha256": "a49724607c4f9972c074af14cb4332164a3b7eedb154cc162ecfee0eaaff9b69",
+          "size_bytes": 5172
+        },
+        {
+          "path": "Tilesets/TestTileset.2bpp",
+          "sha256": "2bb46b0a6b329d83a171f65533fcdd99cf15087a33b927b115e18833d4d24396",
+          "size_bytes": 1328
+        },
+        {
+          "path": "Tilesets/TestTileset.2bpp.wle",
+          "sha256": "11414c5e8713789337922157cc3d96c8ae0e859c11fa70f533e52ab6b5e7f3c9",
+          "size_bytes": 899
+        },
+        {
+          "path": "Tilesets/TestTileset.blk",
+          "sha256": "0516326c1465b3d93b543624f17184967386e767fb954cb7e67f43474a8e471a",
+          "size_bytes": 2048
+        },
+        {
+          "path": "Tilesets/TestTileset.map",
+          "sha256": "911d73fa352c6eca89cedf8a7696b2000d6df4772a6cc872f7837f23e4f26c0e",
+          "size_bytes": 2048
+        },
+        {
+          "path": "Tilesets/TestTileset.pal",
+          "sha256": "7334a2820c811dd3536acab554c522da54565cf8622d731429e42ef1064051ce",
+          "size_bytes": 16
+        },
+        {
+          "path": "Tilesets/TestTileset.png",
+          "sha256": "29bfac98bf2770bdb898907745420f17634347e6e6e6b002fa5ff28cf7c93edc",
+          "size_bytes": 3073
+        },
+        {
+          "path": "Tilesets/TestTileset_Collision.bin",
+          "sha256": "4059d0c0606828be96d1298bf8302a9fa8b2618e8650362f90096deba77bf9c6",
+          "size_bytes": 256
+        },
+        {
+          "path": "Tilesets/TestTileset_CollisionAngles.bin",
+          "sha256": "e8bc0618f90ffba123b2593fb2682e45d90a7ed6e273e8661baee087effbe09d",
+          "size_bytes": 256
+        },
+        {
+          "path": "Tilesets/TestTileset_CollisionHeights.bin",
+          "sha256": "0b5489473a407013f51aa3ce986e4133da20c6f2a97411c46994e72ddc9397e6",
+          "size_bytes": 4096
+        },
+        {
+          "path": "Tools/convertmap.py",
+          "sha256": "d3511bdc1c74179de4717f94a5262f95389d6eedace965845dd3b8b54b3188a2",
+          "size_bytes": 8947
+        },
+        {
+          "path": "Tools/tilegen.py",
+          "sha256": "87cb86d32aeebb71f42ac7f565c3c030c6486159a16ce2fbd4e4433178eba999",
+          "size_bytes": 1141
+        },
+        {
+          "path": "Tools/wlenc.py",
+          "sha256": "3194f68a48c808ff905870df6f87c0fe79b53ed8bdadb86367b761131422052a",
+          "size_bytes": 3265
+        },
+        {
+          "path": "Tools/xmconv.py",
+          "sha256": "dbe2e198d89e5813feb56841fec431bc6673a00eed26f3b9f45db68b39156933",
+          "size_bytes": 9922
+        },
+        {
+          "path": "build.sh",
+          "sha256": "98bfb415d37016b356ceccddc27f9a79a49e1b18306061a252a8ca889d9bda48",
+          "size_bytes": 1234
+        },
+        {
+          "path": "make.bat",
+          "sha256": "deb0741065bd1a4cf51fea780c4a880461a4547b499fb94b98cdd5386da3a88a",
+          "size_bytes": 230
+        }
+      ],
+      "build_inputs": [
+        {
+          "path": "README.md",
+          "sha256": "92e1258a0535adbfdc305e82e2774162d871af7a634f6e5eef038a780b1ca353",
+          "size_bytes": 792
+        },
+        {
+          "path": "build.sh",
+          "sha256": "98bfb415d37016b356ceccddc27f9a79a49e1b18306061a252a8ca889d9bda48",
+          "size_bytes": 1234
+        },
+        {
+          "path": "Main.asm",
+          "sha256": "b41b09d58e14c23cefc8e808e05f20fc89c8da7f0faf91d6aa53c83c394d6f34",
+          "size_bytes": 18340
+        },
+        {
+          "path": "Tools/convertmap.py",
+          "sha256": "d3511bdc1c74179de4717f94a5262f95389d6eedace965845dd3b8b54b3188a2",
+          "size_bytes": 8947
+        },
+        {
+          "path": "GameModes/Level.asm",
+          "sha256": "a8f189693e1fecbf7f2c7dee941ee7722148b8d29c292230ff33bd9d4c6bf4ee",
+          "size_bytes": 30558
+        },
+        {
+          "path": "Levels/DarkForest1.json",
+          "sha256": "05f154317f05402dc963d20decbe5cc11ebbbbc325457dc7f5da7615404fa006",
+          "size_bytes": 5425
+        },
+        {
+          "path": "Levels/DarkForest2.json",
+          "sha256": "bf8fdfebcd13f63fafddf683f4bc312843842e73e0f1b5dcf68b570a5f98ad63",
+          "size_bytes": 6356
+        },
+        {
+          "path": "Levels/DarkForest3.json",
+          "sha256": "a8223aabdfbe59ca19d92d258e520f302aa4c020a32e730bc2e33d910b0b64e9",
+          "size_bytes": 5862
+        },
+        {
+          "path": "Levels/DarkForest4.json",
+          "sha256": "00300f96f4e16ba4dc0bae2c0f5a160653546c5d595169d7530cf63a0232f904",
+          "size_bytes": 6908
+        },
+        {
+          "path": "Levels/DarkForest5.json",
+          "sha256": "565d8f1894c11ac142c212ac58c1cc199ee7e2b6e596d99f2c8fa768a0759227",
+          "size_bytes": 6875
+        },
+        {
+          "path": "Levels/testlevel.json",
+          "sha256": "86c8e92686d3376ac7f1560f9006c89b44f30a38b2c1eeb7357e543cb8cdeb01",
+          "size_bytes": 3717
+        }
+      ]
+    }
   },
   "build": {
     "state": "not_observed",
     "blocked_by": "rights",
-    "reason": "Rights cutoff before source acquisition: no exact source or build inputs were approved or observed; no upstream build was run."
+    "reason": "No source build was performed: the pinned build.sh invokes the pinned Tools/convertmap.py, whose WLE encoder is attributed to Pigu/AYCE and is excluded by D-207; the pinned Levels tree has no generated map .inc or .bin outputs, no reviewed source-build closure omits that converter, and the creator-published prebuilt ROM has no build receipt binding it to the pinned source commit."
   },
   "admission": {
     "state": "observed",
     "value": {
       "decision_status": "no-go",
-      "reason": "The creator page reports separate MIT code and CC BY-NC-SA 4.0 asset terms, but the exact source tree and component-to-grant coverage could not be inspected. Phase 20 repository/public-CI rights and notice scope therefore remain unestablished.",
+      "reason": "The creator page and pinned source support the recorded code/assets scope, but the only pinned source-build route invokes the separately attributed WLE converter excluded by D-207. The offered prebuilt ROM is not bound to the pinned source commit by a build receipt; no source-build closure or Phase 20 admission was established.",
       "evidence": {
         "kind": "rights-scope-review",
         "creator_page": "https://deved.itch.io/potion-panic",
         "creator_page_observed": {
           "release": "GB Compo 2025 demo",
-          "listed_download": "ROM file, 256 kB",
+          "listed_download": "ROM file (GB Compo 2025 demo), 256 kB",
+          "response_filename": "potionpanic_jam.gbc",
+          "sidecar_filename": "LICENSE",
           "source_link": "https://codeberg.org/DevEd/potion-panic",
           "code_license_label": "MIT License",
           "asset_license_label": "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International"
@@ -33,102 +1753,121 @@
         "license_references": {
           "asset_license_legal_code": "https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.en",
           "mit_license_reference": "https://opensource.org/license/mit",
-          "scope_note": "The CC BY-NC-SA grant is conditional, including noncommercial use, attribution, and share-alike for adapted material; the licensor's authority to grant each work must still be established."
+          "scope_note": "The CC BY-NC-SA grant is conditional; D-207 accepts the creator-page asset category for the pinned GFX, Levels, Tilesets and Audio/Modules components. The MIT sidecar alone does not grant those asset terms."
         },
-        "authoritative_source_acquisition": {
-          "repository": "https://codeberg.org/DevEd/potion-panic",
-          "attempt": "git ls-remote --symref for the creator-linked repository",
-          "result": "failed before any ref or commit identity was returned",
-          "sanitized_error": "SSL_ERROR_SYSCALL while connecting to codeberg.org:443"
+        "source_and_build_evidence": {
+          "path": "tests/data/cgb-candidates/evidence/potion-panic-build-review.json",
+          "sha256": "2ac08bec57e239effc247ad9e0af673873b40279c506abe2102449f986d82ecc"
         },
-        "fork_disposition": {
-          "repository": "https://github.com/gbcompo25/potion-panic",
-          "used_as_source_authority": false,
-          "reason": "The indexed repository identifies itself as a fork from DevEd2/potion-panic; the creator page instead links to Codeberg DevEd/potion-panic."
+        "unresolved_build_component": {
+          "path": "Tools/convertmap.py",
+          "sha256": "d3511bdc1c74179de4717f94a5262f95389d6eedace965845dd3b8b54b3188a2",
+          "attribution": "Embedded WLE encoder by Pigu/AYCE.",
+          "rights_scope": "No separate grant or notice for local invocation was identified; D-207 excludes this converter from use/copy.",
+          "source_build_consequence": "The pinned build.sh invokes this converter for the top-level Levels JSON files; no reviewed source-build closure omits it."
         },
-        "unresolved_phase20_scope": [
-          "Exact code, art, audio-driver, converter, build-input, and notice coverage for the creator-linked source tree",
-          "Evidence that the grantor has authority over each component and its incorporated dependencies",
-          "Explicit repository and public-CI scope for the exact source-built ROM and required notices"
-        ],
-        "cutoff": "Stopped at the rights gate. No authoritative source revision, source inventory, submodule identities, build-tool identities, ROM bytes, cartridge header, loaded mode, progress predicate, observations, or receipt were established."
+        "creator_published_prebuilt": {
+          "filename": "potionpanic_jam.gbc",
+          "size_bytes": 262144,
+          "sha256": "86922a48308031d5ca7e79cecbfbe3b4d41c8f094e0c2a5f90b6ced362d708f8",
+          "sidecar": {
+            "filename": "LICENSE",
+            "size_bytes": 1083,
+            "sha256": "05a737cab7911cce77ab9057d1129c241b02d69b00e5f1ef1409f5626fe4d55b"
+          },
+          "relationship": "The creator page labels this download as the GB Compo 2025 demo and links the pinned source repository; no build receipt binds the payload bytes to source commit 321b8365d31a3239d3d7f54831d0339991e2c49c.",
+          "bootless_derivative": {
+            "size_bytes": 262144,
+            "sha256": "186ba4b7ba0f755eeb2feeaaf4c204a8152757d5fd2200de2d6bdaeea90c86bb",
+            "transform": "zero 0x0104–0x0133; recompute only 0x014E–0x014F"
+          },
+          "metadata_evidence": {
+            "path": "tests/data/cgb-candidates/evidence/potion-panic-build-review.json",
+            "sha256": "2ac08bec57e239effc247ad9e0af673873b40279c506abe2102449f986d82ecc"
+          },
+          "original_payload_review_path": "build/phase24/source-review/potion-panic-official/potion-panic.gb",
+          "derivative_review_path": "build/phase24/source-review/potion-panic-official/potion-panic-bootless.gbc"
+        },
+        "source_build_performed": false,
+        "fixture_admission_performed": false,
+        "candidate_runtime_performed": false
       }
     }
   },
   "rom": {
     "state": "not_observed",
     "blocked_by": "rights",
-    "reason": "Rights cutoff before candidate acquisition/build; ROM bytes, digest, size, and cartridge header were not observed."
+    "reason": "The downloaded creator release and local bootless derivative were inspected as provenance metadata only; no candidate ROM was admitted or executed after the source-build rights gate failed."
   },
   "execution": {
     "state": "not_observed",
     "blocked_by": "rights",
-    "reason": "Rights cutoff before candidate execution; CGB profile and loaded execution mode were not observed."
+    "reason": "The source-build rights gate did not pass; no later candidate operation was performed."
   },
   "progress": {
     "state": "not_observed",
     "blocked_by": "rights",
-    "reason": "Rights cutoff before candidate execution; no game route or progress predicate was evaluated."
+    "reason": "The source-build rights gate did not pass; no later candidate operation was performed."
   },
   "observations": {
     "state": "not_observed",
     "blocked_by": "rights",
-    "reason": "Rights cutoff before candidate execution; RGB555 and PCM observations were not produced."
+    "reason": "The source-build rights gate did not pass; no later candidate operation was performed."
   },
   "receipt": {
     "state": "not_observed",
     "blocked_by": "rights",
-    "reason": "Rights cutoff before candidate execution; no source-qualified candidate receipt was produced."
+    "reason": "The source-build rights gate did not pass; no later candidate operation was performed."
   },
   "unobserved": [
     {
-      "field": "source",
-      "blocked_by": "rights",
-      "reason": "Rights cutoff before source acquisition: the creator-linked Codeberg repository was unavailable, so no exact revision, recursive inputs, component inventory, or build recipe was observed."
-    },
-    {
       "field": "build",
       "blocked_by": "rights",
-      "reason": "Rights cutoff before source acquisition: no exact source or build inputs were approved or observed; no upstream build was run."
+      "reason": "No source build was performed: the pinned build.sh invokes the pinned Tools/convertmap.py, whose WLE encoder is attributed to Pigu/AYCE and is excluded by D-207; the pinned Levels tree has no generated map .inc or .bin outputs, no reviewed source-build closure omits that converter, and the creator-published prebuilt ROM has no build receipt binding it to the pinned source commit."
     },
     {
       "field": "rom",
       "blocked_by": "rights",
-      "reason": "Rights cutoff before candidate acquisition/build; ROM bytes, digest, size, and cartridge header were not observed."
+      "reason": "The downloaded creator release and local bootless derivative were inspected as provenance metadata only; no candidate ROM was admitted or executed after the source-build rights gate failed."
     },
     {
       "field": "execution",
       "blocked_by": "rights",
-      "reason": "Rights cutoff before candidate execution; CGB profile and loaded execution mode were not observed."
+      "reason": "The source-build rights gate did not pass; no later candidate operation was performed."
     },
     {
       "field": "progress",
       "blocked_by": "rights",
-      "reason": "Rights cutoff before candidate execution; no game route or progress predicate was evaluated."
+      "reason": "The source-build rights gate did not pass; no later candidate operation was performed."
     },
     {
       "field": "observations",
       "blocked_by": "rights",
-      "reason": "Rights cutoff before candidate execution; RGB555 and PCM observations were not produced."
+      "reason": "The source-build rights gate did not pass; no later candidate operation was performed."
     },
     {
       "field": "receipt",
       "blocked_by": "rights",
-      "reason": "Rights cutoff before candidate execution; no source-qualified candidate receipt was produced."
+      "reason": "The source-build rights gate did not pass; no later candidate operation was performed."
     }
   ],
   "disposition": {
     "status": "no-go",
     "category": "rights",
     "blocker_stage": "rights",
-    "reason": "Exact component rights and required repository/public-CI scope could not be established from the creator-linked source evidence; no later candidate facts were observed.",
+    "reason": "The required local source-build route is blocked by the separately attributed WLE converter: the pinned build script invokes Tools/convertmap.py, the converter is excluded by D-207, and no reviewed source-build closure omits it. The creator-published prebuilt ROM is observed, but its bytes are not bound to the pinned source commit by a build receipt; this does not satisfy the exact source/build gate.",
     "evidence": {
-      "kind": "creator-linked-source-and-rights-cutoff",
+      "kind": "creator-linked-source-and-build-rights-cutoff",
       "source_repository": "https://codeberg.org/DevEd/potion-panic",
-      "source_acquisition_error": "SSL_ERROR_SYSCALL before ref or commit identity was returned",
-      "rights_finding": "Creator-page license labels were verified, but exact component coverage, grant authority, and Phase 20 repository/public-CI scope remain unverified.",
-      "upstream_scripts_executed": false,
-      "candidate_rom_acquired_or_executed": false
+      "source_revision": "321b8365d31a3239d3d7f54831d0339991e2c49c",
+      "source_build_performed": false,
+      "candidate_runtime_performed": false,
+      "creator_prebuilt_metadata_path": "tests/data/cgb-candidates/evidence/potion-panic-build-review.json",
+      "creator_prebuilt_metadata_sha256": "2ac08bec57e239effc247ad9e0af673873b40279c506abe2102449f986d82ecc",
+      "creator_prebuilt_acquired": true,
+      "candidate_rom_admitted": false,
+      "unresolved_build_component": "Tools/convertmap.py",
+      "converter_sha256": "d3511bdc1c74179de4717f94a5262f95389d6eedace965845dd3b8b54b3188a2"
     }
   }
 }

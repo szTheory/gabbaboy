@@ -28,17 +28,31 @@ python3 -I tests/scripts/verify-cgb-candidates.py --check-closeout \
 The first command validates exact named source, component, notice and original requirement-owner
 identities while preserving unresolved outcomes. The second is an admission gate and refuses while
 any component needed by Potion Panic or the sole µCity fallback has unresolved local-build or
-repository/public-CI scope. Current pinned evidence supports the recorded Potion Panic source code,
-audio-driver code and hardware.inc notice; its visual assets, music and embedded WLE converter
-remain unresolved. µCity's GPL-header source, BSD-2-Clause GBT Player and CC BY-SA media are
-recorded with their notices; its required `hardware.inc` has no established grant and blocks local
-build, repository use and public CI. These findings do not establish a completed game attempt or a
-candidate no-go. No game ROM was acquired, built, executed or staged; source/build/ROM/header/native
-mode facts remain `not_observed` until the applicable rights are established.
+repository/public-CI scope. Under D-207, the exact Potion Panic source code, audio driver,
+`hardware.inc`, visual assets and music have recorded supported scope; the CC BY-NC-SA asset use is
+noncommercial, retains attribution, identifies changes, and applies share-alike to adaptations. The
+Pigu/AYCE WLE converter remains unresolved and excluded from use. The pinned `build.sh` invokes that
+converter for the level JSON inputs, while the pinned tree has no generated level map `.inc` or
+`.bin` outputs; no reviewed source-build closure omitting the converter was identified.
+
+The creator page offers `potionpanic_jam.gbc` as “ROM file (GB Compo 2025 demo)” and links the
+pinned source project. The raw release and `LICENSE` sidecar were inspected only in ignored local
+review storage. Their exact digests, valid header/checksum observations, and a local bootless
+derivative digest and byte-range transform are recorded in
+`tests/data/cgb-candidates/evidence/potion-panic-build-review.json`. This page/source relationship
+does not include a build receipt binding the ROM bytes to the pinned commit. The candidate's build
+and ROM facts therefore remain `not_observed`; no source build, Phase 20 admission, candidate
+execution, progress observation, or receipt was produced, and neither ROM payload was staged.
+The exact non-fixture asset notice is retained at
+`tests/data/cgb-candidates/evidence/potion-panic-asset-notice.txt`.
+FIXT-01 remains Pending. Do not attempt µCity until the primary no-go is committed and accepted;
+the sole fallback's required `hardware.inc` remains without an established grant.
 
 The record also pins the exact dmg-acid2 v1.0, cgb-acid2 v1.1 and gbmicrotest source trees and
-observed notices. Acid2 code and the mgblib code have recorded MIT notices; upstream footer/reference
-images remain unresolved, font data is excluded by design, and no derivative was created.
+observed notices. Acid2 code and the mgblib code have recorded MIT notices. Under D-207, each
+exact pinned `img/` tree is accepted under its repository root MIT grant as a narrow
+repository-level inference; font data remains excluded by design, and no derivative or
+comparison was created.
 gbmicrotest source has its MIT notice, while the 513 generated ROM outputs and embedded logo remain
 unresolved. This does not admit or stage any diagnostic payload.
 

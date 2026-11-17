@@ -29,12 +29,13 @@ SOFTWARE.
 
 Assets (`GFX`, `Levels`, `Tilesets`, and `Audio/Modules`): DevEd, Potion Panic,
 CC BY-NC-SA 4.0 International. The creator page identifies the asset license.
-See https://creativecommons.org/licenses/by-nc-sa/4.0/ . The source asset files
-are used as part of the creator-published GB Compo 2025 demo; GabbaBoy does not
-modify those source assets. Use and redistribution of those assets or a
-ROM-derived work is limited to noncommercial purposes and must preserve
-attribution, identify changes, and apply the same license to adaptations. This
-project is not endorsed by DevEd.
+See https://creativecommons.org/licenses/by-nc-sa/4.0/ . The listed asset
+components and adaptations of those assets carry the CC BY-NC-SA 4.0
+noncommercial, attribution, change-identification, and share-alike obligations.
+This notice does not relicense the source code identified as MIT and does not
+assert a blanket CC BY-NC-SA license for every ROM or other combined work; the
+recorded grant is limited to the listed asset components and their adaptations.
+This project is not endorsed by DevEd.
 
 The separately attributed Pigu/AYCE WLE converter is not included or used by
 GabbaBoy. The µCity fallback is not included.
