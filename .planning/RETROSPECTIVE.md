@@ -115,6 +115,37 @@ Model mix and session counts were not recorded. The audit measured sanitizer CTe
 
 ---
 
+## Milestone: v0.4 — Evidence Floor
+
+**Administrative closeout:** 2026-11-17 with owner-accepted gaps. **Product release:** `v0.4.0` was already published on 2026-11-14 and was not changed. **Phases:** 6 | **Plans:** 33 (32 plan summaries retained; Phase 24 Task 7 is unfinished).
+
+### What Was Built
+
+CGB frame/progress and scene-feedback contracts, qualified v0.4.0 release evidence, exact-source rights records, two controlled Acid2 derivatives, and one admitted/executed gbmicrotest case. The original requirement tracker now has seven completed criteria and one Pending game-fixture criterion.
+
+### What Worked
+
+The candidate order and rights exclusions stayed explicit. Independent review separated literal diagnostic acceptance from the Acid2 runtime comparison, so the failure remained visible without being misclassified as a core defect. The small diagnostic lane accounted for one eligible/executed case and 512 exclusions. The sibling scan found a useful renderer pattern: establish independent output oracles before implementing a scoped display path.
+
+### What Was Inefficient
+
+An unrelated end-to-end game-fixture requirement kept the whole evidence milestone open after the diagnostic criteria had enough evidence to close independently. Stale verification reports and a missing Phase 24 final task kept triggering workflow routes that could not make progress on FIXT-01. The cross-model Acid2 failure has no retained image map and must not be replayed under this closeout.
+
+### Patterns Established
+
+Close each requirement against its own literal criteria and linked evidence. Keep runtime failures distinct from specification gaps. Close a milestone with an explicit override when the owner chooses to defer an independent requirement; never rewrite the deferred requirement as satisfied. For PPU work, admit a small exact DMG oracle set first, write independent tests before changing rendering code, and check cheap identity/accounting controls before the long suite.
+
+### Key Lessons
+
+1. Do not make a milestone's final task all-or-nothing when the requirements are independently verifiable; record each disposition separately.
+2. Freeze the closeout policy and acceptable stop conditions before starting the milestone's last phase.
+3. When an oracle output is lost, preserve the original result and stop; do not replay a costly run just to obtain a more convenient artifact.
+4. Move to a new, evidence-supported emulator slice when a bounded fixture gate remains blocked; do not keep reopening the same plan without a new source of evidence.
+
+### Cost Observations
+
+No new full CTest suite, release workflow, or Acid2 replay ran for this closeout. The model mix was not recorded. The exact-final-head D-103 suite remains deferred with FIXT-01; this is disclosed, not counted as a pass.
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -124,6 +155,7 @@ Model mix and session counts were not recorded. The audit measured sanitizer CTe
 | v0.1 | 7 | 64 | Exact-head CI gate, freshness-checked verification, debt-closure phase before close |
 | v0.2 | 10 | 170 | Frozen DMG baseline gate, exact-tag release rehearsal, boundary-commit verifiers, zero-checkpoint automated UAT |
 | v0.3 | 4 | 35 | Bounded phases, state-fork/omission evidence, final-head audit, explicit override closeout |
+| v0.4 | 6 | 33 | Separate requirement dispositions; owner-directed early close with FIXT-01 and stale-verification gaps disclosed |
 
 ### Cumulative Quality
 
@@ -132,9 +164,11 @@ Model mix and session counts were not recorded. The audit measured sanitizer CTe
 | v0.1 | 184/184 (06.1 regression) | loader, battery, API (bounded) | 0 (SDL only in the optional player) |
 | v0.2 | 1183/1183 (15.1 verify) | v0.1 set plus hosted 60 s libFuzzer ASan/UBSan campaign | 0 |
 | v0.3 | 1707/1707 (implementation-head audit; zero skips) | Hosted state-load semantics added to existing campaigns | 0 |
+| v0.4 | No exact-final-head suite at close; earlier phase checks remain in their linked records | No new fuzz target added at close | 0 |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. Verification freshness goes stale whenever late phases touch shared files, so budget a refresh or a documented override at close (GB-GSD-008; v0.1 and v0.2).
 2. Close a `tech_debt` audit with an inserted debt phase before archiving (06.1 and 15.1). Owner-only decisions stay explicit rather than accepted.
 3. A local pass, a stale run or a branch commit is not hosted proof. Bind evidence to the exact head or merge commit (v0.1 exact-head gate; v0.2 GB-EVID-002).
+4. Requirements with independent acceptance evidence can be closed separately while an unrelated fixture requirement remains Pending; state the override and keep the deferred row open (GB-GSD-003; v0.4).

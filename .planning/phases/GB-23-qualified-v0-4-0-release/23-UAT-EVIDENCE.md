@@ -1,3 +1,10 @@
+---
+audit_acknowledged:
+  milestone: v0.4
+  at: 2026-11-17
+  gap_snapshot: "unknown::scenarios=0"
+---
+
 # Phase 23 automated acceptance evidence
 
 The actual qualified v0.4.0 publication is release 443425157 at permanent source 3de1b0e427f37a202be4469dd818266f359c8b20. Trusted control fbea1e2cc70f7c2ab9ea5820fa92ca18ddf997e8 ran successful publisher 43526085579 attempt 1. [23-EVIDENCE.md](23-EVIDENCE.md) records the public source/run/receipt/artifact links, actual native full inventories, actual S corpus, notices, all 22 public byte identities, preserved original 20 and exact prepublish inventory. Actual native platform consumers bind those exact hashes; fresh public macOS consumers and installed-host continuation also pass. All four product positives and four licensed-game insertion refusals pass. Source archive and all six owner evidence families reconcile.

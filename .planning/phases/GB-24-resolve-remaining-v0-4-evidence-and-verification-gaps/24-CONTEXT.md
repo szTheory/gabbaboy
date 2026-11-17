@@ -1,7 +1,7 @@
 # Phase 24: Resolve remaining v0.4 evidence and verification gaps - Context
 
-**Gathered:** 2026-11-16
-**Status:** D-206 closeout decisions recorded; the amended existing plan is awaiting independent review
+**Gathered:** 2026-11-16; post-T6 discussion updated 2026-11-17
+**Status:** T6 evidence reviewed; literal-criterion reconciliation recorded; FIXT-01 still blocks Task 7
 
 <domain>
 ## Phase Boundary
@@ -89,6 +89,9 @@ This recovery adds no plan, dependency, or CTest identity and does not reset any
 - [µCity upstream repository](https://github.com/AntonioND/ucity) and [v1.3 release page](https://github.com/AntonioND/ucity/releases/tag/v1.3) — The upstream repository links to Codeberg; the release page shows tag metadata and a short commit prefix. This does not establish required-file provenance or rights.
 - [µCity linked source repository](https://codeberg.org/SkyLyrac/ucity) — The browser could not fetch this page during discussion; do not infer that the repository is absent.
 - [dmg-acid2 v1.0 README](https://github.com/mattcurrie/dmg-acid2/blob/v1.0/README.md), [cgb-acid2 v1.1 README](https://github.com/mattcurrie/cgb-acid2/blob/v1.1/README.md), and [pinned gbmicrotest README](https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/README.md) — Primary upstream references; the browser could not fetch these pages during discussion. Do not infer that their source or permissions are absent.
+- [24-CLOSEOUT.md](24-CLOSEOUT.md) and [tracked diagnostic runtime record](../../../tests/external/diagnostic-closeout.json) — Exact results and identities; ignored local runtime receipts are not a substitute for the tracked record.
+- [Acid2 fixture manifest](../../../fixtures/acid2/manifest.json) and [diagnostic evidence documentation](../../../docs/diagnostic-evidence.md) — Admitted derivative, mask, provenance, and claim boundaries.
+- [THIRD_PARTY_NOTICES.md](../../../THIRD_PARTY_NOTICES.md) — Contains one stale pre-T6 comparison sentence to correct during a later closeout update.
 
 </canonical_refs>
 
@@ -162,3 +165,40 @@ This recovery adds no plan, dependency, or CTest identity and does not reset any
 The owner directed best-faith decisions from collected primary sources and declined external outreach. D-207 accepts the Potion Panic creator-page CC BY-NC-SA label for the exact creator-linked `GFX`, `Levels`, `Tilesets`, and `Audio/Modules` components, with noncommercial-only scope, attribution, license notice, change marking, and share-alike treatment. It excludes the separately attributed Pigu/AYCE WLE converter; if the official prebuilt ROM is considered, its exact sidecar, digest, source relationship, header, and runtime still must be inspected. The pinned µCity `source/engine/hardware.inc` remains blocked because the file has no grant and differs from the available CC0 source.
 
 D-207 also accepts a narrow root-MIT inference for only the pinned dmg-acid2 v1.0 and cgb-acid2 v1.1 `img/` trees, with both MIT notices and the original Acid2 creator credit retained. The `mgblib` font data remains excluded. These are explicit owner-accepted best-faith interpretations, not new upstream component-specific statements and not gap acceptance. Continue to require exact fixture bytes, pinned tools/builds, authored glyph replacement, source-derived masks, independent runtime comparisons, and the existing accounting contracts; preserve affected requirements as Pending if any required fact remains unestablished. The one accepted gbmicrotest case stays limited to its existing scope; other 512 cases and logo scope remain unresolved. No rightsholder messages will be sent.
+
+## Post-T6 Discussion Addendum (owner-directed, 2026-11-17)
+
+The owner asked for all relevant Phase 24 decision areas to be reviewed and for the synthesized recommendations to be followed. This records the resulting criterion-level direction. It does not authorize another Acid2 run, implementation, Task 7, CI, PR, merge, branch switch, or cleanup. Keep tracker edits for formal reconciliation; keep both automatic-advance flags false.
+
+### Acid2 cross-model result and DIAG-01 scope
+
+- The exact T6 run remains `runtime-failed` for DMG-on-CGB: 19,840 of 19,840 compared unmasked pixels differed. The same-model DMG-on-DMG and CGB-on-CGB comparisons each passed with zero differing pixels. Preserve all three results as recorded; do not call the cross-model result a pass or replay the fixture.
+- Read-only inspection of the recorded source revision and pinned upstream references found the runner selected the admitted DMG derivative, CGB-CPU-E, and DMG mode. The recorded core source uses the intentional D-18 fixed compatibility palette in that profile, while the pinned CGB reference uses a disjoint set of expanded RGB colors. This can explain an all-pixel difference through color encoding alone. The runner discarded its temporary PPM and the retained receipt has no frame or pixel map, so this is a plausible source-level explanation, not proof of pixel geometry or a core defect.
+- The original DIAG-01 wording requires admitted DMG and CGB derivatives, authored glyph replacement, a text-region mask, source/build provenance, recorded rights, and composition-only labeling. It does not require every cross-model profile comparison to match. The current Phase 24 plan adds that stricter all-profile pass gate. Align the next formal requirement map with the original wording: retain the DMG-on-CGB failure as a separate runtime discrepancy, and do not treat it as satisfaction of mode-3 timing or general CGB compatibility. The derivative records and same-model results support DIAG-01's literal criterion; formal status reconciliation must make the plan-level distinction explicit before any Task 7 decision.
+- Primary upstream references document the reference-image/color-conversion convention: [dmg-acid2 v1.0 README](https://raw.githubusercontent.com/mattcurrie/dmg-acid2/v1.0/README.md) and [cgb-acid2 v1.1 README](https://raw.githubusercontent.com/mattcurrie/cgb-acid2/v1.1/README.md). No image/reference, mask, or derivative changes are authorized by this discussion.
+
+### RIGHTS-01 and DIAG-02 literal criteria
+
+- **RIGHTS-01:** Recommend Complete for the exact admitted diagnostic fixtures. The criterion permits a game *or diagnostic* fixture; D-207's owner-accepted bounded rights interpretations, recorded component scopes/notices, unchanged root MIT license, and existing product/package exclusion evidence satisfy the diagnostic alternative. This does not clear unadmitted game-candidate components, the other 512 gbmicrotest ROMs, excluded logo/font data, or any other source. D-207 remains an explicit bounded owner interpretation, not a claim of upstream component-specific certainty.
+- **DIAG-02:** Recommend Complete for the single admitted `div_inc_timing_a` case. Its source and exact bytes, bounded redistribution terms, DMG-CPU-B software applicability, one eligible/executed case, and 512 named exclusions with reasons are recorded. This does not claim a 513-case execution, hardware behavior, or DMG-CPU-08/CGB applicability.
+- Keep the original Phase 20/22 ownership. Record these as criterion-level outcomes during formal reconciliation; do not promote them based on earlier metadata-only reports or imply that all candidate sources are cleared.
+
+### FIXT-01 and execution boundary
+
+FIXT-01 remains Pending. Neither named game candidate has the required source-build, ROM-byte, cartridge-header, CGB-mode, and runtime facts: Potion Panic's source build is blocked by the excluded WLE converter, and µCity requires the unlicensed `hardware.inc`. Do not use either excluded component, search a third candidate, or infer completion from the no-go records. The adopted recommendation is to preserve the original requirement and leave v0.4 open; Task 7 remains blocked while FIXT-01 is Pending. Revisit only if the owner later directs a material acceptance/scope change.
+
+### Cross-role synthesis
+
+| Lens | Adopted direction |
+|---|---|
+| Product and requirement ownership | Apply each original criterion literally and keep original Phase 20/21/22 owners; do not turn a diagnostic outcome into a broader game or hardware claim. |
+| Rendering and emulator behavior | Keep the cross-model pixel mismatch visible; its palette explanation is provisional because no rendered frame survived. Do not change the core or expected image to hide it. |
+| QA and evidence | Preserve exact identities and failed results; distinguish the two same-model passes from the cross-model failure and from requirement satisfaction. No rerun is authorized. |
+| Security and rights | Use only D-207's exact bounded scopes and full notices; unresolved game inputs and unrelated ROMs remain excluded. |
+| Architecture and operations | Reuse existing source-backed records and standard-library checks; add no dependency. Task 7, final CI, PR, merge, and cleanup remain stopped until FIXT-01 is resolved. |
+
+The existing [THIRD_PARTY_NOTICES.md](../../../THIRD_PARTY_NOTICES.md) still says the Acid2 comparison has not been performed. Correct that stale sentence in a later authorized closeout update to state the three recorded outcomes without changing fixture rights or product claims.
+
+## D-209 owner direction — close v0.4 with accepted gaps (2026-11-17)
+
+The owner directs administrative closeout now so emulator work can continue. RIGHTS-01, DIAG-01, and DIAG-02 are complete for the exact admitted diagnostic criteria described in the closeout record; FIXT-01 remains Pending because neither named game has the complete required evidence. Preserve the Acid2 DMG-on-CGB all-pixel mismatch as a failed result; do not replay it or claim a proven cause. Phase 24 Task 7, stale prior verification, and D-103 remain explicit closeout gaps. The next recommended scope is v0.5 DMG PPU Timing, starting through `$gsd-new-milestone`.

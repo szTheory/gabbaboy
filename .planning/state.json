@@ -1,7 +1,7 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.4 — Evidence Floor",
+  "milestone": "v0.4 \u2014 Evidence Floor",
   "phases": [
     {
       "number": "20",
@@ -26,13 +26,18 @@
     {
       "number": "23.1",
       "name": "Close v0.4 requirement and verification gaps",
+      "status": "complete"
+    },
+    {
+      "number": "24",
+      "name": "Resolve remaining v0.4 evidence and verification gaps",
       "status": "in_progress"
     }
   ],
   "next": {
-    "command": "$gsd-discuss-phase 23.1",
-    "label": "Owner rescope decision for Phase 23.1",
-    "reason": "Final review has two Critical findings and one Warning after the two permitted fix rounds; verification remains blocked and D-193 allows one plan"
+    "command": "$gsd-new-milestone",
+    "label": "Start v0.5 DMG PPU Timing",
+    "reason": "D-209 closes v0.4 administratively with seven requirements complete and FIXT-01 Pending. Phase 24 Task 7, stale Phase 20/21/23.1 verification, and D-103 remain disclosed deferred gaps. Start a fresh milestone; do not resume Phase 24 automatically."
   },
-  "updated_at": "2026-11-14T05:57:14Z"
+  "updated_at": "2026-11-17T19:25:51Z"
 }

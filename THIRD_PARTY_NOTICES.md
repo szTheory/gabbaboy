@@ -20,8 +20,11 @@ The Acid2 fixture contains reproduced DMG and CGB derivatives, unchanged pinned
 reference images, source-derived text masks, and complete notices. D-207 accepts
 the root MIT grant only for the exact pinned `img/` trees; that bounded inference
 does not extend to other commits or content. The mgblib font and Nintendo logo
-bytes are excluded. Runtime comparison has not been performed yet. See
-fixtures/acid2/SOURCES.md.
+bytes are excluded. One software comparison was run: DMG-on-DMG and CGB-on-CGB
+matched, while DMG-on-CGB differed in all 19,840 compared pixels. The failed
+cross-model result was not replayed; its cause is not established. These results
+are controlled-composition evidence, not mode-3 timing evidence. See
+fixtures/acid2/SOURCES.md and the Phase 24 closeout record.
 
 GitHub generated source archives retain the admitted licensed fixtures and
 their notices, so every third-party fixture below travels with a source archive

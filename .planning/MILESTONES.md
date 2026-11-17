@@ -1,5 +1,25 @@
 # Milestones
 
+## v0.4 Evidence Floor (Closed with accepted gaps: 2026-11-17)
+
+**Product release:** Qualified `v0.4.0` was published on 2026-11-14 and was not changed by this closeout.
+
+**Phases and plans:** Six phases, 33 plans; 32 plan summaries remain. Phase 24 Task 7 was not completed.
+**Requirements:** 7/8 original v1 requirements are complete. FIXT-01 remains Pending and is deferred; see the archived traceability table.
+**Closeout type:** `override_closeout`, directed by the owner on 2026-11-17. This records an administrative milestone close, not a claim that every phase verification is current.
+**Known verification overrides:** 3 newly acknowledged, 2 carried forward from an earlier close (see STATE.md Deferred Items).
+**Known gaps:** Phase 20, 21, and 23.1 verification is stale; Phase 24 Task 7 is incomplete; D-103's exact-final-head broad-suite gate is unfulfilled; FIXT-01 is Pending. The DMG-on-CGB Acid2 comparison remains failed at 19,840/19,840 pixels and was not replayed.
+
+**Key accomplishments:**
+- Published and independently reconciled the qualified v0.4.0 release.
+- Delivered CGB progress and scene-feedback contracts.
+- Admitted exact Acid2 controlled-composition derivatives and one model-scoped gbmicrotest case; kept the cross-model failure and all exclusions visible.
+- Recorded source/rights no-go reasons for both named game candidates without inferring a license prohibition.
+- Set the next recommended emulator scope to DMG PPU FIFO/fetcher and mode-3 timing, using a narrow source-qualified oracle set.
+
+**Archive:** [roadmap](milestones/v0.4-ROADMAP.md) · [requirements](milestones/v0.4-REQUIREMENTS.md) · [audit](v0.4-MILESTONE-AUDIT.md) · [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
+**Next:** `$gsd-new-milestone` — define v0.5 DMG PPU Timing and its exact fixture admission plan.
+
 ## v0.3 Save States & Host Contract (Shipped: 2026-10-31)
 
 **Delivered:** Exact-continuation native save states, numbered player slots, a safe POSIX host-process contract, v0.2 delivery-debt closure, and the qualified v0.3.0 release.

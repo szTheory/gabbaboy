@@ -4,33 +4,32 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: 24-01 T6 diagnostic evidence; T5 is complete with unresolved rights gates
-status: in_progress
-stopped_at: T5 committed its rights record and ordered-game blocker; T6 is next
-last_updated: "2026-11-17T05:20:30Z"
-state_head: e3b4c5c8b58c5617d9cc41f31f1bd699e6cf0a35
+current_plan: v0.4 closed with accepted gaps; Phase 24 Task 7 remains unfinished
+status: completed
+stopped_at: Owner-directed v0.4 closeout with FIXT-01 and D-103 deferred
+last_updated: "2026-11-17T19:25:51Z"
+state_head: 226712193515b8cef08228a99045c14d178d065d
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 33
   completed_plans: 32
   percent: 97
-last_activity: 2026-11-16
+last_activity: 2026-11-17
 ---
 
 # Project State
 
 ## Current Position
 
-**Current Phase:** 24
-**Current Phase Name:** Resolve remaining v0.4 evidence and verification gaps
-**Current Plan:** 24-01 — D-206 closeout plan review
-**Status:** Phase 24 is reopened additively under D-206; v0.4 remains open until its original requirements and D-103 pass.
-**Progress:** [█████████░] 97%
+**Closed stage:** v0.4 — Evidence Floor, administratively closed with accepted gaps on 2026-11-17. The qualified v0.4.0 product release remains unchanged.
+**Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
+**Phase state:** Phase 24 Task 7 and its plan summary were not completed. Phase 20, 21, and 23.1 verification is stale. D-103's exact-final-head suite was not run. These are disclosed closeout overrides, not passes.
+**Next command:** `$gsd-new-milestone` to define v0.5 DMG PPU Timing. The recommendation is to begin with exact DMG oracle admission, then plan FIFO/fetcher and mode-3 work under the existing performance budget. Both automatic-advance flags remain false.
 
-Completed stages: Phase 23.1 verification passed 18/18 after the owner confirmed the recorded Task 11 → clean review → verification-only order. Phase 24 Plan 01 Tasks 1–4, shared closure, one clean exact-candidate recovery review, and the two authorized focused CTests are complete and remain historical. The BOM bypass was fixed at `65b31a69840bfec232806f808f03fb44c6e21174`; its 632-control self-test, six-phase/40-plan cap check, configure-only inventory, and focused `plan_cap`/`planning_hygiene_controls` run passed. The earlier Phase 24 assessment verification passed 6/6. Under D-206, T5 committed its five-source rights record and ordered-game refusal (`e930e3d7f8d2f8b2fc38be5cffb91985354f0ec4`, `e3b4c5c8b58c5617d9cc41f31f1bd699e6cf0a35`) after the separate TDD RED commit `5184890d337e6f2a034b1fdac51fceb7c1521eb3`. Candidate controls passed 82 negatives; diagnostic controls passed 13, including the intended rights refusal. Potion Panic visual/music/converter scope and µCity `hardware.inc` remain unresolved; neither game was built or run, and no payload was staged. FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending. The refreshed audit is still `gaps_found`; D-103 remains unfulfilled. The orchestrator dispatches only T6 in a fresh context with T1–T5 completed and a T6-only filter, then T7 separately. Preserve the 40-plan ceiling and all suite, lifecycle, release, fixture, rights, and milestone stops. After Phase 24's required gates pass, resume the milestone route with `$gsd-autonomous --from 24`.
+**Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
-Historical D-200 snapshot: Task 8 corrected YAML syntax-whitespace handling and passed its bounded checks at candidate `9991327df736f668bd8c98f4fd9441a4c563905b`. At that time, the D-200 review and phase verification were pending; later D-201–D-203 recoveries are recorded below and in the Phase 23.1 artifacts.
+The preceding D-206 and D-207 blocks are historical checkpoints. D-208 reconciled the literal diagnostic criteria; D-209 is the current owner direction to close v0.4 with FIXT-01 and stale/incomplete verification disclosed.
 
 ## Qualified Release
 
@@ -38,30 +37,27 @@ Historical D-200 snapshot: Task 8 corrected YAML syntax-whitespace handling and 
 
 Fresh readback reconciles all 22 public downloads, actual pre-publish inventory, preserved original 20 tuples/notes, source archive, final receipt/checksums, product positives/game-insertion refusals, six owner evidence families and actual native consumer byte bindings. REL-01 is complete. The one conditional publication request is spent; no retry, tag move or asset replacement is authorized. [23-EVIDENCE.md](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md) records the actual source/run/receipt links and retained failure chronology.
 
+## Deferred Items
+
+Items acknowledged at the v0.4 closeout, most recent first:
+
+| Category | Item | Status | Deferred At | Milestone |
+|----------|------|--------|-------------|-----------|
+| uat_gaps | GB-21 / 21-UAT-EVIDENCE.md | unknown; no open scenarios | 2026-11-17 | v0.4 |
+| uat_gaps | GB-23 / 23-UAT-EVIDENCE.md | unknown; no open scenarios | 2026-11-17 | v0.4 |
+| deferred_items | GB-21 / deferred-items.md: hosted PR qualification protocol | acknowledged; carried-forward note | 2026-11-17 | v0.4 |
+
+Two items had already been acknowledged by an earlier closeout; the audit recorded five acknowledged items total after this close.
+
 ## Preserved Limits
 
-FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remain Pending. Neither named CGB game candidate was built or run; T5 pins the creator-linked Potion Panic `gbcompo25` and µCity 1.3 sources but leaves Potion Panic visual assets/music/converter and µCity `hardware.inc` unresolved. Diagnostics remain 513 named cases, seven historical unresolved gates, zero newly admitted/executed real fixtures. T5 also pins both Acid2 sources and gbmicrotest, while reference/footer image scope and gbmicrotest ROM/logo scope remain unresolved; no derivative or ROM payload was created. Hardware, perception, mode-3 timing, general games, Linux player, Steam Deck and live Playstead integration remain unqualified. Products are unsigned and not notarized.
+FIXT-01 remains Pending: neither Potion Panic nor µCity has a complete source/build/ROM/header/mode/runtime chain. Do not introduce a third game candidate under the v0.4 requirement. Do not replay the Acid2 comparison or claim its cause. The v0.4.0 tag/assets and published claims remain unchanged. No hardware, perception, mode-3 timing, general compatibility, Linux player, Steam Deck, or live Playstead claim is established by this closeout.
 
-The unclassified REL-01 edge and two descriptor-less transparency prohibitions remain unresolved/flagged-unverified workflow items. Historical reports/receipts keep their original source and outcome; no manual UAT or classification dismissal was invented. Both auto flags remain false. No broad local suite or third local lifecycle retest is permitted by this record.
+The exact-final-head D-103 broad-suite gate remains unfulfilled. Phase 20, 21, and 23.1 verification is stale; Phase 24 is incomplete. These are accepted deferred gaps, not passes. No external outreach, release retry, tag/asset change, broad-suite run, or worktree cleanup occurred here. Both automatic advance flags remain false.
 
 ## Owner Handoff
 
-The **v0.4 milestone audit remains open with gaps found** while the D-206 closeout runs. Phase 22 has a historical verification report at [22-VERIFICATION.md](phases/GB-22-composition-and-microtest-evidence/22-VERIFICATION.md), reconstructed from immutable Phase 22 evidence without claiming current runtime freshness. Phase 20 and Phase 21 verification reports remain stale; see [audit report](v0.4-MILESTONE-AUDIT.md) for the recorded findings.
-
-- **FIXT-01 — Pending**, original owner Phase 21.
-- **RIGHTS-01 — Pending**, original owner Phase 20.
-- **DIAG-01 — Pending**, original owner Phase 22.
-- **DIAG-02 — Pending**, original owner Phase 22.
-
-Diagnostics remain metadata-only: 513 names, seven historical gates, admitted=0, executed=0; 482 protocol candidates remain blocked and 31 initial exclusions do not complete suite accounting. T5 pinned the creator-linked Potion Panic `gbcompo25` source and exact µCity 1.3 source. Potion Panic visual assets/music and the attributed converter remain unresolved; µCity's required `hardware.inc` lacks an established grant. No game build, execution, or payload admission occurred. These are unresolved rights findings, not license prohibitions.
-
-Phase 23.1 is historically complete with verification passed 18/18, but current GSD freshness is stale because Phase 24 changed the shared planning checker. Phase 24's earlier assessment and D-07–D-10 recovery gates passed; that 6/6 verification is preserved as historical. D-206 has reopened Phase 24 in its existing plan to close the original v0.4 criteria and D-103, without accepting gaps. The revised plan is awaiting independent review; once it passes, execute it with `$gsd-execute-phase 24`. The four fixture/rights/diagnostic requirements remain Pending under their original owners until their criteria pass. No broad local suite, extra full CI retry, third lifecycle retest, release/tag/asset change, unapproved payload admission, or milestone archival is permitted. The final milestone route remains `$gsd-autonomous --from 24` after Phase 24 completes.
-
-Historical D-199 checkpoint (superseded): The tested source candidate was `7fda5b2fb11d62a680dc4a7340eee7c85e2caf90`: the exact-candidate self-test passed with `controls=314`, the immutable report and handoff stages passed against original baseline `1d74b032d8106516b0fd22d6cd02ddaf916b2031`, the 125/124 wrapper boundary behaved as required, SUMMARY coverage and shared UAT closure passed, and only `plan_cap` plus `planning_hygiene_controls` passed after configure-only generation bound to that full candidate. The first handoff wording check failed; the required stop/route/phase terms were committed at `653ed2b3e501bc31c8a12e99ef800822889e08ff`, and the handoff recheck passed at the tested candidate. At that point, Task 7 checks were complete; the sole exact-candidate review was pending and phase verification had not run. D-103's exact-final-head full-suite gate remains unfulfilled; no broad local suite, no third local lifecycle retest, no release retry, and no tag/asset/rights action is permitted. The owner-only audit route is `/gsd-audit-milestone v0.4`. At that checkpoint Phase 23.1 and v0.4 were open; four requirements were Pending and no next phase was selected. See the current handoff above for the later D-203 result.
-
-Superseded Phase 24 handoff (before the fresh review): Plan execution and automated closure were complete, and the configured independent reviews and phase verifier had not run. This earlier route was superseded when the exact-candidate review found CR-01.
-
-Current handoff: Phase 24 — Resolve remaining v0.4 evidence and verification gaps — is reopened under D-206 in its sole existing plan. T5's current evidence and blocked outcome are in [24-CLOSEOUT.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md) and [v04-closeout.json](../tests/data/v04-closeout.json); its rights record, refusal controls, and ordered-game gate passed their focused checks. The original four Pending requirements remain Pending and D-103 remains unfulfilled. The orchestrator is next: dispatch only T6 in a fresh executor context with T1–T5 explicitly complete and a T6-only filter; then dispatch T7 separately. `$gsd-execute-phase 24` is the workflow entry, not authorization to replay protected tasks or run the entire plan in one context. Keep unresolved diagnostic rights as blockers, do not create the canonical summary before T7, and preserve all broad-suite, CI retry, lifecycle, release/tag/asset, and cleanup stops. Once Phase 24's bounded closeout and required verification pass, continue with `$gsd-autonomous --from 24`.
+Completed stage: **v0.4 Evidence Floor administrative closeout**, after the qualified v0.4.0 release. The closeout records seven completed requirements and one Pending requirement, with Phase 24 Task 7 and D-103 deferred. The next actor is the owner/workflow runner: start the fresh v0.5 milestone definition with `$gsd-new-milestone`. Do not resume Phase 24 automatically or restart stale phases. Keep the Phase 24 artifacts as historical evidence and reconcile this closeout through the approved branch/PR route before deleting the worktree.
 
 ## Accumulated Context
 
@@ -107,12 +103,13 @@ Current handoff: Phase 24 — Resolve remaining v0.4 evidence and verification g
 - [Phase 24]: The configured phase1 tests are restricted to plan_cap and planning_hygiene_controls at the committed candidate; preserve the 30-second timeout and 125-control floor.
 - [Phase 24]: D-07–D-10 authorized exactly one same-plan Task 4 and one independent exact-candidate review for the BOM plan-cap bypass. Task 4, the clean review, the two focused CTests, and Phase 24 verification passed; all phase plans are complete. Continue the existing v0.4 authorization with `$gsd-autonomous --from 23.1`, preserving the four Pending requirements and D-103 stop.
 - [Phase 23.1]: Phase 23.1 verification remains a historical 18/18 result and stale after Phase 24 changed the shared checker; no new recovery scope is authorized. — Phase 24 passed its own focused checks and verification under D-205. Refreshing Phase 23.1 would conflate its former fifth-phase criterion with the approved six-phase cap. Keep the four requirements Pending, v0.4 open, and D-103 unfulfilled.
+- [v0.4 closeout]: D-209 closes the milestone with accepted gaps. RIGHTS-01, DIAG-01, and DIAG-02 are complete for the exact admitted diagnostics; FIXT-01 remains Pending. Phase 24 Task 7, stale verification, and D-103 remain disclosed. The next command is `$gsd-new-milestone` for v0.5 DMG PPU Timing.
 
 ## Session
 
-**Last session:** 2026-11-17T02:38:32.498Z
-**Stopped at:** Phase 23.1 context gathered; preserve historical verification as stale; no follow-up phase authorized
-**Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-CONTEXT.md
+**Last session:** 2026-11-17T19:25:51Z
+**Stopped at:** v0.4 administrative closeout; next command is `$gsd-new-milestone`
+**Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md (historical closeout handoff)
 
 ### Blockers
-None blocking the completed Phase 24 scope. The open milestone audit conditions and preserved suite, fixture, rights, D-103, and archival limits are listed under Owner Handoff.
+No active v0.4 work remains. FIXT-01 is an accepted deferred requirement, Phase 24 Task 7 and D-103 remain incomplete, and the Acid2 mismatch remains a preserved failed result. The next actor is the owner/workflow runner, starting v0.5 with `$gsd-new-milestone`; do not resume Phase 24 automatically.
