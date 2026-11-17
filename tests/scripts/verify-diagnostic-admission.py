@@ -25,6 +25,7 @@ PHASE20 = ROOT / "tests/scripts/verify-fixture-admission.py"
 CANDIDATE_CHECKER_PATH = "tests/scripts/verify-cgb-candidates.py"
 CANDIDATE_CLOSEOUT_PATH = "tests/data/v04-closeout.json"
 DIAGNOSTIC_CLOSEOUT_PATH = "tests/external/diagnostic-closeout.json"
+GBMICROTEST_INVENTORY_PATH = "tests/external/gbmicrotest-inventory.json"
 DIAGNOSTIC_RIGHTS_REVISION = "e3b4c5c8b58c5617d9cc41f31f1bd699e6cf0a35"
 DIAGNOSTIC_RIGHTS_SHA256 = "79030ea8fa874dab505812f644f75d222e4b60fb3705a6fcbbde1630acd8705d"
 DIAGNOSTIC_RIGHTS_SIZE = 30529
@@ -676,7 +677,8 @@ def check_diagnostic_closeout(root: pathlib.Path, source_revision: str, kind: st
     require_worktree_source_file(root, source_revision, DIAGNOSTIC_CLOSEOUT_PATH,
                                  root / DIAGNOSTIC_CLOSEOUT_PATH)
     if kind in ("gbmicrotest", "all"):
-        require_worktree_source_file(root, source_revision, INVENTORY, root / INVENTORY)
+        require_worktree_source_file(root, source_revision, GBMICROTEST_INVENTORY_PATH,
+                                     root / GBMICROTEST_INVENTORY_PATH)
     record_raw = read_source_file(root, source_revision, DIAGNOSTIC_CLOSEOUT_PATH)
     record = _json_without_duplicates(record_raw, "diagnostic-closeout")
     rights_input = record.get("rights_input")
