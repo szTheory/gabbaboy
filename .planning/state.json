@@ -35,9 +35,9 @@
     }
   ],
   "next": {
-    "command": "$gsd-discuss-phase 24",
-    "label": "Resolve the D-210 review blocker before any new recovery",
-    "reason": "The sole D-210 review found that required-native CI executes admitted game ROMs, conflicting with the no-ROM limit, and flagged a mislabeled negative-control count. No PR/matrix started; the review allowance is spent. The owner must define or decline new scope before any further fix, review, CI, or reconciliation."
+    "command": "$gsd-plan-phase 24",
+    "label": "Amend the existing Phase 24 recovery plan",
+    "reason": "D-211 authorizes one same-plan correction for WR-01, one fresh exact-candidate review, and one protected PR matrix that may run already-admitted game/fixture ROM tests. Acid2 remains excluded."
   },
-  "updated_at": "2026-11-17T21:26:12Z"
+  "updated_at": "2026-11-17T21:53:39Z"
 }

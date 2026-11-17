@@ -5,7 +5,7 @@
 
 **Date:** 2026-11-17
 **Phase:** 24-Resolve remaining v0.4 evidence and verification gaps
-**Areas discussed:** Additive verification evidence, Read-only candidate research, Phase exit with gaps, BOM normalization and plan-cap regression, post-T6 Acid2 mismatch, literal RIGHTS-01/DIAG-01/DIAG-02 reconciliation, FIXT-01 execution boundary
+**Areas discussed:** Additive verification evidence, Read-only candidate research, Phase exit with gaps, BOM normalization and plan-cap regression, post-T6 Acid2 mismatch, literal RIGHTS-01/DIAG-01/DIAG-02 reconciliation, FIXT-01 execution boundary, D-211 protected CI boundary and fresh recovery
 
 ---
 
@@ -134,6 +134,20 @@ The owner directed a full fan-out across the relevant product, rights/security, 
 **Owner choice:** “Authorize bounded closeout.” D-206 records reuse of the sole Phase 24 plan, the exact named candidate set, component-level rights review, one final required CI matrix, and the 40-plan ceiling. Existing Phase 24 evidence remains historical; no requirement is complete until its original criterion passes.
 
 **Research already underway:** canonical Potion Panic and µCity source refs and exact µCity v1.3 commit were confirmed from upstream metadata. Acid2 v1.0/v1.1 and pinned gbmicrotest root LICENSE files are MIT, but these labels do not alone resolve font, image, ROM-header, or build-input scope. Those components remain under review.
+
+## D-211 protected CI boundary and fresh recovery (2026-11-17)
+
+| Lens | Evidence / risk | Adopted direction |
+|---|---|---|
+| Product | Avoid widening the original v0.4 requirements or adding game compatibility claims. | Permit only already-admitted fixture ROM cases in the existing required PR matrix. |
+| Emulator QA | The Acid2 cross-model comparison is a recorded failure and must not replay. | Keep `phase22_admission_assessment` static; Acid2 remains excluded from all execution. |
+| Security / test integrity | WR-01 double-counts positives as negatives and repeats one positive. | Count only rejected overlay cases and remove the redundant positive control. |
+| Operations | Required CI cannot be bypassed; a new run after failure would exceed the bounded scope. | Allow one fresh exact-candidate review and one protected matrix; merge only the identical reviewed/tested head; any blocker stops without retry. |
+| Architecture | The existing checker and sole plan already provide the right seams. | Reuse them without a dependency, new CTest identity, fixture, or local ROM run. |
+
+**User's choice:** The owner said “follow your recommendations,” authorizing the revised bounded recovery. D-211 supersedes D-210 only for the existing protected matrix's already-admitted game/fixture ROM execution and the new one-review/one-matrix allowance. Task 7, Phase 24 verification, milestone audit/archive, requirement changes, broad local suite, Acid2 replay, and release changes remain unauthorized.
+
+**Next route:** `$gsd-plan-phase 24` to replan the same `24-01-PLAN.md`; then execute only the D-211 correction task. The current recovery checkout remains active until the protected merge is reconciled to clean `main`.
 
 ## 2026-11-17 — D-209 owner closeout decision
 

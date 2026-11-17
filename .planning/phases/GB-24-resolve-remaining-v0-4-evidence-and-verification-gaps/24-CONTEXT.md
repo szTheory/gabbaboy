@@ -1,7 +1,7 @@
 # Phase 24: Resolve remaining v0.4 evidence and verification gaps - Context
 
 **Gathered:** 2026-11-16; post-T6 discussion updated 2026-11-17
-**Status:** T6 evidence reviewed; literal-criterion reconciliation recorded; FIXT-01 still blocks Task 7
+**Status:** D-211 bounded recovery authorized after D-210 review; plan amendment is next; Task 7 and FIXT-01 remain deferred
 
 <domain>
 ## Phase Boundary
@@ -210,3 +210,23 @@ D-210 authorizes only Task 8 in the existing `24-01-PLAN.md`, to repair the alre
 The exact D-209 status paragraph may differ from each fixture's historical `THIRD_PARTY_NOTICES.md` snapshot; all other bytes and each active fixture digest row remain pinned. Product validation accepts the complete D-209 notice index only by its exact reviewed digest. No rights text, license bytes, fixture payload, or admission identity changes. Shared diagnostic `--receipt` explicitly refuses before file access, proved with a missing ROM path.
 
 Run only the cheap and focused checks recorded in Task 8; project-generated synthetic control ROMs are permitted only in their existing controls. Do not replay Acid2 or run another admitted upstream/game ROM. Obtain exactly one independent review and then one protected PR matrix; merge only that exact reviewed/tested head if all gates pass. Any review blocker or failed/missing required CI context ends this recovery with no retry. Task 7, Phase 24 verification, milestone audit/archive, FIXT-01, and requirement statuses remain unchanged. After successful protected reconciliation, start v0.5 from a clean `main` checkout with `$gsd-new-milestone`.
+
+## D-211 revised bounded recovery addendum (owner-authorized, 2026-11-17)
+
+The owner followed the recommendation after the D-210 exact-candidate review. Reuse the sole existing Phase 24 plan and add exactly one follow-up task to correct WR-01: report only rejected cases as negative controls and remove the duplicate positive overlay case. Do not change fixture rights, payloads, admission, or the recorded Acid2 outcome.
+
+D-211 supersedes D-210's no-admitted-ROM restriction only for already-admitted game/fixture ROM cases run by the existing exact protected PR matrix: `required-native`, `fixture-repro`, and `preview-package-smoke`. This permits the existing Libbet-backed acceptance tests the reviewer identified; it adds no fixture, test case, or local ROM execution. Acid2 remains excluded from execution: `phase22_admission_assessment` stays static and checks the exact recorded three-profile result, including the failed 19,840-pixel DMG-on-CGB comparison. No broad local suite, candidate expansion, rights/requirement change, Task 7, Phase 24 verifier, milestone audit/archive, release change, or branch-protection bypass is authorized.
+
+After cheap direct controls, run only the focused existing local test(s) covering the corrected fixture-admission checker; synthetic controls may run within those existing controls. Commit the corrected candidate, obtain exactly one fresh independent review of its exact head/tree, then open one protected PR and spend one matrix for the three named contexts. Do not push after that matrix begins. A blocker, unresolved finding, missing/failed/skipped/stale required context, or unavailable review ends this recovery without another correction, review, or matrix. Merge only the exact reviewed/tested head through branch protection if all gates pass. Keep FIXT-01 Pending and preserve D-209's accepted gaps. Start v0.5 DMG PPU Timing with `$gsd-new-milestone` only after reconciliation to clean `main`.
+
+### Cross-role synthesis
+
+| Lens | Adopted direction |
+|---|---|
+| Product and requirements | Permit only the pre-existing required CI's already-admitted ROM cases; no new compatibility claim or requirement promotion. |
+| Emulator QA and evidence | Keep Acid2 static in CI; retain the cross-model mismatch as failed evidence and never replay it. |
+| Security and test integrity | Fix the false negative-control count, remove the duplicated positive, preserve fixture identities and branch protection. |
+| Operations | Spend one new review and one exact-head protected matrix; any blocker ends the route without retries. |
+| Architecture | Reuse existing Python standard-library checker, CTest identity, and the sole Phase 24 plan; add no dependency. |
+
+The current checkout remains the recovery worktree. Do not switch away or remove it before its reviewed changes are reconciled; a clean `main` checkout is the next milestone boundary after a successful merge.
