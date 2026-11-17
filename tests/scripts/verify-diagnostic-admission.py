@@ -2148,6 +2148,26 @@ class AdmissionControlTests(unittest.TestCase):
     def _diagnostic_closeout_inputs(self) -> tuple[dict[str, Any], dict[str, Any]]:
         record = _json_without_duplicates(
             (ROOT / DIAGNOSTIC_CLOSEOUT_PATH).read_bytes(), "diagnostic-closeout")
+        # Admission mutation controls always start from the pre-runtime state. The
+        # committed closeout may now carry a truthful one-case runtime receipt.
+        gbmicrotest = record.get("gbmicrotest")
+        if isinstance(gbmicrotest, dict) and gbmicrotest.get("status") in ("executed", "runtime-failed"):
+            gbmicrotest["status"] = "admitted-before-runtime"
+            gbmicrotest["cohort_status"] = "admitted-before-runtime"
+            gbmicrotest["blocked_by"] = []
+            accounting = gbmicrotest.get("accounting")
+            if isinstance(accounting, dict):
+                accounting["executed_names"] = []
+                accounting["runtime_results"] = []
+                accounting["final_execution_accounting_complete"] = False
+            source_review = gbmicrotest.get("source_review")
+            if isinstance(source_review, dict):
+                local_review = source_review.get("local_rom_review")
+                if isinstance(local_review, dict):
+                    local_review["runtime_status"] = "pending"
+                protocol = source_review.get("protocol")
+                if isinstance(protocol, dict):
+                    protocol["runtime_status"] = "pending"
         rights_raw = _git(ROOT, "show", f"{DIAGNOSTIC_RIGHTS_REVISION}:{CANDIDATE_CLOSEOUT_PATH}")
         return record, _json_without_duplicates(rights_raw, "diagnostic-rights-input")
 
