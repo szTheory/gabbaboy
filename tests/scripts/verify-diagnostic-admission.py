@@ -30,9 +30,9 @@ CANDIDATE_CHECKER_PATH = "tests/scripts/verify-cgb-candidates.py"
 CANDIDATE_CLOSEOUT_PATH = "tests/data/v04-closeout.json"
 DIAGNOSTIC_CLOSEOUT_PATH = "tests/external/diagnostic-closeout.json"
 GBMICROTEST_INVENTORY_PATH = "tests/external/gbmicrotest-inventory.json"
-DIAGNOSTIC_RIGHTS_REVISION = "e3b4c5c8b58c5617d9cc41f31f1bd699e6cf0a35"
-DIAGNOSTIC_RIGHTS_SHA256 = "79030ea8fa874dab505812f644f75d222e4b60fb3705a6fcbbde1630acd8705d"
-DIAGNOSTIC_RIGHTS_SIZE = 30529
+DIAGNOSTIC_RIGHTS_REVISION = "508f37f191ec76506d75921e97430148f4909209"
+DIAGNOSTIC_RIGHTS_SHA256 = "e44695dc2b5efebdbc01aed9179466d25ac8f5a55bc99a8ce94217b4adf262f9"
+DIAGNOSTIC_RIGHTS_SIZE = 39813
 CANDIDATE_CONTRACT_PATHS = (
     CANDIDATE_CHECKER_PATH,
     PHASE20_CHECKER_PATH,
@@ -106,6 +106,54 @@ GBMICROTEST_HEADER_SHA256 = "380ab2e41fee82c23881b13650e6301b79809e7baa1d3c82836
 GBMICROTEST_BUILD_BLOB = "eb0ddc1368e3a777ef9787dc056d756e95c19102"
 GBMICROTEST_BUILD_SHA256 = "c726ca6214cb3861fef0da43da2eebc69f7c63e944b61746be5ec028db977488"
 GBMICROTEST_INLINE_CASES = frozenset(("mbc1_ram_banks", "mbc1_rom_banks"))
+ACID2_FIXTURE_MANIFEST = "fixtures/acid2/manifest.json"
+ACID2_FIXTURE_ADMISSION_PIN = "fixtures/acid2/admission.commit"
+ACID2_FIXTURE_BUNDLE = "fixtures/acid2/derivatives.tar"
+ACID2_FIXTURE_NOTICE = "fixtures/acid2/LICENSE.txt"
+ACID2_FIXTURE_SOURCES = "fixtures/acid2/SOURCES.md"
+ACID2_FIXTURE_ADMISSION_COMMIT = "3d0587d49e7d88815c6af7dc36f4810579a8dc48"
+ACID2_FIXTURE_MANIFEST_SHA256 = "7f198d5964a8547d1a122d5d64d395547ba6f365264cdb00abf190a5880c5da6"
+ACID2_FIXTURE_BUNDLE_SHA256 = "bd7f78881d6964e9396128814c769f93ef661030290c5e66b9b8fda5b040f5cb"
+ACID2_FIXTURE_BUNDLE_SIZE = 296960
+ACID2_FIXTURE_NOTICE_SHA256 = "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044"
+ACID2_DERIVATIVES = {
+    "dmg": ("derivatives/dmg-acid2.gb",
+            "6d3e5aca5f6d2ba31337ae61c1994e56f1780196c96cc645d54de378d39bbe82",
+            "dmg-cpu-b"),
+    "cgb": ("derivatives/cgb-acid2.gbc",
+            "62a93fce12ef60938eefce81d02113a75e1a52b2631aa3d6f16388dc697837e2",
+            "cgb-cpu-e"),
+}
+ACID2_COMPARISON_PROFILES = ("dmg", "dmg-on-cgb", "cgb")
+ACID2_PROFILE_EXPECTATIONS = {
+    "dmg": {"rom_kind": "dmg", "runner_model": "dmg-cpu-b", "mode": "dmg",
+            "reference_path": "source/dmg/img/reference-dmg.png",
+            "reference_sha256": "ca966d50895c7efef05838590d148c2cbfd7fba57dab986f25b35b4da71abb57",
+            "reference_size_bytes": 787,
+            "mask_path": "masks/dmg.bin",
+            "mask_sha256": "bfc6ae61c3ab4753ac5c11f5c5bac8a7d6d6873767737a72e6c5d31ae0937098",
+            "masked_pixels": 3200, "compared_pixels": 19840},
+    "dmg-on-cgb": {"rom_kind": "dmg", "runner_model": "cgb-cpu-e", "mode": "dmg",
+                    "reference_path": "source/dmg/img/reference-cgb.png",
+                    "reference_sha256": "cbf039fd613a6db3c3d830a6a1d887efbc892aea4578ffc569b61f66a9e07ced",
+                    "reference_size_bytes": 882,
+                    "mask_path": "masks/dmg.bin",
+                    "mask_sha256": "bfc6ae61c3ab4753ac5c11f5c5bac8a7d6d6873767737a72e6c5d31ae0937098",
+                    "masked_pixels": 3200, "compared_pixels": 19840},
+    "cgb": {"rom_kind": "cgb", "runner_model": "cgb-cpu-e", "mode": "cgb",
+            "reference_path": "source/cgb/img/reference.png",
+            "reference_sha256": "9ea9c262c5383353e77d715d021a0f7c5ccbe438f88082cb225756e50c4fdf01",
+            "reference_size_bytes": 870,
+            "mask_path": "masks/cgb.bin",
+            "mask_sha256": "95219a5b1d6d5df70de9af7896cb9bc9c2194e133e1070c67e4414aa58d227a9",
+            "masked_pixels": 3328, "compared_pixels": 19712},
+}
+ACID2_RUNTIME_EVIDENCE_PATH = "build/phase24/acid2-runtime.json"
+DIAGNOSTIC_RUNTIME_PREFLIGHT_PATH = "build/phase24/diagnostic-runtime-preflight.json"
+DIAGNOSTIC_RUNTIME_FINAL_PATH = "build/phase24/diagnostic-runtime.json"
+GBMICROTEST_RUNTIME_PREFLIGHT_PATH = "build/phase24/gbmicrotest-runtime-preflight.json"
+GBMICROTEST_RUNTIME_FINAL_PATH = "build/phase24/gbmicrotest-runtime.json"
+LEGACY_GBMICROTEST_PREFLIGHT_SHA256 = "6ce0c3d8a7164ca993802251ec9f3197bcf190a224777b45d6e18c6de03c470f"
 GBMICROTEST_INITIAL_EXCLUSIONS = frozenset((
     "000-oam_lock", "000-write_to_x8000", "001-vram_unlocked", "002-vram_locked",
     "004-tima_boot_phase", "004-tima_cycle_timer", "007-lcd_on_stat", "400-dma",
@@ -728,6 +776,19 @@ def _diagnostic_component(source: dict[str, Any], component_id: str) -> dict[str
     return matches[0]
 
 
+def _git_revision_is_ancestor(root: pathlib.Path, ancestor: str, descendant: str) -> bool:
+    if not HEX40.fullmatch(ancestor) or not HEX40.fullmatch(descendant):
+        return False
+    try:
+        result = subprocess.run(["git", "merge-base", "--is-ancestor", ancestor, descendant],
+                                cwd=root, capture_output=True, check=False, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        raise AdmissionRefused("diagnostic-runtime-revision-ancestry-unavailable") from None
+    if result.returncode not in (0, 1):
+        raise AdmissionRefused("diagnostic-runtime-revision-ancestry-check-failed")
+    return result.returncode == 0
+
+
 def _validate_gbmicrotest_runtime_result(results: object, *, root: pathlib.Path | None = None,
                                          expected_source_revision: str | None = None,
                                          require_evidence: bool = False) -> dict[str, Any]:
@@ -766,7 +827,9 @@ def _validate_gbmicrotest_runtime_result(results: object, *, root: pathlib.Path 
             or not isinstance(result["elapsed_seconds"], (int, float))
             or isinstance(result["elapsed_seconds"], bool) or not math.isfinite(result["elapsed_seconds"])
             or not 0 < result["elapsed_seconds"] <= 25
-            or result["evidence_path"] != "build/phase24/diagnostic-runtime-preflight.json"):
+            or result["evidence_path"] not in (
+                "build/phase24/diagnostic-runtime-preflight.json",
+                GBMICROTEST_RUNTIME_PREFLIGHT_PATH, GBMICROTEST_RUNTIME_FINAL_PATH)):
         raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-result-mismatch")
     if result["verdict"] == "pass":
         if (not isinstance(result["runner_exit_code"], int) or isinstance(result["runner_exit_code"], bool)
@@ -793,9 +856,14 @@ def _validate_gbmicrotest_runtime_result(results: object, *, root: pathlib.Path 
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-bounded-failure-invalid")
     else:
         raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-verdict-invalid")
-    if expected_source_revision is not None and result["source_revision"] != expected_source_revision:
+    if (expected_source_revision is not None and result["source_revision"] != expected_source_revision
+            and (root is None or not _git_revision_is_ancestor(root, result["source_revision"],
+                                                                expected_source_revision))):
         raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-source-revision-mismatch")
     if root is not None:
+        if expected_source_revision is not None and not _git_revision_is_ancestor(
+                root, result["source_revision"], expected_source_revision):
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-source-not-ancestor")
         source_record_raw = read_source_file(root, result["source_revision"], DIAGNOSTIC_CLOSEOUT_PATH)
         if sha256(source_record_raw) != result["closeout_record_sha256"]:
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-closeout-source-mismatch")
@@ -833,6 +901,116 @@ def _validate_gbmicrotest_runtime_result(results: object, *, root: pathlib.Path 
     return result
 
 
+def _validate_acid2_runtime_result(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise AdmissionRefused("diagnostic-closeout-acid2-runtime-result-invalid")
+    if value.get("status") == "pending":
+        expected_pending = {
+            "status": "pending", "source_revision": None, "closeout_record_sha256": None,
+            "fixture_admission_commit": ACID2_FIXTURE_ADMISSION_COMMIT,
+            "manifest_sha256": ACID2_FIXTURE_MANIFEST_SHA256,
+            "bundle_sha256": ACID2_FIXTURE_BUNDLE_SHA256, "runner_sha256": None,
+            "qualification_sha256": None, "evidence_path": None, "evidence_sha256": None,
+            "comparisons": [],
+        }
+        if value != expected_pending:
+            raise AdmissionRefused("diagnostic-closeout-acid2-runtime-pending-mutated")
+        return value
+
+    expected_fields = {
+        "status", "source_revision", "closeout_record_sha256", "fixture_admission_commit",
+        "manifest_sha256", "bundle_sha256", "runner_sha256", "qualification_sha256",
+        "evidence_path", "evidence_sha256", "comparisons",
+    }
+    if set(value) != expected_fields:
+        raise AdmissionRefused("diagnostic-closeout-acid2-runtime-result-fields-invalid")
+    for field in ("closeout_record_sha256", "manifest_sha256", "bundle_sha256", "runner_sha256",
+                  "qualification_sha256", "evidence_sha256"):
+        if not isinstance(value[field], str) or not HEX64.fullmatch(value[field]):
+            raise AdmissionRefused(f"diagnostic-closeout-acid2-runtime-digest-invalid:{field}")
+    if (not isinstance(value["source_revision"], str) or not HEX40.fullmatch(value["source_revision"])
+            or value["fixture_admission_commit"] != ACID2_FIXTURE_ADMISSION_COMMIT
+            or value["manifest_sha256"] != ACID2_FIXTURE_MANIFEST_SHA256
+            or value["bundle_sha256"] != ACID2_FIXTURE_BUNDLE_SHA256
+            or value["evidence_path"] != DIAGNOSTIC_RUNTIME_PREFLIGHT_PATH):
+        raise AdmissionRefused("diagnostic-closeout-acid2-runtime-result-identity-invalid")
+    comparisons = value["comparisons"]
+    if (not isinstance(comparisons, list) or len(comparisons) != len(ACID2_COMPARISON_PROFILES)
+            or [row.get("profile") if isinstance(row, dict) else None for row in comparisons]
+            != list(ACID2_COMPARISON_PROFILES)):
+        raise AdmissionRefused("diagnostic-closeout-acid2-comparison-set-invalid")
+    for row, profile in zip(comparisons, ACID2_COMPARISON_PROFILES, strict=True):
+        expected = ACID2_PROFILE_EXPECTATIONS[profile]
+        kind = expected["rom_kind"]
+        derivative_path, derivative_sha, model = ACID2_DERIVATIVES[kind]
+        rom = row.get("rom") if isinstance(row, dict) else None
+        reference = row.get("reference") if isinstance(row, dict) else None
+        mask = row.get("mask") if isinstance(row, dict) else None
+        if (not isinstance(row, dict) or row.get("rom_kind") != kind
+                or row.get("runner_model") != model or row.get("mode") != expected["mode"]
+                or row.get("hardware_claim") is not False
+                or row.get("verdict") not in ("pass", "mismatch")
+                or not isinstance(row.get("differing_unmasked_pixels"), int)
+                or isinstance(row.get("differing_unmasked_pixels"), bool)
+                or not 0 <= row["differing_unmasked_pixels"] <= expected["compared_pixels"]
+                or not isinstance(rom, dict) or rom.get("path") != derivative_path
+                or rom.get("sha256") != derivative_sha or rom.get("size_bytes") != 32768
+                or not isinstance(reference, dict)
+                or reference.get("path") != expected["reference_path"]
+                or reference.get("sha256") != expected["reference_sha256"]
+                or reference.get("size_bytes") != expected["reference_size_bytes"]
+                or not isinstance(mask, dict)
+                or mask.get("path") != expected["mask_path"]
+                or mask.get("sha256") != expected["mask_sha256"]
+                or mask.get("masked_pixels") != expected["masked_pixels"]
+                or mask.get("compared_pixels") != expected["compared_pixels"]
+                or not isinstance(row.get("runner_sha256"), str)
+                or not HEX64.fullmatch(row["runner_sha256"])
+                or row["runner_sha256"] != value["runner_sha256"]
+                or row.get("guest_budget_half_dots") != 4213440
+                or not isinstance(row.get("elapsed_seconds"), (int, float))
+                or isinstance(row.get("elapsed_seconds"), bool)
+                or not math.isfinite(row["elapsed_seconds"])
+                or not 0 < row["elapsed_seconds"] <= 25
+                or not isinstance(row.get("detail"), str) or len(row["detail"]) > 1024):
+            raise AdmissionRefused(f"diagnostic-closeout-acid2-comparison-mutated:{profile}")
+        if (row["verdict"] == "pass") != (row["differing_unmasked_pixels"] == 0):
+            raise AdmissionRefused(f"diagnostic-closeout-acid2-comparison-verdict-invalid:{profile}")
+    expected_status = "pass" if all(row["verdict"] == "pass" for row in comparisons) else "mismatch"
+    if value["status"] != expected_status:
+        raise AdmissionRefused("diagnostic-closeout-acid2-runtime-status-invalid")
+    return value
+
+
+def _validate_acid2_runtime_evidence(root: pathlib.Path, runtime: dict[str, Any],
+                                     current_source_revision: str) -> None:
+    if runtime["status"] == "pending":
+        return
+    source_revision = runtime["source_revision"]
+    if not _git_revision_is_ancestor(root, source_revision, current_source_revision):
+        raise AdmissionRefused("diagnostic-closeout-acid2-runtime-source-not-ancestor")
+    source_record = read_source_file(root, source_revision, DIAGNOSTIC_CLOSEOUT_PATH)
+    if sha256(source_record) != runtime["closeout_record_sha256"]:
+        raise AdmissionRefused("diagnostic-closeout-acid2-runtime-source-record-mismatch")
+    path = root / runtime["evidence_path"]
+    if path.is_symlink():
+        raise AdmissionRefused("diagnostic-closeout-acid2-runtime-evidence-unsafe")
+    if not path.exists():
+        return
+    raw = read_limited(path, MAX_JSON_BYTES, "acid2-runtime-evidence")
+    if sha256(raw) != runtime["evidence_sha256"]:
+        raise AdmissionRefused("diagnostic-closeout-acid2-runtime-evidence-digest-mismatch")
+    evidence = _json_without_duplicates(raw, "acid2-runtime-evidence")
+    if (evidence.get("schema") != "gabbaboy-diagnostic-runtime-evidence-v1"
+            or evidence.get("source_revision") != source_revision
+            or evidence.get("closeout_record_sha256") != runtime["closeout_record_sha256"]
+            or evidence.get("acid2", {}).get("status") != runtime["status"]
+            or evidence.get("acid2", {}).get("comparisons") != runtime["comparisons"]
+            or evidence.get("runner_sha256") != runtime["runner_sha256"]
+            or evidence.get("qualification_sha256") != runtime["qualification_sha256"]):
+        raise AdmissionRefused("diagnostic-closeout-acid2-runtime-evidence-binding-mismatch")
+
+
 def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: dict[str, Any],
                                          kind: str,
                                          inventory: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -853,36 +1031,69 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
     blockers: list[str] = []
     if kind in ("acid2", "all"):
         acid2 = record.get("acid2")
-        if not isinstance(acid2, dict) or acid2.get("status") != "blocked-before-derivative":
+        if not isinstance(acid2, dict) or acid2.get("status") not in (
+                "admitted-before-runtime", "executed", "runtime-failed"):
             raise AdmissionRefused("diagnostic-closeout-acid2-outcome-invalid")
         if acid2.get("font_data") != "excluded-by-design":
             raise AdmissionRefused("diagnostic-closeout-acid2-font-scope-invalid")
+        expected_fixture = {
+            "manifest_path": ACID2_FIXTURE_MANIFEST,
+            "manifest_sha256": ACID2_FIXTURE_MANIFEST_SHA256,
+            "admission_commit": ACID2_FIXTURE_ADMISSION_COMMIT,
+            "bundle_path": ACID2_FIXTURE_BUNDLE,
+            "bundle_sha256": ACID2_FIXTURE_BUNDLE_SHA256,
+            "bundle_size_bytes": ACID2_FIXTURE_BUNDLE_SIZE,
+            "notice_path": ACID2_FIXTURE_NOTICE,
+            "notice_sha256": ACID2_FIXTURE_NOTICE_SHA256,
+            "rights_decision_commit": "169c062cd97764e2cea4052ce285209e8a886ff0",
+            "rights_input_commit": DIAGNOSTIC_RIGHTS_REVISION,
+        }
+        if acid2.get("fixture") != expected_fixture:
+            raise AdmissionRefused("diagnostic-closeout-acid2-fixture-record-invalid")
         cases = acid2.get("cases")
         expected_acid2 = (
             ("dmg-acid2-v1.0", "dc2295408f881637ff69f784d8d93f3d2db30181",
-             "a59741f15579a82205fff557dd000a5ebb6d7f6e"),
+             "a59741f15579a82205fff557dd000a5ebb6d7f6e", "dmg", "dmg-cpu-b"),
             ("cgb-acid2-v1.1", "fa5b7f86d6fb599f79e55169494d981a7af75a31",
-             "a541bf54356809dc04cc050f8fc14d9620649f88"),
+             "a541bf54356809dc04cc050f8fc14d9620649f88", "cgb", "cgb-cpu-e"),
         )
         if not isinstance(cases, list) or len(cases) != len(expected_acid2):
             raise AdmissionRefused("diagnostic-closeout-acid2-case-set-invalid")
-        for item, (source_id, commit, tree) in zip(cases, expected_acid2, strict=True):
+        for item, (source_id, commit, tree, derivative_kind, model) in zip(cases, expected_acid2, strict=True):
+            derivative_path, derivative_sha, _model = ACID2_DERIVATIVES[derivative_kind]
             if (not isinstance(item, dict) or item.get("id") != source_id
                     or item.get("commit") != commit or item.get("root_tree_sha1") != tree
-                    or item.get("blocked_by") != ["footer-and-reference-images"]
-                    or item.get("derivative") != {"status": "not-created", "path": None, "sha256": None}
-                    or item.get("admission") != {"status": "not-created", "commit": None}):
+                    or item.get("blocked_by") != []
+                    or item.get("derivative") != {"status": "admitted", "member": derivative_path,
+                                                   "sha256": derivative_sha, "size_bytes": 32768}
+                    or item.get("admission") != {"status": "admitted", "commit": ACID2_FIXTURE_ADMISSION_COMMIT}
+                    or item.get("model_scope") != {"runner_model": model, "hardware_claim": False}):
                 raise AdmissionRefused(f"diagnostic-closeout-acid2-case-mutated:{source_id}")
             source = _diagnostic_source_by_id(rights_record, source_id)
             if source.get("commit") != commit or source.get("root_tree_sha1") != tree:
                 raise AdmissionRefused(f"diagnostic-closeout-rights-pin-mismatch:{source_id}")
             image_component = _diagnostic_component(source, "footer-and-reference-images")
-            if image_component.get("outcome") != "unresolved":
+            code_component = _diagnostic_component(source, "source-code")
+            if image_component.get("outcome") != "supported":
                 raise AdmissionRefused(f"diagnostic-closeout-rights-mismatch:{source_id}:footer-and-reference-images")
+            if code_component.get("outcome") != "supported":
+                raise AdmissionRefused(f"diagnostic-closeout-rights-mismatch:{source_id}:source-code")
+            for component_id, component in (("source-code", code_component),
+                                            ("footer-and-reference-images", image_component)):
+                scope = component.get("scope")
+                if (not isinstance(scope, dict) or scope.get("repository") != "supported"
+                        or scope.get("public_ci") != "supported"):
+                    raise AdmissionRefused(f"diagnostic-closeout-rights-scope-mismatch:{source_id}:{component_id}")
             font_component = _diagnostic_component(source, "mgblib-font-data")
             if font_component.get("outcome") != "excluded-by-design":
                 raise AdmissionRefused(f"diagnostic-closeout-font-rights-mutated:{source_id}")
-        blockers.append("acid2-footer-reference-image-rights-unresolved")
+        runtime = _validate_acid2_runtime_result(acid2.get("runtime"))
+        if acid2.get("status") == "admitted-before-runtime" and runtime["status"] != "pending":
+            raise AdmissionRefused("diagnostic-closeout-acid2-runtime-status-mismatch")
+        if acid2.get("status") == "executed" and runtime["status"] != "pass":
+            raise AdmissionRefused("diagnostic-closeout-acid2-runtime-status-mismatch")
+        if acid2.get("status") == "runtime-failed" and runtime["status"] not in ("mismatch", "bounded-failure"):
+            raise AdmissionRefused("diagnostic-closeout-acid2-runtime-status-mismatch")
     if kind in ("gbmicrotest", "all"):
         gbmicrotest = record.get("gbmicrotest")
         if not isinstance(gbmicrotest, dict) or inventory is None:
@@ -1155,12 +1366,83 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-case-accounting-mutated")
         if runtime_complete:
             _validate_gbmicrotest_runtime_result(cohort["runtime_results"])
-        if record.get("status") != "blocked-by-acid2":
+        if record.get("status") not in ("admitted-before-runtime", "runtime-pass", "runtime-failed"):
             raise AdmissionRefused("diagnostic-closeout-status-mutated")
-    if kind == "acid2" and record.get("status") != "blocked-by-acid2":
+    if kind == "acid2" and record.get("status") not in ("admitted-before-runtime", "runtime-pass", "runtime-failed"):
         raise AdmissionRefused("diagnostic-closeout-status-mutated")
+    acid2_record = record.get("acid2")
+    gb_record = record.get("gbmicrotest")
+    if isinstance(acid2_record, dict) and isinstance(gb_record, dict):
+        acid2_runtime = _validate_acid2_runtime_result(acid2_record.get("runtime"))
+        gb_runtime = None
+        if gb_record.get("status") in ("executed", "runtime-failed"):
+            accounting = gb_record.get("accounting")
+            gb_runtime = _validate_gbmicrotest_runtime_result(
+                accounting.get("runtime_results") if isinstance(accounting, dict) else None)
+        expected_closeout_status = "admitted-before-runtime"
+        if acid2_runtime["status"] != "pending":
+            expected_closeout_status = (
+                "runtime-pass" if acid2_runtime["status"] == "pass"
+                and gb_runtime is not None and gb_runtime["verdict"] == "pass"
+                else "runtime-failed")
+        if record.get("status") != expected_closeout_status:
+            raise AdmissionRefused("diagnostic-closeout-combined-status-mismatch")
     record["_blockers"] = blockers
     return record
+
+
+def validate_acid2_fixture(root: pathlib.Path, source_revision: str) -> tuple[dict[str, bytes], dict[str, Any]]:
+    """Validate the exact admitted Acid2 snapshot, rights record, and bounded archive."""
+    fixture_paths = (
+        ACID2_FIXTURE_MANIFEST, ACID2_FIXTURE_ADMISSION_PIN, ACID2_FIXTURE_BUNDLE,
+        ACID2_FIXTURE_NOTICE, ACID2_FIXTURE_SOURCES, "THIRD_PARTY_NOTICES.md",
+        PHASE20_CHECKER_PATH, PHASE20_POLICY_PATH, "tests/scripts/verify-acid2-masks.py",
+        "tests/scripts/run-acid2-local.py",
+    )
+    for relative in fixture_paths:
+        require_worktree_source_file(root, source_revision, relative, root / relative)
+
+    manifest_raw = read_source_file(root, source_revision, ACID2_FIXTURE_MANIFEST)
+    pointer_raw = read_source_file(root, source_revision, ACID2_FIXTURE_ADMISSION_PIN)
+    archive_raw = read_source_file(root, source_revision, ACID2_FIXTURE_BUNDLE)
+    notice = read_source_file(root, source_revision, ACID2_FIXTURE_NOTICE)
+    if (sha256(manifest_raw) != ACID2_FIXTURE_MANIFEST_SHA256
+            or pointer_raw != (ACID2_FIXTURE_ADMISSION_COMMIT + "\n").encode("ascii")
+            or sha256(archive_raw) != ACID2_FIXTURE_BUNDLE_SHA256
+            or len(archive_raw) != ACID2_FIXTURE_BUNDLE_SIZE
+            or sha256(notice) != ACID2_FIXTURE_NOTICE_SHA256):
+        raise AdmissionRefused("diagnostic-closeout-acid2-fixture-identity-mismatch")
+
+    phase20 = root / PHASE20_CHECKER_PATH
+    code, stdout, stderr = _bounded_run(
+        [sys.executable, "-I", str(phase20), "--check-manifest",
+         ACID2_FIXTURE_MANIFEST, "--repo-root", str(root)], cwd=root, timeout=10)
+    if code != 0 or b"PASS: fixture admission" not in stdout:
+        detail = (stdout + stderr).decode("utf-8", "replace")[:240]
+        raise AdmissionRefused("diagnostic-closeout-acid2-manifest-refused:" + detail)
+
+    masks = _load_module("phase24_acid2_masks", root / "tests/scripts/verify-acid2-masks.py")
+    manifest_raw_inner = masks._extract_inner_manifest(archive_raw)
+    manifest = masks._json_no_duplicate_keys(manifest_raw_inner, "acid2-inner-manifest")
+    members = masks.read_bundle(
+        archive_raw, manifest, expected_bundle_sha256=ACID2_FIXTURE_BUNDLE_SHA256,
+        expected_bundle_size_bytes=ACID2_FIXTURE_BUNDLE_SIZE)
+    masks.validate_bundle_manifest(root, manifest, members)
+    derivatives = {row.get("kind"): row for row in manifest.get("derivatives", [])
+                   if isinstance(row, dict)}
+    if set(derivatives) != set(ACID2_DERIVATIVES):
+        raise AdmissionRefused("diagnostic-closeout-acid2-derivative-set-invalid")
+    for kind, (path, expected_sha, model) in ACID2_DERIVATIVES.items():
+        row = derivatives[kind]
+        content = members.get(path)
+        scope = manifest.get("model_scope", {}).get(kind)
+        if (not isinstance(content, bytes) or row.get("path") != path
+                or row.get("sha256") != expected_sha or sha256(content) != expected_sha
+                or row.get("size_bytes") != 32768 or len(content) != 32768
+                or scope != {"excluded_claims": ["glyph-accuracy", "mode-3-timing", "hardware-qualification"],
+                             "hardware_claim": False, "runner_model": model}):
+            raise AdmissionRefused(f"diagnostic-closeout-acid2-derivative-or-model-mismatch:{kind}")
+    return members, manifest
 
 
 def validate_gbmicrotest_fixture(root: pathlib.Path, source_revision: str) -> dict[str, bytes]:
@@ -1261,29 +1543,17 @@ def validate_gbmicrotest_fixture(root: pathlib.Path, source_revision: str) -> di
     return content
 
 
-def run_gbmicrotest_runtime(root: pathlib.Path, source_revision: str, runner: pathlib.Path,
-                            qualification_path: pathlib.Path, deadline_seconds: int,
-                            evidence_path: pathlib.Path, invocation_started: float,
-                            bundle: dict[str, bytes]) -> dict[str, Any]:
-    if deadline_seconds != 25:
-        raise AdmissionRefused("diagnostic-runtime-deadline-must-be-25-seconds")
-    if time.monotonic() - invocation_started >= deadline_seconds:
-        raise AdmissionRefused("diagnostic-runtime-deadline-expired-before-runner")
+def validate_current_runner_qualification(root: pathlib.Path, source_revision: str,
+                                         runner: pathlib.Path,
+                                         qualification_path: pathlib.Path) -> dict[str, Any]:
     root = root.resolve(strict=True)
     if runner.is_symlink() or qualification_path.is_symlink():
         raise AdmissionRefused("diagnostic-runtime-runner-or-qualification-unavailable")
     runner = runner.resolve(strict=True)
     qualification_path = qualification_path.resolve(strict=True)
-    if not runner.is_file() or not qualification_path.is_file():
+    if (not runner.is_file() or not qualification_path.is_file()
+            or qualification_path != root / "build/phase21-evidence/current-runner-qualification.json"):
         raise AdmissionRefused("diagnostic-runtime-runner-or-qualification-unavailable")
-    if qualification_path != root / "build/phase21-evidence/current-runner-qualification.json":
-        raise AdmissionRefused("diagnostic-runtime-qualification-path-invalid")
-
-    closeout_raw = read_source_file(root, source_revision, DIAGNOSTIC_CLOSEOUT_PATH)
-    closeout_sha = sha256(closeout_raw)
-    if read_limited(root / DIAGNOSTIC_CLOSEOUT_PATH, MAX_JSON_BYTES, "diagnostic-closeout") != closeout_raw:
-        raise AdmissionRefused("diagnostic-runtime-closeout-json-differs-from-committed-source")
-
     qualification_raw = read_limited(qualification_path, 64 * 1024, "runner-qualification")
     qualification = _json_without_duplicates(qualification_raw, "runner-qualification")
     runner_sha = sha256(read_limited(runner, 64 * 1024 * 1024, "runner-binary"))
@@ -1300,7 +1570,100 @@ def run_gbmicrotest_runtime(root: pathlib.Path, source_revision: str, runner: pa
     if check_code != 0 or b"PASS: current runner qualification" not in check_out:
         detail = (check_out + check_err).decode("utf-8", "replace")[:240]
         raise AdmissionRefused("diagnostic-runtime-qualification-refused:" + detail)
-    qualification_sha = sha256(qualification_raw)
+    return {"runner": runner, "qualification_path": qualification_path,
+            "runner_sha256": runner_sha, "qualification_sha256": sha256(qualification_raw),
+            "qualification": qualification}
+
+
+def run_acid2_runtime(root: pathlib.Path, source_revision: str, runner: pathlib.Path,
+                      deadline_seconds: int, invocation_started: float,
+                      members: dict[str, bytes], manifest: dict[str, Any],
+                      qualified_runner: dict[str, Any],
+                      evidence_path: pathlib.Path | None = None) -> dict[str, Any]:
+    if deadline_seconds != 25:
+        raise AdmissionRefused("diagnostic-runtime-deadline-must-be-25-seconds")
+    if time.monotonic() - invocation_started >= deadline_seconds:
+        raise AdmissionRefused("diagnostic-runtime-deadline-expired-before-acid2")
+    if (qualified_runner.get("runner") != runner.resolve(strict=True)
+            or qualified_runner.get("runner_sha256") is None):
+        raise AdmissionRefused("diagnostic-runtime-runner-qualification-not-reused")
+    module = _load_module("phase24_admitted_acid2_runtime", root / "tests/scripts/run-acid2-local.py")
+    results: list[dict[str, Any]] = []
+    for profile in ACID2_COMPARISON_PROFILES:
+        remaining = deadline_seconds - (time.monotonic() - invocation_started)
+        if remaining <= 0:
+            raise AdmissionRefused("diagnostic-runtime-deadline-expired-before-acid2-comparison")
+        comparison_started = time.monotonic()
+        try:
+            result = module.run_admitted_comparison(
+                members, manifest, runner, profile, remaining)
+        except (module.Refused, RuntimeError, subprocess.SubprocessError) as error:
+            raise AdmissionRefused(f"diagnostic-runtime-acid2-comparison-refused:{profile}:{error}") from None
+        if result.get("runner_sha256") != qualified_runner["runner_sha256"]:
+            raise AdmissionRefused("diagnostic-runtime-acid2-runner-qualification-binding-mismatch")
+        result["elapsed_seconds"] = round(time.monotonic() - comparison_started, 6)
+        results.append(result)
+    status = "pass" if all(item.get("verdict") == "pass" for item in results) else "mismatch"
+    closeout_raw = read_source_file(root, source_revision, DIAGNOSTIC_CLOSEOUT_PATH)
+    evidence = {
+        "schema": "gabbaboy-acid2-runtime-evidence-v1",
+        "source_revision": source_revision,
+        "closeout_record_sha256": sha256(closeout_raw),
+        "fixture_admission_commit": ACID2_FIXTURE_ADMISSION_COMMIT,
+        "manifest_sha256": ACID2_FIXTURE_MANIFEST_SHA256,
+        "bundle_sha256": ACID2_FIXTURE_BUNDLE_SHA256,
+        "runner_sha256": qualified_runner["runner_sha256"],
+        "qualification_sha256": qualified_runner["qualification_sha256"],
+        "comparisons": results,
+        "status": status,
+    }
+    if evidence_path is not None:
+        target = evidence_path if evidence_path.is_absolute() else root / evidence_path
+        try:
+            relative = target.resolve(strict=False).relative_to(root).as_posix()
+        except ValueError:
+            raise AdmissionRefused("diagnostic-runtime-acid2-evidence-path-outside-repository") from None
+        if (relative != ACID2_RUNTIME_EVIDENCE_PATH or target.is_symlink() or target.exists()):
+            raise AdmissionRefused("diagnostic-runtime-acid2-evidence-path-invalid-or-exists")
+        ignored = subprocess.run(["git", "check-ignore", "-q", relative], cwd=root,
+                                 check=False, timeout=5)
+        if ignored.returncode != 0:
+            raise AdmissionRefused("diagnostic-runtime-acid2-evidence-path-not-ignored")
+        raw = (json.dumps(evidence, indent=2, sort_keys=True) + "\n").encode("utf-8")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with target.open("xb") as stream:
+                stream.write(raw)
+                stream.flush()
+                os.fsync(stream.fileno())
+        except OSError as error:
+            raise AdmissionRefused("diagnostic-runtime-acid2-evidence-write-failed:" +
+                                   (error.strerror or "write")) from None
+        evidence["evidence_path"] = relative
+        evidence["evidence_sha256"] = sha256(raw)
+    return evidence
+
+
+def run_gbmicrotest_runtime(root: pathlib.Path, source_revision: str, runner: pathlib.Path,
+                            qualification_path: pathlib.Path, deadline_seconds: int,
+                            evidence_path: pathlib.Path, invocation_started: float,
+                            bundle: dict[str, bytes],
+                            qualified_runner: dict[str, Any] | None = None) -> dict[str, Any]:
+    if deadline_seconds != 25:
+        raise AdmissionRefused("diagnostic-runtime-deadline-must-be-25-seconds")
+    if time.monotonic() - invocation_started >= deadline_seconds:
+        raise AdmissionRefused("diagnostic-runtime-deadline-expired-before-runner")
+    root = root.resolve(strict=True)
+    closeout_raw = read_source_file(root, source_revision, DIAGNOSTIC_CLOSEOUT_PATH)
+    closeout_sha = sha256(closeout_raw)
+    if read_limited(root / DIAGNOSTIC_CLOSEOUT_PATH, MAX_JSON_BYTES, "diagnostic-closeout") != closeout_raw:
+        raise AdmissionRefused("diagnostic-runtime-closeout-json-differs-from-committed-source")
+    qualified = qualified_runner or validate_current_runner_qualification(
+        root, source_revision, runner, qualification_path)
+    runner = qualified["runner"]
+    qualification = qualified["qualification"]
+    runner_sha = qualified["runner_sha256"]
+    qualification_sha = qualified["qualification_sha256"]
 
     derivative = bundle["bin/div_inc_timing_a.bootless.gb"]
     case_line = (
@@ -1421,7 +1784,9 @@ def run_gbmicrotest_runtime(root: pathlib.Path, source_revision: str, runner: pa
         relative_evidence = evidence_target.resolve(strict=False).relative_to(root).as_posix()
     except ValueError:
         raise AdmissionRefused("diagnostic-runtime-evidence-path-outside-repository") from None
-    if (relative_evidence != "build/phase24/diagnostic-runtime-preflight.json"
+    if (relative_evidence not in ("build/phase24/diagnostic-runtime-preflight.json",
+                                  GBMICROTEST_RUNTIME_PREFLIGHT_PATH,
+                                  GBMICROTEST_RUNTIME_FINAL_PATH)
             or evidence_target.is_symlink() or evidence_target.exists()):
         raise AdmissionRefused("diagnostic-runtime-evidence-path-invalid-or-exists")
     ignored = subprocess.run(["git", "check-ignore", "-q", relative_evidence], cwd=root,
@@ -1470,6 +1835,165 @@ def run_gbmicrotest_runtime(root: pathlib.Path, source_revision: str, runner: pa
                                          expected_source_revision=source_revision,
                                          require_evidence=True)
     return runtime_result
+
+
+def _write_ignored_json(root: pathlib.Path, relative: str, evidence: dict[str, Any],
+                        *, expected_previous_sha256: str | None = None) -> tuple[pathlib.Path, str]:
+    target = root / relative
+    if target.is_symlink():
+        raise AdmissionRefused("diagnostic-runtime-evidence-path-invalid-or-exists")
+    if target.exists():
+        prior_raw = read_limited(target, MAX_JSON_BYTES, "prior-runtime-evidence")
+        prior_sha = sha256(prior_raw)
+        if relative != DIAGNOSTIC_RUNTIME_PREFLIGHT_PATH:
+            raise AdmissionRefused("diagnostic-runtime-evidence-path-invalid-or-exists")
+        if expected_previous_sha256 is not None and prior_sha != expected_previous_sha256:
+            raise AdmissionRefused("diagnostic-runtime-prior-evidence-binding-mismatch")
+        if expected_previous_sha256 is None:
+            if prior_sha != LEGACY_GBMICROTEST_PREFLIGHT_SHA256:
+                raise AdmissionRefused("diagnostic-runtime-unknown-prior-evidence-refused")
+            preserved = root / f"build/phase24/diagnostic-runtime-preflight-archive-{prior_sha}.json"
+            if preserved.is_symlink():
+                raise AdmissionRefused("diagnostic-runtime-prior-evidence-preservation-path-unsafe")
+            if preserved.exists():
+                if sha256(read_limited(preserved, MAX_JSON_BYTES, "archived-prior-runtime-evidence")) != prior_sha:
+                    raise AdmissionRefused("diagnostic-runtime-prior-evidence-preservation-mismatch")
+                target.unlink()
+            else:
+                target.rename(preserved)
+            ignored_archive = subprocess.run(["git", "check-ignore", "-q", preserved.relative_to(root).as_posix()],
+                                             cwd=root, check=False, timeout=5)
+            if ignored_archive.returncode != 0:
+                raise AdmissionRefused("diagnostic-runtime-prior-evidence-archive-not-ignored")
+        else:
+            preserved = root / "build/phase24/diagnostic-runtime-preflight.legacy-gbmicrotest.json"
+            if preserved.exists() or preserved.is_symlink():
+                raise AdmissionRefused("diagnostic-runtime-prior-evidence-preservation-path-exists")
+            target.rename(preserved)
+    ignored = subprocess.run(["git", "check-ignore", "-q", relative], cwd=root,
+                             check=False, timeout=5)
+    if ignored.returncode != 0:
+        raise AdmissionRefused("diagnostic-runtime-evidence-path-not-ignored")
+    raw = (json.dumps(evidence, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with target.open("xb") as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except OSError as error:
+        raise AdmissionRefused("diagnostic-runtime-evidence-write-failed:" +
+                               (error.strerror or "write")) from None
+    if sha256(read_limited(target, MAX_JSON_BYTES, "diagnostic-runtime-evidence")) != sha256(raw):
+        raise AdmissionRefused("diagnostic-runtime-evidence-digest-mismatch")
+    return target, sha256(raw)
+
+
+def _stable_gbmicrotest_result(result: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in result.items()
+            if key not in {"source_revision", "closeout_record_sha256", "evidence_path",
+                           "evidence_sha256", "elapsed_seconds"}}
+
+
+def _stable_acid2_comparisons(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{key: value for key, value in result.items() if key != "elapsed_seconds"}
+            for result in results]
+
+
+def _record_combined_preflight_result(root: pathlib.Path, source_revision: str,
+                                      closeout_sha256: str, acid2_runtime: dict[str, Any],
+                                      gb_runtime: dict[str, Any], evidence_path: str,
+                                      evidence_sha256: str) -> None:
+    root = root.resolve(strict=True)
+    record_path = root / DIAGNOSTIC_CLOSEOUT_PATH
+    source_raw = read_source_file(root, source_revision, DIAGNOSTIC_CLOSEOUT_PATH)
+    current_raw = read_limited(record_path, MAX_JSON_BYTES, "diagnostic-closeout")
+    if current_raw != source_raw or sha256(current_raw) != closeout_sha256:
+        raise AdmissionRefused("diagnostic-runtime-closeout-changed-before-preflight-record")
+    if (acid2_runtime.get("source_revision") != source_revision
+            or acid2_runtime.get("closeout_record_sha256") != closeout_sha256
+            or acid2_runtime.get("status") not in ("pass", "mismatch")
+            or gb_runtime.get("source_revision") != source_revision
+            or gb_runtime.get("closeout_record_sha256") != closeout_sha256
+            or gb_runtime.get("verdict") not in ("pass", "source-failure", "bounded-failure")):
+        raise AdmissionRefused("diagnostic-runtime-preflight-result-not-complete")
+    record = _json_without_duplicates(current_raw, "diagnostic-closeout")
+    acid2 = record.get("acid2")
+    gb = record.get("gbmicrotest")
+    if (not isinstance(acid2, dict) or acid2.get("status") != "admitted-before-runtime"
+            or not isinstance(gb, dict) or gb.get("status") != "admitted-before-runtime"):
+        raise AdmissionRefused("diagnostic-runtime-preflight-closeout-state-invalid")
+    acid2["runtime"] = {
+        "status": acid2_runtime["status"], "source_revision": source_revision,
+        "closeout_record_sha256": closeout_sha256,
+        "fixture_admission_commit": ACID2_FIXTURE_ADMISSION_COMMIT,
+        "manifest_sha256": ACID2_FIXTURE_MANIFEST_SHA256,
+        "bundle_sha256": ACID2_FIXTURE_BUNDLE_SHA256,
+        "runner_sha256": acid2_runtime["runner_sha256"],
+        "qualification_sha256": acid2_runtime["qualification_sha256"],
+        "evidence_path": evidence_path, "evidence_sha256": evidence_sha256,
+        "comparisons": acid2_runtime["comparisons"],
+    }
+    acid2["status"] = "executed" if acid2_runtime["status"] == "pass" else "runtime-failed"
+    gb_passed = gb_runtime["verdict"] == "pass"
+    gb["status"] = "executed" if gb_passed else "runtime-failed"
+    gb["cohort_status"] = gb["status"]
+    gb["blocked_by"] = [] if gb_passed else ["selected-case-" + gb_runtime["verdict"]]
+    accounting = gb.get("accounting")
+    if (not isinstance(accounting, dict) or accounting.get("runtime_results") != []
+            or accounting.get("executed_names") != []):
+        raise AdmissionRefused("diagnostic-runtime-preflight-accounting-invalid")
+    accounting["executed_names"] = [GBMICROTEST_SELECTED_CASE] if gb_passed else []
+    accounting["final_execution_accounting_complete"] = gb_passed
+    accounting["runtime_results"] = [gb_runtime]
+    source_review = gb.get("source_review")
+    if isinstance(source_review, dict):
+        local_review = source_review.get("local_rom_review")
+        if isinstance(local_review, dict):
+            local_review["runtime_status"] = "pass" if gb_passed else gb_runtime["verdict"]
+        protocol = source_review.get("protocol")
+        if isinstance(protocol, dict):
+            protocol["runtime_status"] = "pass" if gb_passed else gb_runtime["verdict"]
+    record["status"] = ("runtime-pass" if gb_passed and acid2_runtime["status"] == "pass"
+                         else "runtime-failed")
+    updated = (json.dumps(record, indent=2) + "\n").encode("utf-8")
+    temporary = record_path.with_name(record_path.name + ".preflight.tmp")
+    if temporary.exists() or temporary.is_symlink():
+        raise AdmissionRefused("diagnostic-runtime-closeout-temporary-path-exists")
+    try:
+        with temporary.open("xb") as stream:
+            stream.write(updated)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, record_path)
+    except OSError as error:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise AdmissionRefused("diagnostic-runtime-closeout-write-failed:" +
+                               (error.strerror or "write")) from None
+
+
+def _verify_combined_runtime_stable(record: dict[str, Any], acid2_runtime: dict[str, Any],
+                                    gb_runtime: dict[str, Any]) -> None:
+    acid2 = record.get("acid2")
+    gb = record.get("gbmicrotest")
+    if not isinstance(acid2, dict) or not isinstance(gb, dict):
+        raise AdmissionRefused("diagnostic-runtime-preflight-record-missing")
+    baseline = _validate_acid2_runtime_result(acid2.get("runtime"))
+    if (baseline["status"] != "pass"
+            or acid2_runtime.get("status") != "pass"
+            or _stable_acid2_comparisons(baseline["comparisons"])
+            != _stable_acid2_comparisons(acid2_runtime.get("comparisons", []))
+            or acid2_runtime.get("status") != "pass"):
+        raise AdmissionRefused("diagnostic-runtime-acid2-preflight-outcome-changed")
+    accounting = gb.get("accounting")
+    baseline_rows = accounting.get("runtime_results") if isinstance(accounting, dict) else None
+    baseline_gb = _validate_gbmicrotest_runtime_result(baseline_rows)
+    if (baseline_gb["verdict"] != "pass" or gb_runtime.get("verdict") != "pass"
+            or _stable_gbmicrotest_result(baseline_gb) != _stable_gbmicrotest_result(gb_runtime)):
+        raise AdmissionRefused("diagnostic-runtime-gbmicrotest-preflight-outcome-changed")
 
 
 def record_gbmicrotest_runtime_result(root: pathlib.Path, source_revision: str,
@@ -1530,6 +2054,10 @@ def check_diagnostic_closeout(root: pathlib.Path, source_revision: str, kind: st
                                  root / ADMISSION_CHECKER_PATH)
     require_worktree_source_file(root, source_revision, DIAGNOSTIC_CLOSEOUT_PATH,
                                  root / DIAGNOSTIC_CLOSEOUT_PATH)
+    if kind in ("acid2", "all"):
+        for relative in (ACID2_FIXTURE_MANIFEST, ACID2_FIXTURE_ADMISSION_PIN,
+                         ACID2_FIXTURE_BUNDLE, ACID2_FIXTURE_NOTICE):
+            require_worktree_source_file(root, source_revision, relative, root / relative)
     if kind in ("gbmicrotest", "all"):
         require_worktree_source_file(root, source_revision, GBMICROTEST_INVENTORY_PATH,
                                      root / GBMICROTEST_INVENTORY_PATH)
@@ -1547,13 +2075,19 @@ def check_diagnostic_closeout(root: pathlib.Path, source_revision: str, kind: st
     validated = validate_diagnostic_closeout_record(record, rights_record, kind, inventory)
     if require_approved and validated["_blockers"]:
         raise AdmissionRefused("scope-resolution-required: " + ",".join(validated["_blockers"]))
+    if kind in ("acid2", "all"):
+        acid2_bundle, acid2_manifest = validate_acid2_fixture(root, source_revision)
+        validated["_acid2_bundle_content"] = acid2_bundle
+        validated["_acid2_manifest"] = acid2_manifest
+        _validate_acid2_runtime_evidence(root, validated["acid2"]["runtime"], source_revision)
     bundle = None
     if (kind in ("gbmicrotest", "all")
             and validated["gbmicrotest"].get("status") != "blocked-before-admission"):
         bundle = validate_gbmicrotest_fixture(root, source_revision)
     if kind in ("gbmicrotest", "all") and validated["gbmicrotest"].get("status") in ("executed", "runtime-failed"):
         _validate_gbmicrotest_runtime_result(validated["gbmicrotest"]["accounting"]["runtime_results"],
-                                             root=root)
+                                             root=root, expected_source_revision=source_revision,
+                                             require_evidence=False)
     if kind in ("gbmicrotest", "all") and bundle is not None:
         validated["_gbmicrotest_bundle_content"] = bundle
     return validated
@@ -2171,13 +2705,16 @@ class AdmissionControlTests(unittest.TestCase):
         rights_raw = _git(ROOT, "show", f"{DIAGNOSTIC_RIGHTS_REVISION}:{CANDIDATE_CLOSEOUT_PATH}")
         return record, _json_without_duplicates(rights_raw, "diagnostic-rights-input")
 
-    def test_acid2_image_gate_stays_blocked_without_creating_an_output(self) -> None:
+    def test_acid2_snapshot_admits_two_real_derivatives_but_keeps_font_excluded(self) -> None:
         record, rights = self._diagnostic_closeout_inputs()
         validated = validate_diagnostic_closeout_record(record, rights, "acid2")
-        self.assertEqual(validated["status"], "blocked-by-acid2")
-        self.assertEqual(validated["_blockers"], ["acid2-footer-reference-image-rights-unresolved"])
+        self.assertEqual(validated["status"], "admitted-before-runtime")
+        self.assertEqual(validated["_blockers"], [])
+        self.assertEqual(validated["acid2"]["font_data"], "excluded-by-design")
         self.assertEqual([case["derivative"]["status"] for case in validated["acid2"]["cases"]],
-                         ["not-created", "not-created"])
+                         ["admitted", "admitted"])
+        self.assertEqual([case["model_scope"]["runner_model"] for case in validated["acid2"]["cases"]],
+                         ["dmg-cpu-b", "cgb-cpu-e"])
 
     def test_acid2_gate_refuses_a_synthetic_derivative_claim(self) -> None:
         record, rights = self._diagnostic_closeout_inputs()
@@ -2190,9 +2727,22 @@ class AdmissionControlTests(unittest.TestCase):
         record, rights = self._diagnostic_closeout_inputs()
         source = _diagnostic_source_by_id(rights, "dmg-acid2-v1.0")
         component = _diagnostic_component(source, "footer-and-reference-images")
-        component["outcome"] = "supported"
+        component["outcome"] = "unresolved"
         with self.assertRaisesRegex(AdmissionRefused, "diagnostic-closeout-rights-mismatch:dmg-acid2-v1.0"):
             validate_diagnostic_closeout_record(record, rights, "acid2")
+
+    def test_acid2_runtime_receipt_requires_all_three_source_pinned_profiles(self) -> None:
+        record, _rights = self._diagnostic_closeout_inputs()
+        runtime = record["acid2"]["runtime"]
+        runtime.update({
+            "status": "pass", "source_revision": "a" * 40,
+            "closeout_record_sha256": "b" * 64, "runner_sha256": "c" * 64,
+            "qualification_sha256": "d" * 64, "evidence_path": DIAGNOSTIC_RUNTIME_PREFLIGHT_PATH,
+            "evidence_sha256": "e" * 64,
+        })
+        runtime["comparisons"] = []
+        with self.assertRaisesRegex(AdmissionRefused, "diagnostic-closeout-acid2-comparison-set-invalid"):
+            _validate_acid2_runtime_result(runtime)
 
     def test_gbmicrotest_accounts_for_one_admitted_case_and_512_exclusions(self) -> None:
         record, rights = self._diagnostic_closeout_inputs()
@@ -2347,7 +2897,7 @@ class AdmissionControlTests(unittest.TestCase):
             with self.assertRaisesRegex(AdmissionRefused, "candidate-rights-unresolved:") as caught:
                 require_approved(root, revision, candidate_rights=True)
             detail = str(caught.exception)
-            self.assertIn("potion-panic-gbcompo25/visual-assets", detail)
+            self.assertIn("potion-panic-gbcompo25/converter-code", detail)
             self.assertIn("ucity-1.3/hardware-inc", detail)
 
     def test_each_mutated_identity_refuses(self) -> None:
@@ -2589,8 +3139,8 @@ def main(argv: list[str] | None = None) -> int:
                      "--deadline-seconds, and --write-evidence together")
     if runtime_flags and not args.require_approved:
         parser.error("runtime requires --require-approved")
-    if runtime_flags and args.closeout_kind not in ("gbmicrotest", "all"):
-        parser.error("bounded runtime requires --closeout-kind gbmicrotest or all")
+    if runtime_flags and args.closeout_kind not in ("acid2", "gbmicrotest", "all"):
+        parser.error("bounded runtime requires --closeout-kind acid2, gbmicrotest, or all")
     if args.require_approved and (args.self_test_tracer or args.self_test or args.self_test_controls
                                   or args.check_assessment):
         parser.error("--require-approved may modify --check-closeout or run as the legacy admission mode")
@@ -2628,13 +3178,98 @@ def main(argv: list[str] | None = None) -> int:
             record = check_diagnostic_closeout(args.repo_root, revision, args.closeout_kind,
                                                require_approved=args.require_approved)
             if runtime_flags:
-                if args.closeout_kind != "gbmicrotest":
-                    raise AdmissionRefused("combined-acid2-runtime-not-available-after-independent-blocker")
+                qualified = validate_current_runner_qualification(
+                    args.repo_root, revision, args.runner, args.current_build_qualification)
+                if args.closeout_kind == "acid2":
+                    if args.write_evidence.resolve(strict=False) != (
+                            args.repo_root.resolve() / ACID2_RUNTIME_EVIDENCE_PATH):
+                        raise AdmissionRefused("diagnostic-runtime-acid2-evidence-path-invalid")
+                    runtime = run_acid2_runtime(
+                        args.repo_root, revision, qualified["runner"], args.deadline_seconds,
+                        invocation_started, record["_acid2_bundle_content"],
+                        record["_acid2_manifest"], qualified, args.write_evidence)
+                    print(f"diagnostic closeout acid2 runtime result source={revision} comparisons=3 "
+                          f"verdict={runtime['status']} runner={runtime['runner_sha256']} "
+                          f"qualification={runtime['qualification_sha256']} "
+                          f"evidence={runtime['evidence_sha256']}")
+                    return 0 if runtime["status"] == "pass" else 1
+                if args.closeout_kind == "all":
+                    output_path = args.write_evidence.resolve(strict=False)
+                    preflight_path = (args.repo_root.resolve() / DIAGNOSTIC_RUNTIME_PREFLIGHT_PATH)
+                    final_path = (args.repo_root.resolve() / DIAGNOSTIC_RUNTIME_FINAL_PATH)
+                    if output_path not in (preflight_path, final_path):
+                        raise AdmissionRefused("diagnostic-runtime-combined-evidence-path-invalid")
+                    closeout_raw = read_source_file(args.repo_root, revision, DIAGNOSTIC_CLOSEOUT_PATH)
+                    closeout_sha = sha256(closeout_raw)
+                    acid2_runtime = run_acid2_runtime(
+                        args.repo_root, revision, qualified["runner"], args.deadline_seconds,
+                        invocation_started, record["_acid2_bundle_content"],
+                        record["_acid2_manifest"], qualified)
+                    gb_evidence_relative = (GBMICROTEST_RUNTIME_PREFLIGHT_PATH
+                                            if output_path == preflight_path
+                                            else GBMICROTEST_RUNTIME_FINAL_PATH)
+                    gb_runtime = run_gbmicrotest_runtime(
+                        args.repo_root, revision, qualified["runner"],
+                        qualified["qualification_path"], args.deadline_seconds,
+                        pathlib.Path(gb_evidence_relative), invocation_started,
+                        record["_gbmicrotest_bundle_content"], qualified)
+                    accounting = record["gbmicrotest"]["accounting"]
+                    eligible_names = accounting["admitted_eligible_names"]
+                    excluded_names = accounting["excluded_names"]
+                    if (eligible_names != [GBMICROTEST_SELECTED_CASE]
+                            or len(excluded_names) != GBMICROTEST_CASE_COUNT - 1
+                            or set(eligible_names) & set(excluded_names)):
+                        raise AdmissionRefused("diagnostic-runtime-roster-accounting-mismatch")
+                    combined_status = ("pass" if acid2_runtime["status"] == "pass"
+                                       and gb_runtime["verdict"] == "pass" else "runtime-failed")
+                    combined = {
+                        "schema": "gabbaboy-diagnostic-runtime-evidence-v1",
+                        "source_revision": revision,
+                        "closeout_record_sha256": closeout_sha,
+                        "runner_sha256": qualified["runner_sha256"],
+                        "qualification_sha256": qualified["qualification_sha256"],
+                        "acid2": {"status": acid2_runtime["status"],
+                                  "comparisons": acid2_runtime["comparisons"]},
+                        "gbmicrotest": gb_runtime,
+                        "eligible_names": eligible_names,
+                        "executed_names": [GBMICROTEST_SELECTED_CASE]
+                        if gb_runtime["verdict"] == "pass" else [],
+                        "excluded_names": excluded_names,
+                        "roster_count": GBMICROTEST_CASE_COUNT,
+                        "combined_status": combined_status,
+                    }
+                    relative_output = (DIAGNOSTIC_RUNTIME_PREFLIGHT_PATH
+                                       if output_path == preflight_path
+                                       else DIAGNOSTIC_RUNTIME_FINAL_PATH)
+                    previous_evidence_sha = None
+                    if output_path == preflight_path:
+                        previous_rows = record.get("gbmicrotest", {}).get("accounting", {}).get("runtime_results", [])
+                        if isinstance(previous_rows, list) and len(previous_rows) == 1:
+                            previous_evidence_sha = previous_rows[0].get("evidence_sha256")
+                    _target, combined_sha = _write_ignored_json(args.repo_root.resolve(),
+                                                                relative_output, combined,
+                                                                expected_previous_sha256=previous_evidence_sha)
+                    if output_path == preflight_path:
+                        _record_combined_preflight_result(
+                            args.repo_root, revision, closeout_sha, acid2_runtime, gb_runtime,
+                            relative_output, combined_sha)
+                    else:
+                        _verify_combined_runtime_stable(record, acid2_runtime, gb_runtime)
+                    if combined_status == "pass":
+                        print(f"diagnostic closeout runtime pass source={revision} acid2=2 "
+                              f"eligible={len(eligible_names)} executed={len(combined['executed_names'])} "
+                              f"excluded={len(excluded_names)}")
+                        return 0
+                    print(f"diagnostic closeout runtime result source={revision} acid2=3 "
+                          f"eligible={len(eligible_names)} executed={len(combined['executed_names'])} "
+                          f"excluded={len(excluded_names)} acid2_verdict={acid2_runtime['status']} "
+                          f"gbmicrotest_verdict={gb_runtime['verdict']}")
+                    return 1
                 runtime = run_gbmicrotest_runtime(
-                    args.repo_root, revision, args.runner, args.current_build_qualification,
-                    args.deadline_seconds, args.write_evidence, invocation_started,
-                    record["_gbmicrotest_bundle_content"],
-                )
+                    args.repo_root, revision, qualified["runner"],
+                    qualified["qualification_path"], args.deadline_seconds,
+                    args.write_evidence, invocation_started,
+                    record["_gbmicrotest_bundle_content"], qualified)
                 record_gbmicrotest_runtime_result(args.repo_root, revision, runtime)
                 executed = 1 if runtime["verdict"] == "pass" else 0
                 print(f"diagnostic closeout runtime result source={revision} gbmicrotest=1 "

@@ -3741,24 +3741,6 @@ set_tests_properties(phase22_acid2_tracer PROPERTIES
   TIMEOUT 60)
 set(GBB_PHASE22_ACID2_MASKS "${PROJECT_SOURCE_DIR}/tests/scripts/verify-acid2-masks.py")
 set(GBB_PHASE22_DIAGNOSTIC_ADMISSION "${PROJECT_SOURCE_DIR}/tests/scripts/verify-diagnostic-admission.py")
-add_test(NAME phase22_acid2_contract
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_ACID2_MASKS}" --self-test)
-add_test(NAME phase22_acid2_controls
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_ACID2_MASKS}" --self-test-controls)
-add_test(NAME phase22_fixture_admission_contract
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test)
-add_test(NAME phase22_fixture_admission_controls
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test-controls
-    --runner "$<TARGET_FILE:gabbaboy-runner>")
-add_test(NAME phase22_admission_assessment
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}"
-    --check-assessment --repo-root "${PROJECT_SOURCE_DIR}")
-set_tests_properties(phase22_acid2_contract phase22_acid2_controls
-  phase22_fixture_admission_contract phase22_fixture_admission_controls PROPERTIES TIMEOUT 30)
-set_tests_properties(phase22_admission_assessment PROPERTIES TIMEOUT 30
-  PASS_REGULAR_EXPRESSION "diagnostic assessment valid status=blocked unresolved_gates=7 gbmicrotest_cases=513")
-# The metadata no-go is checked at one immutable configure-time source revision. The checker
-# independently validates the historical assessment revision and never fetches upstream data.
 # Source archives have no Git metadata: keep configure/build usable and fail these source-bound
 # tests closed at execution unless the caller supplied an immutable revision explicitly.
 set(GBB_PHASE22_EVIDENCE_SOURCE_REV "" CACHE STRING
@@ -3781,6 +3763,27 @@ else()
     message(FATAL_ERROR "GBB_PHASE22_EVIDENCE_SOURCE_REV must be a full immutable Git commit")
   endif()
 endif()
+add_test(NAME phase22_acid2_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_ACID2_MASKS}" --self-test)
+add_test(NAME phase22_acid2_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_ACID2_MASKS}" --self-test-controls)
+add_test(NAME phase22_fixture_admission_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test)
+add_test(NAME phase22_fixture_admission_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test-controls
+    --runner "$<TARGET_FILE:gabbaboy-runner>")
+add_test(NAME phase22_admission_assessment
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}"
+    --check-closeout --closeout-kind acid2 --require-approved --repo-root "${PROJECT_SOURCE_DIR}"
+    --source-revision "${GBB_PHASE22_EVIDENCE_SOURCE_REV}"
+    --runner "$<TARGET_FILE:gabbaboy-runner>"
+    --current-build-qualification "${GBB_RUNNER_QUALIFICATION_PATH}"
+    --deadline-seconds 25 --write-evidence "${PROJECT_BINARY_DIR}/phase24/acid2-runtime.json")
+set_tests_properties(phase22_acid2_contract phase22_acid2_controls
+  phase22_fixture_admission_contract phase22_fixture_admission_controls PROPERTIES TIMEOUT 30)
+set_tests_properties(phase22_admission_assessment PROPERTIES TIMEOUT 30
+  LABELS "integration"
+  PASS_REGULAR_EXPRESSION "diagnostic closeout acid2 runtime result source=[0-9a-f]+ comparisons=3 verdict=pass runner=[0-9a-f]+ qualification=[0-9a-f]+ evidence=[0-9a-f]+")
 set(GBB_PHASE22_EVIDENCE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-diagnostic-evidence.py")
 add_test(NAME phase22_evidence_contract
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_EVIDENCE_CHECKER}" --check
