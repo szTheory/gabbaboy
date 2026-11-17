@@ -45,8 +45,11 @@ and ROM facts therefore remain `not_observed`; no source build, Phase 20 admissi
 execution, progress observation, or receipt was produced, and neither ROM payload was staged.
 The exact non-fixture asset notice is retained at
 `tests/data/cgb-candidates/evidence/potion-panic-asset-notice.txt`.
-FIXT-01 remains Pending. Do not attempt µCity until the primary no-go is committed and accepted;
-the sole fallback's required `hardware.inc` remains without an established grant.
+FIXT-01 remains Pending. After the committed Potion Panic no-go, the sole µCity fallback was
+checked against its already pinned v1.3 source and rights record. Its required
+`source/engine/hardware.inc` still has no established grant, so the fallback also stops before
+build, ROM acquisition, admission or runtime; candidate native-mode and progress facts remain
+unobserved.
 
 The record also pins the exact dmg-acid2 v1.0, cgb-acid2 v1.1 and gbmicrotest source trees and
 observed notices. Acid2 code and the mgblib code have recorded MIT notices. Under D-207, each

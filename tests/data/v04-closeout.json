@@ -782,7 +782,7 @@
     "primary": "potion-panic-gbcompo25",
     "fallback": "ucity-1.3",
     "primary_outcome": "rights-no-go",
-    "fallback_outcome": "not-attempted-after-primary",
+    "fallback_outcome": "rights-no-go",
     "builds_performed": false,
     "rom_payloads_acquired": true,
     "candidate_payloads_staged": false,
@@ -808,7 +808,7 @@
       "id": "FIXT-01",
       "owner": "Phase 21",
       "status": "Pending",
-      "reason": "Potion Panic source and creator-published ROM/sidecar metadata are observed, but the required local source build is blocked because pinned build.sh invokes the D-207-excluded WLE converter and no reviewed source-build closure omits it. The downloaded ROM is not bound to the pinned source commit by a build receipt; candidate ROM admission, native-mode execution and progress remain unobserved. The sole µCity fallback is not attempted until the primary no-go is committed and accepted."
+      "reason": "Both named candidates have final rights no-go records in the required order. Potion Panic's creator-published ROM and sidecar are observed only as metadata; its source build is blocked by the D-207-excluded WLE converter and its downloaded ROM has no build receipt binding it to the pinned source. µCity 1.3's required source/engine/hardware.inc has no established grant. Neither candidate was built, admitted, or executed; candidate native-mode and progress facts remain unobserved."
     },
     {
       "id": "RIGHTS-01",

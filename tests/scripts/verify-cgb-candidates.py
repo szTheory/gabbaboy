@@ -216,7 +216,7 @@ CLOSEOUT_POTION_PANIC_SUBMODULE = {
     "repository": "https://github.com/gbdev/hardware.inc",
     "revision": "97e979bd977b469c6dbefae15f581b27d1ba8e35",
 }
-CLOSEOUT_GAME_OUTCOMES = ("rights-no-go", "not-attempted-after-primary")
+CLOSEOUT_GAME_OUTCOMES = ("rights-no-go", "rights-no-go")
 CLOSEOUT_PRIMARY_NO_PAYLOAD_FIELDS = (
     "builds_performed", "candidate_payloads_staged", "admission_performed",
 )
@@ -2357,6 +2357,10 @@ def closeout_self_test_controls(root: Path) -> int:
     mutant = copy.deepcopy(canonical)
     mutant["ordered_games"]["fallback"] = "third-game"
     refuse(mutant, "candidate-closeout-game-order-invalid", "fallback substitution")
+
+    mutant = copy.deepcopy(canonical)
+    mutant["ordered_games"]["fallback_outcome"] = "not-attempted-after-primary"
+    refuse(mutant, "candidate-closeout-game-outcome-invalid", "fallback omitted after primary no-go")
 
     mutant = copy.deepcopy(canonical)
     mutant["ordered_games"]["rom_payloads_acquired"] = False
