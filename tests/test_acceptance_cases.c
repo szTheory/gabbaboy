@@ -269,7 +269,7 @@ static int acceptance_diagnostic_receipt_refused(void) {
     gbb_case c;
     memset(&c, 0, sizeof(c));
     snprintf(c.id, sizeof(c.id), "diagnostic-receipt");
-    c.rom = "missing-diagnostic-rom.gb";
+    snprintf(c.rom, sizeof(c.rom), "missing-diagnostic-rom.gb");
     c.oracle = GBB_ORACLE_DIAGNOSTIC_SHARED;
     c.budget_half_dots = 48u;
     c.instruction_limit = 1u;
