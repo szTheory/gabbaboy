@@ -134,6 +134,17 @@ def immutable_blob(root: Path, revision: str, relative: str) -> bytes:
     return git_output(root, "show", f"{revision}:{relative}")
 
 
+def validate_candidate_record_paths(paths: list[str]) -> None:
+    prefix = "tests/data/cgb-candidates/"
+    candidate_json = {
+        path for path in paths
+        if path.startswith(prefix) and path.endswith(".json") and "/" not in path[len(prefix):]
+    }
+    expected_json = {candidate[1] for candidate in CANDIDATES}
+    if candidate_json != expected_json:
+        raise Reject("candidate-record-set-invalid")
+
+
 def load_snapshot(root: Path, revision: str) -> dict[str, bytes]:
     snapshot: dict[str, bytes] = {}
     for relative in SOURCE_PATHS:
@@ -151,11 +162,7 @@ def load_snapshot(root: Path, revision: str) -> dict[str, bytes]:
 
     listing = git_output(root, "ls-tree", "-r", "--name-only", revision, "--",
                          "tests/data/cgb-candidates").decode("utf-8", errors="strict").splitlines()
-    candidate_json = {path for path in listing if path.startswith("tests/data/cgb-candidates/")
-                      and path.endswith(".json")}
-    expected_json = {candidate[1] for candidate in CANDIDATES}
-    if candidate_json != expected_json:
-        raise Reject("candidate-record-set-invalid")
+    validate_candidate_record_paths(listing)
     return snapshot
 
 
@@ -523,6 +530,15 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
     if candidate_outcome(_synthetic_records(("no-go", "admitted"))) != {
             "status": "admitted", "candidate_id": "ucity-1.3"}:
         raise Reject("self-test-fallback-admission-positive-failed")
+
+    expected_paths = [candidate[1] for candidate in CANDIDATES]
+    validate_candidate_record_paths(expected_paths + [
+        "tests/data/cgb-candidates/evidence/potion-panic-build-review.json",
+    ])
+    _expect_reject(
+        lambda: validate_candidate_record_paths(expected_paths + ["tests/data/cgb-candidates/third.json"]),
+        "candidate-record-set-invalid", "extra-top-level-candidate-record",
+    )
 
     changed_id = _synthetic_records(("no-go", "no-go"))
     changed_id[1]["candidate_id"] = "third-game"
