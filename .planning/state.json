@@ -35,9 +35,9 @@
     }
   ],
   "next": {
-    "command": "$gsd-plan-phase 24",
-    "label": "Amend the existing Phase 24 recovery plan",
-    "reason": "D-211 authorizes one same-plan correction for WR-01, one fresh exact-candidate review, and one protected PR matrix that may run already-admitted game/fixture ROM tests. Acid2 remains excluded."
+    "command": "$gsd-execute-phase 24",
+    "label": "Execute only Phase 24 Task 9",
+    "reason": "Dispatch only 24-01-T9-overlay-control-accounting with an explicit active-task filter; do not replay Task 8 or run deferred Task 7. D-211 authorizes one correction, one fresh exact-candidate review, and one protected PR matrix. Acid2 remains excluded."
   },
-  "updated_at": "2026-11-17T21:53:39Z"
+  "updated_at": "2026-11-17T22:08:43Z"
 }

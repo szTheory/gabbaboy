@@ -2,8 +2,8 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: D-211 bounded scope recorded; next route is the existing Phase 24 plan amendment
-last_updated: "2026-11-17T21:51:05.759Z"
+stopped_at: D-211 Task 9 plan amendment and independent plan check complete; execute only Task 9 next
+last_updated: "2026-11-17T22:08:43.000Z"
 state_head: 2236bd9c4d21c5667d8acb54d8ffd6c0f8203ecf
 progress:
   total_phases: 6
@@ -14,17 +14,17 @@ milestone_name: Evidence Floor
 last_activity: 2026-11-17
 current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: Phase 24 D-211 same-plan recovery task planning; Task 7 remains deferred
+current_plan: Phase 24 Plan 24-01 Task 9 D-211 correction; Task 7 remains deferred
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone stage:** v0.4 — Evidence Floor remains administratively closed with accepted gaps under D-209. D-210 Task 8 implementation and focused checks passed at candidate `054f2d0d80f4e15c70d43408c026280b93ec6b08`; its review identified a protected-CI/ROM scope conflict and a warning about false negative-control accounting. D-211 now authorizes one same-plan correction, one fresh exact-candidate review, and one protected PR matrix. The matrix may execute only already-admitted game/fixture ROM cases in its existing tests; Acid2 remains excluded. No PR or matrix has started.
+**Milestone stage:** v0.4 — Evidence Floor remains administratively closed with accepted gaps under D-209. D-210 Task 8 implementation and focused checks passed at candidate `054f2d0d80f4e15c70d43408c026280b93ec6b08`; its review identified a protected-CI/ROM scope conflict and a warning about false negative-control accounting. D-211 authorizes one same-plan correction, one fresh exact-candidate review, and one protected PR matrix. The amendment adds only Task 9; its independent plan check passed with no blockers or warnings. The matrix may execute only already-admitted game/fixture ROM cases in its existing tests; Acid2 remains excluded. No Task 9 code, PR, or matrix has started.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
 **Phase state:** Phase 24 Task 7 and its plan summary remain incomplete; Task 8 implementation and eight focused CTests pass, but the sole review found one Critical scope blocker and one Warning. Phase 20, 21, and 23.1 verification is stale. No PR or protected matrix was started. These remain disclosed gaps, not passes.
-**Next route:** `$gsd-plan-phase 24` to amend the existing sole Phase 24 plan with D-211 Task 9, then execute that task alone. Keep the current recovery checkout until exact-head review, the one protected matrix, and merge/reconciliation are complete. After a clean `main` handoff, start v0.5 DMG PPU Timing with `$gsd-new-milestone`. Both automatic-advance flags remain false.
+**Next route:** `$gsd-execute-phase 24`, dispatching only `24-01-T9-overlay-control-accounting` with an explicit active-task filter. Do not use the default full-plan task dispatch: Task 8's review gate remains unresolved and Task 7 remains deferred. Keep the current recovery checkout until exact-head review, the one protected matrix, and merge/reconciliation are complete. After a clean `main` handoff, start v0.5 DMG PPU Timing with `$gsd-new-milestone`. Both automatic-advance flags remain false.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -56,7 +56,7 @@ The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 veri
 
 ## Owner Handoff
 
-Completed stage: **Phase 24 D-211 recovery scope discussion**. Task 8 and its original focused checks remain complete. No PR or protected matrix has started. Continue in this recovery checkout with `$gsd-plan-phase 24`; amend the existing plan only, then execute the D-211 correction task. Do not switch/remove the worktree until reviewed changes are merged and reconciled to clean `main`. Keep Task 7, FIXT-01, and the accepted gaps unchanged.
+Completed stage: **Phase 24 D-211 Task 9 planning and independent plan check**. Task 8 implementation and its original focused checks remain complete, but its review gate found a blocker; no PR or protected matrix has started. Continue in this recovery checkout with `$gsd-execute-phase 24`, explicitly filtering executor dispatch to Task 9 only (`24-01-T9-overlay-control-accounting`) and marking only T1–T6 as previously complete. Do not replay Task 8 or execute Task 7. Do not switch/remove the worktree until reviewed changes are merged and reconciled to clean `main`. Keep FIXT-01 and the accepted gaps unchanged.
 
 ## Accumulated Context
 
@@ -108,9 +108,9 @@ Completed stage: **Phase 24 D-211 recovery scope discussion**. Task 8 and its or
 
 ## Session
 
-**Last session:** 2026-11-17T21:51:05.465Z
-**Stopped at:** D-211 recovery scope recorded; plan amendment is next
-**Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md
+**Last session:** 2026-11-17T22:08:43.000Z
+**Stopped at:** D-211 Task 9 plan amendment and independent plan check complete; execute only Task 9 next
+**Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md
 
 ### Blockers
-D-211 permits one same-plan correction, one fresh independent review, and one protected matrix whose existing admitted game/fixture ROM tests may run; Acid2 remains excluded. Owner approval is recorded. No PR or matrix has started. Next actor: the agent continues with `$gsd-plan-phase 24`, then executes only the new correction task. Any blocker or failed/missing context ends the scope without retry. Reconcile through protected merge before switching to clean `main` and starting v0.5.
+D-211 permits one same-plan correction, one fresh independent review, and one protected matrix whose existing admitted game/fixture ROM tests may run; Acid2 remains excluded. Owner approval is recorded. The Task 9 amendment passed its independent check. No correction code, PR, or matrix has started. Next actor: the agent invokes `$gsd-execute-phase 24` with an explicit executor filter for Task 9 only; do not run the default full-plan task sequence, Task 8, or Task 7. Any blocker or failed/missing context ends the scope without retry. Reconcile through protected merge before switching to clean `main` and starting v0.5.
