@@ -35,9 +35,9 @@
     }
   ],
   "next": {
-    "command": "$gsd-new-milestone",
-    "label": "Start v0.5 DMG PPU Timing",
-    "reason": "D-209 closes v0.4 administratively with seven requirements complete and FIXT-01 Pending. Phase 24 Task 7, stale Phase 20/21/23.1 verification, and D-103 remain disclosed deferred gaps. Start a fresh milestone; do not resume Phase 24 automatically."
+    "command": "$gsd-execute-phase 24",
+    "label": "Resume D-210 closeout recovery (Task 8 only)",
+    "reason": "D-210 authorizes only Phase 24 Plan 24-01 Task 8. Task 8 is ordered before the deferred Task 7; Task 7 has an explicit owner-authorization precondition. Preserve the Acid2 no-replay stop, FIXT-01 Pending, and the one-review/one-protected-PR-matrix limit."
   },
-  "updated_at": "2026-11-17T19:25:51Z"
+  "updated_at": "2026-11-17T21:08:48Z"
 }

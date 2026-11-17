@@ -4,11 +4,11 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: v0.4 closed with accepted gaps; Phase 24 Task 7 remains unfinished
-status: completed
-stopped_at: Owner-directed v0.4 closeout with FIXT-01 and D-103 deferred
-last_updated: "2026-11-17T19:25:51Z"
-state_head: 226712193515b8cef08228a99045c14d178d065d
+current_plan: Phase 24 Plan 24-01 Task 8 bounded recovery; Task 7 remains unfinished
+status: in_progress
+stopped_at: Owner-authorized D-210 closeout-candidate recovery
+last_updated: "2026-11-17T21:08:48Z"
+state_head: ea0c0ace8a22e7626b3d3b4fb26e2b167269c3da
 progress:
   total_phases: 6
   completed_phases: 5
@@ -22,10 +22,10 @@ last_activity: 2026-11-17
 
 ## Current Position
 
-**Closed stage:** v0.4 — Evidence Floor, administratively closed with accepted gaps on 2026-11-17. The qualified v0.4.0 product release remains unchanged.
+**Milestone stage:** v0.4 — Evidence Floor was administratively closed with accepted gaps under D-209. D-210 now authorizes one narrow Phase 24 Task 8 recovery to fix the frozen closeout candidate's CI and diagnostic receipt contracts before protected PR reconciliation; original requirements and gaps are unchanged. The qualified v0.4.0 product release remains unchanged.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
-**Phase state:** Phase 24 Task 7 and its plan summary were not completed. Phase 20, 21, and 23.1 verification is stale. D-103's exact-final-head suite was not run. These are disclosed closeout overrides, not passes.
-**Next command:** `$gsd-new-milestone` to define v0.5 DMG PPU Timing. The recommendation is to begin with exact DMG oracle admission, then plan FIFO/fetcher and mode-3 work under the existing performance budget. Both automatic-advance flags remain false.
+**Phase state:** Phase 24 Task 7 and its plan summary remain incomplete; Task 8 is the only authorized active task. Phase 20, 21, and 23.1 verification is stale. The exact-head PR matrix has not yet run. These are disclosed gaps, not passes.
+**Next route:** Complete Task 8's bounded implementation and focused checks, then exactly one independent review and one protected PR matrix. If those pass, reconcile the exact reviewed/tested head to clean `main`; only then start v0.5 DMG PPU Timing with `$gsd-new-milestone`. Begin its first phase with exact DMG oracle admission, then FIFO/fetcher work under the existing performance budget. Both automatic-advance flags remain false.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -53,11 +53,11 @@ Two items had already been acknowledged by an earlier closeout; the audit record
 
 FIXT-01 remains Pending: neither Potion Panic nor µCity has a complete source/build/ROM/header/mode/runtime chain. Do not introduce a third game candidate under the v0.4 requirement. Do not replay the Acid2 comparison or claim its cause. The v0.4.0 tag/assets and published claims remain unchanged. No hardware, perception, mode-3 timing, general compatibility, Linux player, Steam Deck, or live Playstead claim is established by this closeout.
 
-The exact-final-head D-103 broad-suite gate remains unfulfilled. Phase 20, 21, and 23.1 verification is stale; Phase 24 is incomplete. These are accepted deferred gaps, not passes. No external outreach, release retry, tag/asset change, broad-suite run, or worktree cleanup occurred here. Both automatic advance flags remain false.
+The exact-final-head D-103 gate remains unfulfilled until the one authorized protected PR matrix is captured. Phase 20, 21, and 23.1 verification is stale; Phase 24 Task 7 is incomplete. These remain gaps, not passes. No external outreach, release retry, tag/asset change, Acid2 replay, broad local suite, or worktree cleanup is authorized by D-210. The bounded PR matrix is allowed once after the frozen candidate review; no retry follows. Both automatic advance flags remain false.
 
 ## Owner Handoff
 
-Completed stage: **v0.4 Evidence Floor administrative closeout**, after the qualified v0.4.0 release. The closeout records seven completed requirements and one Pending requirement, with Phase 24 Task 7 and D-103 deferred. The next actor is the owner/workflow runner: start the fresh v0.5 milestone definition with `$gsd-new-milestone`. Do not resume Phase 24 automatically or restart stale phases. Keep the Phase 24 artifacts as historical evidence and reconcile this closeout through the approved branch/PR route before deleting the worktree.
+Completed stage: **Phase 24 Task 6 and D-209 v0.4 administrative closeout**, after the qualified v0.4.0 release. D-210 authorizes only Phase 24 Plan 24-01 Task 8 and one review/PR matrix to reconcile the closeout candidate. The current actor is the recovery executor; the owner acts only if review/CI blocks or a new scope is needed. After a successful protected merge and clean-main reconciliation, the next actor starts v0.5 with `$gsd-new-milestone`. Keep Phase 24 Task 7 and FIXT-01 incomplete and do not remove the worktree until its changes are reconciled.
 
 ## Accumulated Context
 
@@ -100,6 +100,7 @@ Completed stage: **v0.4 Evidence Floor administrative closeout**, after the qual
 - [Phase 23.1]: D-203 authorizes exactly one same-plan Task 11 correction for CR-07 and one independent exact-candidate review; preserve every other D-193–D-202 stop and budget. — The owner directed a multi-perspective fan-out and instructed the agent to follow the synthesized recommendation.
 - [Phase 24]: Phase 24 assessment keeps each original v0.4 criterion, owner, tracker status, audit status, historical outcome, freshness, boundary, and remaining gate distinct.
 - [Phase 24]: D-205 remains the exact one-plan Phase 24 exception within the 40-plan ceiling; the assessment completes no original requirement and does not satisfy D-103.
+- [Phase 24]: D-210 authorizes exactly Task 8 in the existing plan: static validation of the exact recorded Acid2 mismatch, exact notice-index reconciliation, and explicit diagnostic `--receipt` refusal. One independent review and one protected PR matrix follow; failures stop without retry. FIXT-01, Task 7, and other D-209 gaps remain.
 - [Phase 24]: The configured phase1 tests are restricted to plan_cap and planning_hygiene_controls at the committed candidate; preserve the 30-second timeout and 125-control floor.
 - [Phase 24]: D-07–D-10 authorized exactly one same-plan Task 4 and one independent exact-candidate review for the BOM plan-cap bypass. Task 4, the clean review, the two focused CTests, and Phase 24 verification passed; all phase plans are complete. Continue the existing v0.4 authorization with `$gsd-autonomous --from 23.1`, preserving the four Pending requirements and D-103 stop.
 - [Phase 23.1]: Phase 23.1 verification remains a historical 18/18 result and stale after Phase 24 changed the shared checker; no new recovery scope is authorized. — Phase 24 passed its own focused checks and verification under D-205. Refreshing Phase 23.1 would conflate its former fifth-phase criterion with the approved six-phase cap. Keep the four requirements Pending, v0.4 open, and D-103 unfulfilled.
@@ -107,9 +108,9 @@ Completed stage: **v0.4 Evidence Floor administrative closeout**, after the qual
 
 ## Session
 
-**Last session:** 2026-11-17T19:25:51Z
-**Stopped at:** v0.4 administrative closeout; next command is `$gsd-new-milestone`
+**Last session:** 2026-11-17T21:08:48Z
+**Stopped at:** D-210 Task 8 implementation and cheap checks; candidate build and exact-head review remain
 **Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md (historical closeout handoff)
 
 ### Blockers
-No active v0.4 work remains. FIXT-01 is an accepted deferred requirement, Phase 24 Task 7 and D-103 remain incomplete, and the Acid2 mismatch remains a preserved failed result. The next actor is the owner/workflow runner, starting v0.5 with `$gsd-new-milestone`; do not resume Phase 24 automatically.
+Task 8 is active under D-210. Preserve the no-Acid2-replay stop, the exact failed DMG-on-CGB result, FIXT-01 Pending, Phase 24 Task 7 incomplete, and the one-review/one-matrix limits. If review or required PR CI fails, stop without a retry and return the specific blocker to the owner. If the protected merge succeeds, reconcile clean `main`, then start v0.5 with `$gsd-new-milestone`.

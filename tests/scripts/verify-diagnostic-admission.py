@@ -149,6 +149,16 @@ ACID2_PROFILE_EXPECTATIONS = {
             "masked_pixels": 3328, "compared_pixels": 19712},
 }
 ACID2_RUNTIME_EVIDENCE_PATH = "build/phase24/acid2-runtime.json"
+ACID2_RECORDED_SOURCE_REVISION = "fe725bfe996a2fff2c57a0e2164a3243ca6d8cb8"
+ACID2_RECORDED_CLOSEOUT_SHA256 = "4486c2382e94a06680e9188734833a180ce20b3b41b53af53f0a19929860227a"
+ACID2_RECORDED_RUNNER_SHA256 = "986dd0fce4a967d03beea2d0c7462d3f5d91ab4e6d064569a78adecfe39e91e7"
+ACID2_RECORDED_QUALIFICATION_SHA256 = "2efe8ec58eade93c3dffae10751be3910a24bd3a313291f69e49666d1f302e48"
+ACID2_RECORDED_EVIDENCE_SHA256 = "4eccc78349f01a85d6f374984f590b46f4af3a63aad6d7e938f9e9d49b40ba55"
+ACID2_RECORDED_OUTCOMES = (
+    ("dmg", "pass", 0),
+    ("dmg-on-cgb", "mismatch", 19840),
+    ("cgb", "pass", 0),
+)
 DIAGNOSTIC_RUNTIME_PREFLIGHT_PATH = "build/phase24/diagnostic-runtime-preflight.json"
 DIAGNOSTIC_RUNTIME_FINAL_PATH = "build/phase24/diagnostic-runtime.json"
 GBMICROTEST_RUNTIME_PREFLIGHT_PATH = "build/phase24/gbmicrotest-runtime-preflight.json"
@@ -982,6 +992,43 @@ def _validate_acid2_runtime_result(value: object) -> dict[str, Any]:
     if value["status"] != expected_status:
         raise AdmissionRefused("diagnostic-closeout-acid2-runtime-status-invalid")
     return value
+
+
+def validate_recorded_acid2_outcome(record: dict[str, Any]) -> tuple[tuple[str, str, int], ...]:
+    """Pin the already-recorded D-209 result without invoking a runner or ROM."""
+    acid2 = record.get("acid2")
+    runtime = acid2.get("runtime") if isinstance(acid2, dict) else None
+    if (record.get("status") != "runtime-failed"
+            or not isinstance(acid2, dict) or acid2.get("status") != "runtime-failed"
+            or not isinstance(runtime, dict)
+            or runtime.get("status") != "mismatch"
+            or runtime.get("source_revision") != ACID2_RECORDED_SOURCE_REVISION
+            or runtime.get("closeout_record_sha256") != ACID2_RECORDED_CLOSEOUT_SHA256
+            or runtime.get("fixture_admission_commit") != ACID2_FIXTURE_ADMISSION_COMMIT
+            or runtime.get("manifest_sha256") != ACID2_FIXTURE_MANIFEST_SHA256
+            or runtime.get("bundle_sha256") != ACID2_FIXTURE_BUNDLE_SHA256
+            or runtime.get("runner_sha256") != ACID2_RECORDED_RUNNER_SHA256
+            or runtime.get("qualification_sha256") != ACID2_RECORDED_QUALIFICATION_SHA256
+            or runtime.get("evidence_path") != ACID2_RUNTIME_EVIDENCE_PATH
+            or runtime.get("evidence_sha256") != ACID2_RECORDED_EVIDENCE_SHA256):
+        raise AdmissionRefused("diagnostic-closeout-acid2-recorded-result-identity-mismatch")
+    comparisons = runtime.get("comparisons")
+    observed: list[tuple[str, str, int]] = []
+    if not isinstance(comparisons, list):
+        raise AdmissionRefused("diagnostic-closeout-acid2-recorded-result-mismatch")
+    for row in comparisons:
+        if not isinstance(row, dict):
+            raise AdmissionRefused("diagnostic-closeout-acid2-recorded-result-mismatch")
+        profile = row.get("profile")
+        verdict = row.get("verdict")
+        pixels = row.get("differing_unmasked_pixels")
+        if (not isinstance(profile, str) or verdict not in ("pass", "mismatch")
+                or not isinstance(pixels, int) or isinstance(pixels, bool)):
+            raise AdmissionRefused("diagnostic-closeout-acid2-recorded-result-mismatch")
+        observed.append((profile, verdict, pixels))
+    if tuple(observed) != ACID2_RECORDED_OUTCOMES:
+        raise AdmissionRefused("diagnostic-closeout-acid2-recorded-result-mismatch")
+    return tuple(observed)
 
 
 def _validate_acid2_runtime_evidence(root: pathlib.Path, runtime: dict[str, Any],
@@ -2782,6 +2829,47 @@ class AdmissionControlTests(unittest.TestCase):
         with self.assertRaisesRegex(AdmissionRefused, "diagnostic-closeout-acid2-comparison-set-invalid"):
             _validate_acid2_runtime_result(runtime)
 
+    def test_recorded_acid2_outcome_is_exact_and_does_not_require_execution(self) -> None:
+        record = _json_without_duplicates(
+            (ROOT / DIAGNOSTIC_CLOSEOUT_PATH).read_bytes(), "diagnostic-closeout")
+        self.assertEqual(validate_recorded_acid2_outcome(record), ACID2_RECORDED_OUTCOMES)
+        for label, mutate, expected in (
+            ("profile-result", lambda value: value["acid2"]["runtime"]["comparisons"][1].update(
+                differing_unmasked_pixels=19839), "diagnostic-closeout-acid2-recorded-result-mismatch"),
+            ("boolean-pixel-count", lambda value: value["acid2"]["runtime"]["comparisons"][0].update(
+                differing_unmasked_pixels=False), "diagnostic-closeout-acid2-recorded-result-mismatch"),
+            ("profile-order", lambda value: value["acid2"]["runtime"]["comparisons"].reverse(),
+             "diagnostic-closeout-acid2-recorded-result-mismatch"),
+            ("record-status", lambda value: value.update(status="runtime-pending"),
+             "diagnostic-closeout-acid2-recorded-result-identity-mismatch"),
+            ("acid2-status", lambda value: value["acid2"].update(status="executed"),
+             "diagnostic-closeout-acid2-recorded-result-identity-mismatch"),
+            ("runtime-source", lambda value: value["acid2"]["runtime"].update(
+                source_revision="a" * 40), "diagnostic-closeout-acid2-recorded-result-identity-mismatch"),
+            ("runtime-status", lambda value: value["acid2"]["runtime"].update(
+                status="pass"), "diagnostic-closeout-acid2-recorded-result-identity-mismatch"),
+            ("closeout-digest", lambda value: value["acid2"]["runtime"].update(
+                closeout_record_sha256="0" * 64), "diagnostic-closeout-acid2-recorded-result-identity-mismatch"),
+            ("fixture-admission", lambda value: value["acid2"]["runtime"].update(
+                fixture_admission_commit="0" * 40), "diagnostic-closeout-acid2-recorded-result-identity-mismatch"),
+            ("manifest-digest", lambda value: value["acid2"]["runtime"].update(
+                manifest_sha256="0" * 64), "diagnostic-closeout-acid2-recorded-result-identity-mismatch"),
+            ("bundle-digest", lambda value: value["acid2"]["runtime"].update(
+                bundle_sha256="0" * 64), "diagnostic-closeout-acid2-recorded-result-identity-mismatch"),
+            ("runner-digest", lambda value: value["acid2"]["runtime"].update(
+                runner_sha256="0" * 64), "diagnostic-closeout-acid2-recorded-result-identity-mismatch"),
+            ("qualification-digest", lambda value: value["acid2"]["runtime"].update(
+                qualification_sha256="0" * 64), "diagnostic-closeout-acid2-recorded-result-identity-mismatch"),
+            ("evidence-path", lambda value: value["acid2"]["runtime"].update(
+                evidence_path="build/phase24/other.json"), "diagnostic-closeout-acid2-recorded-result-identity-mismatch"),
+            ("evidence-digest", lambda value: value["acid2"]["runtime"].update(
+                evidence_sha256="0" * 64), "diagnostic-closeout-acid2-recorded-result-identity-mismatch"),
+        ):
+            candidate = json.loads(json.dumps(record))
+            mutate(candidate)
+            with self.subTest(label=label), self.assertRaisesRegex(AdmissionRefused, expected):
+                validate_recorded_acid2_outcome(candidate)
+
     def test_gbmicrotest_accounts_for_one_admitted_case_and_512_exclusions(self) -> None:
         record, rights = self._diagnostic_closeout_inputs()
         inventory = validate_gbmicrotest_inventory(ROOT)
@@ -3150,6 +3238,8 @@ def main(argv: list[str] | None = None) -> int:
     modes.add_argument("--check-assessment", action="store_true")
     modes.add_argument("--check-closeout", action="store_true")
     modes.add_argument("--prepare-gbmicrotest-fixture", action="store_true")
+    parser.add_argument("--require-recorded-acid2", action="store_true",
+                        help="validate the exact committed Acid2 result without running a ROM")
     parser.add_argument("--require-approved", action="store_true")
     parser.add_argument("--closeout-kind", choices=("acid2", "gbmicrotest", "all"))
     parser.add_argument("--runner", type=pathlib.Path)
@@ -3168,8 +3258,13 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--check-closeout requires --closeout-kind")
     if args.closeout_kind and not args.check_closeout:
         parser.error("--closeout-kind requires --check-closeout")
+    if args.require_recorded_acid2 and (not args.check_closeout or args.closeout_kind != "acid2"
+                                        or not args.require_approved):
+        parser.error("--require-recorded-acid2 requires --check-closeout --closeout-kind acid2 --require-approved")
     runtime_flags = (args.current_build_qualification is not None or args.deadline_seconds is not None
                      or args.write_evidence is not None)
+    if args.require_recorded_acid2 and (args.runner is not None or runtime_flags):
+        parser.error("--require-recorded-acid2 cannot be combined with runner or runtime options")
     if runtime_flags and (not args.check_closeout or args.runner is None
                           or args.current_build_qualification is None or args.deadline_seconds is None
                           or args.write_evidence is None):
@@ -3215,6 +3310,13 @@ def main(argv: list[str] | None = None) -> int:
             invocation_started = time.monotonic()
             record = check_diagnostic_closeout(args.repo_root, revision, args.closeout_kind,
                                                require_approved=args.require_approved)
+            if args.require_recorded_acid2:
+                outcomes = validate_recorded_acid2_outcome(record)
+                outcome_text = " ".join(f"{profile}={verdict}/{pixels}"
+                                         for profile, verdict, pixels in outcomes)
+                print(f"diagnostic closeout acid2 recorded status=runtime-failed "
+                      f"source={ACID2_RECORDED_SOURCE_REVISION} comparisons=3 {outcome_text}")
+                return 0
             if runtime_flags:
                 qualified = validate_current_runner_qualification(
                     args.repo_root, revision, args.runner, args.current_build_qualification,

@@ -99,10 +99,12 @@ target_link_libraries(test_acceptance_cases PRIVATE gabbaboy_runner_support)
 target_compile_features(test_acceptance_cases PRIVATE c_std_17)
 set_target_properties(test_acceptance_cases PROPERTIES C_EXTENSIONS OFF)
 foreach(case acceptance_parse_cases_bounds acceptance_parse_cases_errors acceptance_parse_paths
-             acceptance_unknown_model_refused)
+             acceptance_unknown_model_refused acceptance_diagnostic_receipt_refused)
   add_test(NAME ${case} COMMAND test_acceptance_cases ${case})
   set_tests_properties(${case} PROPERTIES TIMEOUT 30)
 endforeach()
+set_tests_properties(acceptance_diagnostic_receipt_refused PROPERTIES
+  PASS_REGULAR_EXPRESSION "status=input-error reason=diagnostic-option-not-applicable")
 
 # Independent stdlib confirmation of the D-24 frame digest, the PPM bytes and the D-16 PCM digest.
 add_executable(test_acceptance_digest ${CMAKE_CURRENT_LIST_DIR}/../test_acceptance_digest.c)

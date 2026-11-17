@@ -202,3 +202,11 @@ The existing [THIRD_PARTY_NOTICES.md](../../../THIRD_PARTY_NOTICES.md) still say
 ## D-209 owner direction — close v0.4 with accepted gaps (2026-11-17)
 
 The owner directs administrative closeout now so emulator work can continue. RIGHTS-01, DIAG-01, and DIAG-02 are complete for the exact admitted diagnostic criteria described in the closeout record; FIXT-01 remains Pending because neither named game has the complete required evidence. Preserve the Acid2 DMG-on-CGB all-pixel mismatch as a failed result; do not replay it or claim a proven cause. Phase 24 Task 7, stale prior verification, and D-103 remain explicit closeout gaps. The next recommended scope is v0.5 DMG PPU Timing, starting through `$gsd-new-milestone`.
+
+## D-210 bounded recovery addendum (owner-authorized, 2026-11-17)
+
+D-210 authorizes only Task 8 in the existing `24-01-PLAN.md`, to repair the already frozen closeout candidate's CI contract. `phase22_admission_assessment` becomes static evidence validation for the exact recorded outcome: DMG-on-DMG pass/0, DMG-on-CGB mismatch/19,840, CGB-on-CGB pass/0. It has no runner, qualification, runtime timeout, evidence-write argument, or Acid2 execution path. The mismatch stays a failure and its cause stays unproven.
+
+The exact D-209 status paragraph may differ from each fixture's historical `THIRD_PARTY_NOTICES.md` snapshot; all other bytes and each active fixture digest row remain pinned. Product validation accepts the complete D-209 notice index only by its exact reviewed digest. No rights text, license bytes, fixture payload, or admission identity changes. Shared diagnostic `--receipt` explicitly refuses before file access, proved with a missing ROM path.
+
+Run only the cheap and focused checks recorded in Task 8; project-generated synthetic control ROMs are permitted only in their existing controls. Do not replay Acid2 or run another admitted upstream/game ROM. Obtain exactly one independent review and then one protected PR matrix; merge only that exact reviewed/tested head if all gates pass. Any review blocker or failed/missing required CI context ends this recovery with no retry. Task 7, Phase 24 verification, milestone audit/archive, FIXT-01, and requirement statuses remain unchanged. After successful protected reconciliation, start v0.5 from a clean `main` checkout with `$gsd-new-milestone`.

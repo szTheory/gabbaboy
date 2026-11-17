@@ -265,12 +265,30 @@ static int acceptance_unknown_model_refused(void) {
     PASS("acceptance_unknown_model_refused");
 }
 
+static int acceptance_diagnostic_receipt_refused(void) {
+    gbb_case c;
+    memset(&c, 0, sizeof(c));
+    snprintf(c.id, sizeof(c.id), "diagnostic-receipt");
+    c.rom = "missing-diagnostic-rom.gb";
+    c.oracle = GBB_ORACLE_DIAGNOSTIC_SHARED;
+    c.budget_half_dots = 48u;
+    c.instruction_limit = 1u;
+    c.event_limit = 1u;
+
+    gbb_acceptance_options options;
+    memset(&options, 0, sizeof(options));
+    options.receipt = 1;
+    REQUIRE(gbb_acceptance_run_case(&c, &options) == 2);
+    PASS("acceptance_diagnostic_receipt_refused");
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) { fprintf(stderr, "usage: test_acceptance_cases <name>\n"); return 2; }
     if (strcmp(argv[1], "acceptance_parse_cases_bounds") == 0) return acceptance_parse_cases_bounds();
     if (strcmp(argv[1], "acceptance_parse_cases_errors") == 0) return acceptance_parse_cases_errors();
     if (strcmp(argv[1], "acceptance_parse_paths") == 0) return acceptance_parse_paths();
     if (strcmp(argv[1], "acceptance_unknown_model_refused") == 0) return acceptance_unknown_model_refused();
+    if (strcmp(argv[1], "acceptance_diagnostic_receipt_refused") == 0) return acceptance_diagnostic_receipt_refused();
     fprintf(stderr, "unknown test %s\n", argv[1]);
     return 2;
 }

@@ -3774,16 +3774,13 @@ add_test(NAME phase22_fixture_admission_controls
     --runner "$<TARGET_FILE:gabbaboy-runner>")
 add_test(NAME phase22_admission_assessment
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}"
-    --check-closeout --closeout-kind acid2 --require-approved --repo-root "${PROJECT_SOURCE_DIR}"
-    --source-revision "${GBB_PHASE22_EVIDENCE_SOURCE_REV}"
-    --runner "$<TARGET_FILE:gabbaboy-runner>"
-    --current-build-qualification "${GBB_RUNNER_QUALIFICATION_PATH}"
-    --deadline-seconds 25 --write-evidence "${PROJECT_BINARY_DIR}/phase24/acid2-runtime.json")
+    --check-closeout --closeout-kind acid2 --require-approved --require-recorded-acid2
+    --repo-root "${PROJECT_SOURCE_DIR}" --source-revision "${GBB_PHASE22_EVIDENCE_SOURCE_REV}")
 set_tests_properties(phase22_acid2_contract phase22_acid2_controls
   phase22_fixture_admission_contract phase22_fixture_admission_controls PROPERTIES TIMEOUT 30)
 set_tests_properties(phase22_admission_assessment PROPERTIES TIMEOUT 30
   LABELS "integration"
-  PASS_REGULAR_EXPRESSION "diagnostic closeout acid2 runtime result source=[0-9a-f]+ comparisons=3 verdict=pass runner=[0-9a-f]+ qualification=[0-9a-f]+ evidence=[0-9a-f]+")
+  PASS_REGULAR_EXPRESSION "diagnostic closeout acid2 recorded status=runtime-failed source=fe725bfe996a2fff2c57a0e2164a3243ca6d8cb8 comparisons=3 dmg=pass/0 dmg-on-cgb=mismatch/19840 cgb=pass/0")
 set(GBB_PHASE22_EVIDENCE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-diagnostic-evidence.py")
 add_test(NAME phase22_evidence_contract
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_EVIDENCE_CHECKER}" --check

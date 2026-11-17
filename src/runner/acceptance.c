@@ -625,7 +625,7 @@ static int run_shared_diagnostic_case(const gbb_case *c, const gbb_acceptance_op
     shared_diagnostic_result result;
     memset(&result, 0, sizeof(result));
 
-    if (options != NULL && (options->observe || options->observe_input_script != NULL ||
+    if (options != NULL && (options->receipt || options->observe || options->observe_input_script != NULL ||
         options->has_frame_digest_at || options->pcm_only || options->dump_dir != NULL ||
         options->failure_dir != NULL || options->has_drop_button || options->raw_verdict ||
         options->expect_fail)) return input_error(c, "diagnostic-option-not-applicable");
