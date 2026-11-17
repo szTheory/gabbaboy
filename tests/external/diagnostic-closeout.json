@@ -567,7 +567,7 @@
       "runtime_results": []
     },
     "blocked_by": [
-      "prebuilt-rom-output-scope"
+      "prebuilt-rom-output-scope-unresolved"
     ],
     "cases": [
       {
@@ -856,12 +856,18 @@
         }
       },
       {
+        "derivative": {
+          "bundle": "fixtures/gbmicrotest/cohort.tar#bin/div_inc_timing_a.bootless.gb",
+          "kind": "bootless header derivative",
+          "sha256": "53b0624af64524fe7cdf9b0aed3456ca60c7b30fe25cd5202b6b77855f57ffa8",
+          "size_bytes": 32768
+        },
         "disposition": {
+          "status": "blocked-candidate",
           "blocked_by": [
-            "prebuilt-rom-output-scope"
+            "prebuilt-rom-output-scope-unresolved"
           ],
-          "reason": "The pinned original ROM and logo-free review derivative were hash-checked locally, and the case supports a DMG-CPU-B software diagnostic scope; no component-specific repository/public-CI grant for the compiled ROM output is established. No fixture was admitted, staged, or run.",
-          "status": "blocked-candidate"
+          "reason": "Pinned source/model/oracle and bootless transform were reviewed, but the T6 source/output/header component-term gate remains unresolved. No diagnostic payload runtime is authorized."
         },
         "name": "div_inc_timing_a",
         "prebuilt_rom": {
@@ -10349,9 +10355,9 @@
         "url": "https://raw.githubusercontent.com/aappleby/gbmicrotest/463eb6bc0fe31d61781ef63060ad6d74090c0255/tests/header.inc"
       },
       "local_rom_review": {
-        "admission_status": "not-attempted",
+        "admission_status": "not-admitted-output-scope-unresolved",
         "derivative": {
-          "kind": "local bootless header derivative; not admitted or staged",
+          "kind": "review-only bootless header derivative; not admitted or run",
           "path": "derived/div_inc_timing_a.bootless.gb",
           "sha256": "53b0624af64524fe7cdf9b0aed3456ca60c7b30fe25cd5202b6b77855f57ffa8",
           "size_bytes": 32768
@@ -10370,7 +10376,7 @@
         "review_area": "build/phase24/source-review/gbmicrotest (ignored local review only)",
         "runtime_status": "not-run",
         "source_commit": "463eb6bc0fe31d61781ef63060ad6d74090c0255",
-        "staging_status": "not-staged",
+        "staging_status": "review-bundle-committed-before-rights-reassessment",
         "transform": {
           "all_changed_offsets_allowlisted": true,
           "all_other_bytes_identical": true,
@@ -10424,7 +10430,7 @@
         }
       },
       "logo_scope": {
-        "current_derivative_status": "logo bytes removed from local review derivative",
+        "current_derivative_status": "selected derivative has logo bytes removed; no logo bytes are bundled",
         "derivative_range_all_zero": true,
         "original_logo_range_sha256": "daf4cabdc852baa0291849203f0b41fd0b4ecd58e0d7aff4a509f5de4d7f9a2e",
         "source_directive": ".nintendologo",
@@ -10459,8 +10465,8 @@
         "status": "supported"
       },
       "output_scope": {
-        "component": "compiled bootless ROM output",
-        "finding": "The pinned MIT notice grants broad rights to the undefined term Software; the README identifies prebuilt ROMs in bin/ and an unpinned WLA-DX build instruction but gives no explicit license scope for prebuilt or generated ROM outputs. No component-specific repository/public-CI output grant is established by these texts.",
+        "component": "one source-bound compiled bootless ROM derivative",
+        "finding": "The pinned root MIT grant and OSI compiled-form/derived-work language support a bounded interpretation for this modified copy, but the pinned README does not explicitly state binary-output terms. T6 requires exact source/output/header component terms before staging; this interpretation has not been accepted as satisfying that gate, so the output scope remains unresolved.",
         "readme": {
           "git_blob_sha1": "e184a72ed5f6f1b76f5124762c6ed3f79f139e4e",
           "path": "README.md",
@@ -10468,7 +10474,10 @@
           "size_bytes": 1616,
           "url": "https://raw.githubusercontent.com/aappleby/gbmicrotest/463eb6bc0fe31d61781ef63060ad6d74090c0255/README.md"
         },
-        "required_evidence": "An authoritative component-specific grant or source statement that the pinned prebuilt/compiled ROM output may be redistributed in the repository and public CI.",
+        "references": [
+          "https://opensource.org/license/mit",
+          "https://opensource.org/osd"
+        ],
         "root_license": {
           "git_blob_sha1": "ca05fdbac9ec607636037171ee3856ea2a3378dd",
           "path": "LICENSE",
@@ -10476,7 +10485,9 @@
           "size_bytes": 1065,
           "url": "https://raw.githubusercontent.com/aappleby/gbmicrotest/463eb6bc0fe31d61781ef63060ad6d74090c0255/LICENSE"
         },
-        "status": "unresolved"
+        "scope_limit": "No output-rights conclusion is accepted while the T6 component-term gate remains unresolved. The candidate inference would cover only div_inc_timing_a's source-bound bootless derivative with the full MIT notice; it excludes original ROM bytes, removed Nintendo logo bytes, any of the other 512 ROMs, and other sources.",
+        "status": "unresolved",
+        "required_evidence": "An authoritative component-level grant or source statement that covers this exact compiled derivative for repository/public-CI use, or an explicit owner decision that the bounded MIT interpretation satisfies the T6 component-term gate."
       },
       "protocol": {
         "expected_div": 0,
@@ -10508,6 +10519,18 @@
         "sha256": "ea6017487ac860fa29e54c43d2d1a73659ed3662b7ba3c7c91cc41faf5ef6deb",
         "size_bytes": 268,
         "url": "https://raw.githubusercontent.com/aappleby/gbmicrotest/463eb6bc0fe31d61781ef63060ad6d74090c0255/tests/div_inc_timing_a.s"
+      },
+      "review_bundle": {
+        "bundle_path": "fixtures/gbmicrotest/cohort.tar",
+        "bundle_sha256": "b810271e7bde4ffb05104c5d3aa772731118b45be3c93f38d2bb797e66e59780",
+        "identity_path": "fixtures/gbmicrotest/identity.json",
+        "identity_sha256": "c18a7118c6172a3202893db5212f00eea67d015b309248da50884e4f4f6059e3",
+        "logo_bytes_bundled": false,
+        "manifest_path": "fixtures/gbmicrotest/manifest.json",
+        "manifest_sha256": "d3aedaa5d89f583bea2951a9a58a3190ff2314fafbfa53b7e63e98ed6349cb7c",
+        "original_rom_bundled": false,
+        "status": "committed-review-bundle-not-admitted-output-scope-unresolved",
+        "commit": "ce0cdca22b8338442a574f030e47f59f04c99fc2"
       }
     },
     "status": "blocked-before-admission"
@@ -10519,5 +10542,5 @@
     "size_bytes": 30529
   },
   "schema": "gabbaboy-diagnostic-closeout-v1",
-  "status": "blocked-before-admission"
+  "status": "blocked-by-acid2"
 }

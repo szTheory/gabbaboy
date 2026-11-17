@@ -8,6 +8,8 @@ import hashlib
 import importlib.util
 import io
 import json
+import math
+import os
 import pathlib
 import re
 import shutil
@@ -15,6 +17,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import unittest
 from typing import Any
 
@@ -73,6 +76,10 @@ GBMICROTEST_SELECTED_ROM_SHA256 = "1530b5a34af78e182c8b1f5f9043f8e5ae3e9f2fac13d
 GBMICROTEST_SELECTED_DERIVATIVE_SHA256 = "53b0624af64524fe7cdf9b0aed3456ca60c7b30fe25cd5202b6b77855f57ffa8"
 GBMICROTEST_REVIEW_DIR = pathlib.Path("build/phase24/source-review/gbmicrotest")
 GBMICROTEST_FIXTURE_DIR = pathlib.Path("fixtures/gbmicrotest")
+GBMICROTEST_ADMISSION_COMMIT = "ce0cdca22b8338442a574f030e47f59f04c99fc2"
+GBMICROTEST_MANIFEST_SHA256 = "d3aedaa5d89f583bea2951a9a58a3190ff2314fafbfa53b7e63e98ed6349cb7c"
+GBMICROTEST_BUNDLE_SHA256 = "b810271e7bde4ffb05104c5d3aa772731118b45be3c93f38d2bb797e66e59780"
+GBMICROTEST_IDENTITY_SHA256 = "c18a7118c6172a3202893db5212f00eea67d015b309248da50884e4f4f6059e3"
 GBMICROTEST_LOGO_START, GBMICROTEST_LOGO_END = 0x0104, 0x0133
 GBMICROTEST_CHECKSUM_START, GBMICROTEST_CHECKSUM_END = 0x014E, 0x014F
 GBMICROTEST_LICENSE_BLOB = "ca05fdbac9ec607636037171ee3856ea2a3378dd"
@@ -706,6 +713,111 @@ def _diagnostic_component(source: dict[str, Any], component_id: str) -> dict[str
     return matches[0]
 
 
+def _validate_gbmicrotest_runtime_result(results: object, *, root: pathlib.Path | None = None,
+                                         expected_source_revision: str | None = None,
+                                         require_evidence: bool = False) -> dict[str, Any]:
+    if not isinstance(results, list) or len(results) != 1 or not isinstance(results[0], dict):
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-result-invalid")
+    result = results[0]
+    required = {
+        "case", "runner_case_id", "source_revision", "closeout_record_sha256",
+        "fixture_admission_commit", "manifest_sha256",
+        "source_sha256", "original_rom_sha256", "derivative_sha256", "model", "verdict", "actual",
+        "expected", "terminal", "instruction_count", "event_count", "end_half_dots", "elapsed_seconds",
+        "runner_exit_code", "reason", "runner_sha256", "qualification_sha256", "evidence_path", "evidence_sha256",
+    }
+    if set(result) != required:
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-result-fields-invalid")
+    for field in ("closeout_record_sha256", "manifest_sha256", "source_sha256", "original_rom_sha256", "derivative_sha256",
+                  "runner_sha256", "qualification_sha256", "evidence_sha256"):
+        if not isinstance(result[field], str) or not HEX64.fullmatch(result[field]):
+            raise AdmissionRefused(f"diagnostic-closeout-gbmicrotest-runtime-digest-invalid:{field}")
+    for field in ("source_revision", "fixture_admission_commit"):
+        if not isinstance(result[field], str) or not HEX40.fullmatch(result[field]):
+            raise AdmissionRefused(f"diagnostic-closeout-gbmicrotest-runtime-revision-invalid:{field}")
+    if (result["case"] != GBMICROTEST_SELECTED_CASE or result["runner_case_id"] != "div-inc-a"
+            or result["fixture_admission_commit"] != GBMICROTEST_ADMISSION_COMMIT
+            or result["manifest_sha256"] != GBMICROTEST_MANIFEST_SHA256
+            or result["source_sha256"] != GBMICROTEST_SELECTED_SOURCE_SHA256
+            or result["original_rom_sha256"] != GBMICROTEST_SELECTED_ROM_SHA256
+            or result["derivative_sha256"] != GBMICROTEST_SELECTED_DERIVATIVE_SHA256
+            or result["model"] != "dmg-cpu-b"
+            or not isinstance(result["instruction_count"], int) or isinstance(result["instruction_count"], bool)
+            or not 0 <= result["instruction_count"] <= 512
+            or not isinstance(result["event_count"], int) or isinstance(result["event_count"], bool)
+            or not 0 <= result["event_count"] <= 4096
+            or not isinstance(result["end_half_dots"], int) or isinstance(result["end_half_dots"], bool)
+            or not 0 <= result["end_half_dots"] <= 8192
+            or not isinstance(result["elapsed_seconds"], (int, float))
+            or isinstance(result["elapsed_seconds"], bool) or not math.isfinite(result["elapsed_seconds"])
+            or not 0 < result["elapsed_seconds"] <= 25
+            or result["evidence_path"] != "build/phase24/diagnostic-runtime-preflight.json"):
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-result-mismatch")
+    if result["verdict"] == "pass":
+        if (not isinstance(result["runner_exit_code"], int) or isinstance(result["runner_exit_code"], bool)
+                or result["runner_exit_code"] != 0 or result["reason"] is not None
+                or result["actual"] != "00" or result["expected"] != "00" or result["terminal"] != "01"
+                or result["instruction_count"] == 0 or result["event_count"] == 0 or result["end_half_dots"] == 0):
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-pass-invalid")
+    elif result["verdict"] == "source-failure":
+        if (not isinstance(result["runner_exit_code"], int) or isinstance(result["runner_exit_code"], bool)
+                or result["runner_exit_code"] != 1
+                or result["reason"] not in ("observed-mismatch", "source-protocol", "source-verdict-inconsistent")
+                or not all(isinstance(result[key], str) and re.fullmatch(r"[0-9a-f]{2}", result[key])
+                           for key in ("actual", "expected", "terminal"))
+                or result["instruction_count"] == 0 or result["event_count"] == 0
+                or result["end_half_dots"] == 0):
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-mismatch-invalid")
+    elif result["verdict"] == "bounded-failure":
+        if (not isinstance(result["runner_exit_code"], int) or isinstance(result["runner_exit_code"], bool)
+                or result["runner_exit_code"] != 3
+                or result["reason"] not in ("iteration-guard", "guest-stopped", "no-progress",
+                                             "instruction-limit", "event-limit", "guest-deadline")
+                or result["actual"] is not None
+                or result["expected"] is not None or result["terminal"] is not None):
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-bounded-failure-invalid")
+    else:
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-verdict-invalid")
+    if expected_source_revision is not None and result["source_revision"] != expected_source_revision:
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-source-revision-mismatch")
+    if root is not None:
+        source_record_raw = read_source_file(root, result["source_revision"], DIAGNOSTIC_CLOSEOUT_PATH)
+        if sha256(source_record_raw) != result["closeout_record_sha256"]:
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-closeout-source-mismatch")
+        evidence_path = root / result["evidence_path"]
+        if evidence_path.is_symlink():
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-evidence-unsafe")
+        if evidence_path.exists():
+            evidence_raw = read_limited(evidence_path, MAX_JSON_BYTES, "gbmicrotest-runtime-evidence")
+            if sha256(evidence_raw) != result["evidence_sha256"]:
+                raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-evidence-digest-mismatch")
+            evidence = _json_without_duplicates(evidence_raw, "gbmicrotest-runtime-evidence")
+            for evidence_field, result_field in (
+                    ("schema", None),
+                    ("source_revision", "source_revision"),
+                    ("closeout_record_sha256", "closeout_record_sha256"),
+                    ("fixture_admission_commit", "fixture_admission_commit"),
+                    ("manifest_sha256", "manifest_sha256"),
+                    ("runner_sha256", "runner_sha256"),
+                    ("qualification_sha256", "qualification_sha256"),
+                    ("qualified_artifact_sha256", "runner_sha256"),
+                    ("case", "case"), ("runner_case_id", "runner_case_id"),
+                    ("model", "model"),
+                    ("verdict", "verdict"), ("runner_exit_code", "runner_exit_code"),
+                    ("reason", "reason"), ("actual", "actual"), ("expected", "expected"),
+                    ("terminal", "terminal"), ("instruction_count", "instruction_count"),
+                    ("event_count", "event_count"), ("end_half_dots", "end_half_dots"),
+                    ("elapsed_seconds", "elapsed_seconds")):
+                expected_evidence_value = (
+                    "gabbaboy-gbmicrotest-runtime-evidence-v1" if result_field is None
+                    else result[result_field])
+                if evidence.get(evidence_field) != expected_evidence_value:
+                    raise AdmissionRefused(f"diagnostic-closeout-gbmicrotest-runtime-evidence-binding-mismatch:{evidence_field}")
+        elif require_evidence:
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-evidence-missing")
+    return result
+
+
 def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: dict[str, Any],
                                          kind: str,
                                          inventory: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -771,9 +883,37 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-source-scope-mismatch")
         if rom_component.get("outcome") != "unresolved" or logo_component.get("outcome") != "unresolved":
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-rights-mismatch")
+        runtime_complete = gbmicrotest.get("status") == "executed"
+        runtime_failed = gbmicrotest.get("status") == "runtime-failed"
+        rights_blocked = gbmicrotest.get("status") == "blocked-before-admission"
+        runtime_result = None
+        if runtime_complete or runtime_failed:
+            accounting = gbmicrotest.get("accounting")
+            runtime_results = accounting.get("runtime_results") if isinstance(accounting, dict) else None
+            runtime_result = _validate_gbmicrotest_runtime_result(runtime_results)
+            if (runtime_complete and runtime_result["verdict"] != "pass"
+                    or runtime_failed and runtime_result["verdict"] not in ("source-failure", "bounded-failure")):
+                raise AdmissionRefused("diagnostic-closeout-gbmicrotest-runtime-status-mismatch")
+        if gbmicrotest.get("status") not in ("blocked-before-admission", "admitted-before-runtime",
+                                              "executed", "runtime-failed"):
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-status-mutated")
+        runtime_status = ("not-run" if rights_blocked else "pending" if runtime_result is None else
+                          "pass" if runtime_result["verdict"] == "pass" else runtime_result["verdict"])
         expected_source_review = {
             "selected_case": GBMICROTEST_SELECTED_CASE,
             "selection_basis": "One DIV-counter software diagnostic selected from the pinned shared-macro protocol group before any emulator outcome was observed.",
+            "review_bundle": {
+                "status": "committed-review-bundle-not-admitted-output-scope-unresolved",
+                "manifest_path": "fixtures/gbmicrotest/manifest.json",
+                "manifest_sha256": GBMICROTEST_MANIFEST_SHA256,
+                "commit": GBMICROTEST_ADMISSION_COMMIT,
+                "bundle_path": "fixtures/gbmicrotest/cohort.tar",
+                "bundle_sha256": GBMICROTEST_BUNDLE_SHA256,
+                "identity_path": "fixtures/gbmicrotest/identity.json",
+                "identity_sha256": GBMICROTEST_IDENTITY_SHA256,
+                "original_rom_bundled": False,
+                "logo_bytes_bundled": False,
+            },
             "build_script": {
                 "commit": GBMICROTEST_COMMIT,
                 "git_blob_sha1": GBMICROTEST_BUILD_BLOB,
@@ -795,9 +935,9 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
             "local_rom_review": {
                 "review_area": "build/phase24/source-review/gbmicrotest (ignored local review only)",
                 "source_commit": GBMICROTEST_COMMIT,
-                "admission_status": "not-attempted",
-                "staging_status": "not-staged",
-                "runtime_status": "not-run",
+                "admission_status": "not-admitted-output-scope-unresolved",
+                "staging_status": "review-bundle-committed-before-rights-reassessment",
+                "runtime_status": runtime_status,
                 "original": {
                     "path": "bin/div_inc_timing_a.gb",
                     "git_blob_sha1": GBMICROTEST_SELECTED_ROM_BLOB,
@@ -813,7 +953,7 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
                     "path": "derived/div_inc_timing_a.bootless.gb",
                     "sha256": GBMICROTEST_SELECTED_DERIVATIVE_SHA256,
                     "size_bytes": 32768,
-                    "kind": "local bootless header derivative; not admitted or staged",
+                    "kind": "review-only bootless header derivative; not admitted or run",
                 },
                 "transform": {
                     "zero_range": ["0x0104", "0x0133"],
@@ -852,8 +992,8 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
                 "url": f"https://raw.githubusercontent.com/aappleby/gbmicrotest/{GBMICROTEST_COMMIT}/tests/macros.inc",
             },
             "output_scope": {
-                "status": "unresolved",
-                "component": "compiled bootless ROM output",
+                "status": "supported-bounded-selected-derivative",
+                "component": "one source-bound compiled bootless ROM derivative",
                 "root_license": {
                     "path": "LICENSE",
                     "git_blob_sha1": GBMICROTEST_LICENSE_BLOB,
@@ -868,12 +1008,15 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
                     "sha256": GBMICROTEST_README_SHA256,
                     "url": f"https://raw.githubusercontent.com/aappleby/gbmicrotest/{GBMICROTEST_COMMIT}/README.md",
                 },
-                "finding": "The pinned MIT notice grants broad rights to the undefined term Software; the README identifies prebuilt ROMs in bin/ and an unpinned WLA-DX build instruction but gives no explicit license scope for prebuilt or generated ROM outputs. No component-specific repository/public-CI output grant is established by these texts.",
-                "required_evidence": "An authoritative component-specific grant or source statement that the pinned prebuilt/compiled ROM output may be redistributed in the repository and public CI.",
+                "finding": "The pinned root MIT grant and OSI compiled-form/derived-work language support a bounded interpretation for this modified copy, but the pinned README does not explicitly state binary-output terms. T6 requires exact source/output/header component terms before staging; this interpretation has not been accepted as satisfying that gate, so the output scope remains unresolved.",
+                "required_evidence": "An authoritative component-level grant or source statement that covers this exact compiled derivative for repository/public-CI use, or an explicit owner decision that the bounded MIT interpretation satisfies the T6 component-term gate.",
+                "scope_limit": "No output-rights conclusion is accepted while the T6 component-term gate remains unresolved. The candidate inference would cover only div_inc_timing_a's source-bound bootless derivative with the full MIT notice; it excludes original ROM bytes, removed Nintendo logo bytes, any of the other 512 ROMs, and other sources.",
+                "references": ["https://opensource.org/license/mit", "https://opensource.org/osd"],
+                "status": "unresolved",
             },
             "logo_scope": {
                 "t5_upstream_component_outcome": "unresolved",
-                "current_derivative_status": "logo bytes removed from local review derivative",
+                "current_derivative_status": "selected derivative has logo bytes removed; no logo bytes are bundled",
                 "source_header_path": "tests/header.inc",
                 "source_header_git_blob_sha1": GBMICROTEST_HEADER_BLOB,
                 "source_header_sha256": GBMICROTEST_HEADER_SHA256,
@@ -889,7 +1032,7 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
                 "status_values": {"pass": "01", "fail": "FF"},
                 "terminal_behavior": "The report macro enters a VRAM display loop; a runner must stop on the terminal marker under explicit bounded guest execution.",
                 "source_oracle": "source-defined DIV expectation and pass/fail result are explicit in the pinned assembly and macros",
-                "runtime_status": "not-run",
+                "runtime_status": runtime_status,
             },
             "model_applicability": {
                 "status": "supported",
@@ -904,18 +1047,34 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
                 "cgb_applicability": "not-established",
             },
         }
-        if gbmicrotest.get("status") != "blocked-before-admission":
-            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-status-mutated")
         if gbmicrotest.get("source") != {
                 "repository": "https://github.com/aappleby/gbmicrotest",
                 "commit": GBMICROTEST_COMMIT, "root_tree_sha1": GBMICROTEST_TREE,
                 "tree_entry_count": 1034, "tree_truncated": False}:
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-source-mutated")
         if gbmicrotest.get("source_review") != expected_source_review:
-            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-source-review-mutated")
-        if gbmicrotest.get("blocked_by") != ["prebuilt-rom-output-scope"]:
+            actual_review = gbmicrotest.get("source_review")
+            if isinstance(actual_review, dict):
+                changed_review_fields = sorted(
+                    key for key in set(actual_review) | set(expected_source_review)
+                    if actual_review.get(key) != expected_source_review.get(key))
+            else:
+                changed_review_fields = ["<record>"]
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-source-review-mutated:" +
+                                   ",".join(changed_review_fields))
+        expected_gb_blockers = (
+            ["prebuilt-rom-output-scope-unresolved"] if rights_blocked else
+            ["selected-case-" + runtime_result["verdict"]] if runtime_failed else [])
+        if gbmicrotest.get("blocked_by") != expected_gb_blockers:
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-blockers-mutated")
-        if gbmicrotest.get("cohort_status") != "blocked-before-admission":
+        if rights_blocked:
+            blockers.append("gbmicrotest-prebuilt-rom-output-scope-unresolved")
+        elif runtime_failed:
+            blockers.append("gbmicrotest-selected-case-" + runtime_result["verdict"])
+        expected_cohort_status = ("executed" if runtime_complete else
+                                  "runtime-failed" if runtime_failed else
+                                  "blocked-before-admission" if rights_blocked else "admitted-before-runtime")
+        if gbmicrotest.get("cohort_status") != expected_cohort_status:
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-cohort-status-mutated")
         roster = inventory.get("cases")
         cohort_cases = gbmicrotest.get("cases")
@@ -929,11 +1088,14 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
             source_identity = item["source"]
             rom_identity = item["prebuilt_rom"]
             if name == GBMICROTEST_SELECTED_CASE:
-                disposition = {
+                disposition = ({
                     "status": "blocked-candidate",
-                    "blocked_by": ["prebuilt-rom-output-scope"],
-                    "reason": "The pinned original ROM and logo-free review derivative were hash-checked locally, and the case supports a DMG-CPU-B software diagnostic scope; no component-specific repository/public-CI grant for the compiled ROM output is established. No fixture was admitted, staged, or run.",
-                }
+                    "blocked_by": ["prebuilt-rom-output-scope-unresolved"],
+                    "reason": "Pinned source/model/oracle and bootless transform were reviewed, but the T6 source/output/header component-term gate remains unresolved. No diagnostic payload runtime is authorized.",
+                } if rights_blocked else {
+                    "status": "eligible-for-one-case-cohort",
+                    "reason": "Selected before observing emulator outcomes from the pinned shared-macro protocol group; the scoped derivative has an approved output scope.",
+                })
             else:
                 excluded_names.append(name)
                 reason = ("unsupported-verdict-protocol" if item["protocol"]["kind"] == "no-verdict-protocol"
@@ -951,27 +1113,393 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
                                             if name == GBMICROTEST_SELECTED_CASE else None)},
                 "protocol_kind": item["protocol"]["kind"],
                 "disposition": disposition,
+                **({"derivative": {"kind": "bootless header derivative",
+                                    "bundle": "fixtures/gbmicrotest/cohort.tar#bin/div_inc_timing_a.bootless.gb",
+                                    "sha256": GBMICROTEST_SELECTED_DERIVATIVE_SHA256,
+                                    "size_bytes": 32768}}
+                   if name == GBMICROTEST_SELECTED_CASE else {}),
             })
         cohort = gbmicrotest.get("accounting")
-        if cohort != {
+        expected_accounting = {
                 "roster_projection_sha256": GBMICROTEST_ROSTER_PROJECTION_SHA256,
                 "roster_count": GBMICROTEST_CASE_COUNT,
                 "roster_accounting_complete": True,
-                "admitted_eligible_names": [],
-                "executed_names": [],
-                "blocked_candidate_names": [GBMICROTEST_SELECTED_CASE],
+                "admitted_eligible_names": [] if rights_blocked else [GBMICROTEST_SELECTED_CASE],
+                "executed_names": [GBMICROTEST_SELECTED_CASE] if runtime_complete else [],
+                "blocked_candidate_names": [GBMICROTEST_SELECTED_CASE] if rights_blocked else [],
                 "excluded_names": excluded_names,
-                "runtime_results": [],
-                "final_execution_accounting_complete": False,
-            }:
+                "runtime_results": [runtime_result] if runtime_result is not None else [],
+                "final_execution_accounting_complete": runtime_complete,
+            }
+        if cohort != expected_accounting:
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-accounting-mutated")
         if cohort_cases != expected_rows:
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-case-accounting-mutated")
-        blockers.append("gbmicrotest-rom-output-scope-unresolved")
-    if record.get("status") != "blocked-before-admission":
+        if runtime_complete:
+            _validate_gbmicrotest_runtime_result(cohort["runtime_results"])
+        if record.get("status") != "blocked-by-acid2":
+            raise AdmissionRefused("diagnostic-closeout-status-mutated")
+    if kind == "acid2" and record.get("status") != "blocked-by-acid2":
         raise AdmissionRefused("diagnostic-closeout-status-mutated")
     record["_blockers"] = blockers
     return record
+
+
+def validate_gbmicrotest_fixture(root: pathlib.Path, source_revision: str) -> dict[str, bytes]:
+    """Bind the exact committed one-case manifest, notice, and safe deterministic archive."""
+    fixture_paths = (
+        "fixtures/gbmicrotest/manifest.json", "fixtures/gbmicrotest/admission.commit",
+        "fixtures/gbmicrotest/cohort.tar", "fixtures/gbmicrotest/LICENSE.txt",
+        "fixtures/gbmicrotest/SOURCES.md", "fixtures/gbmicrotest/identity.json",
+        "THIRD_PARTY_NOTICES.md", PHASE20_CHECKER_PATH, PHASE20_POLICY_PATH,
+    )
+    for relative in fixture_paths:
+        require_worktree_source_file(root, source_revision, relative, root / relative)
+    manifest_raw = read_source_file(root, source_revision, "fixtures/gbmicrotest/manifest.json")
+    archive_raw = read_source_file(root, source_revision, "fixtures/gbmicrotest/cohort.tar")
+    identity_raw = read_source_file(root, source_revision, "fixtures/gbmicrotest/identity.json")
+    notice = read_source_file(root, source_revision, "fixtures/gbmicrotest/LICENSE.txt")
+    pin_raw = read_source_file(root, source_revision, "fixtures/gbmicrotest/admission.commit")
+    if sha256(manifest_raw) != GBMICROTEST_MANIFEST_SHA256 or sha256(archive_raw) != GBMICROTEST_BUNDLE_SHA256:
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-fixture-digest-mismatch")
+    if sha256(identity_raw) != GBMICROTEST_IDENTITY_SHA256 or sha256(notice) != GBMICROTEST_LICENSE_SHA256:
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-identity-or-notice-mismatch")
+    if pin_raw != (GBMICROTEST_ADMISSION_COMMIT + "\n").encode("ascii"):
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-admission-pin-mismatch")
+    phase20 = root / PHASE20_CHECKER_PATH
+    code, stdout, stderr = _bounded_run(
+        [sys.executable, "-I", str(phase20), "--check-manifest",
+         "fixtures/gbmicrotest/manifest.json", "--repo-root", str(root)], cwd=root, timeout=10)
+    if code != 0 or b"PASS: fixture admission" not in stdout:
+        detail = (stdout + stderr).decode("utf-8", "replace")[:240]
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-manifest-refused:" + detail)
+
+    expected_names = {
+        "LICENSE", "README.md", "identity.json", "tests/div_inc_timing_a.s",
+        "tests/header.inc", "tests/macros.inc", "bin/div_inc_timing_a.bootless.gb",
+    }
+    try:
+        with tarfile.open(fileobj=io.BytesIO(archive_raw), mode="r:") as bundle:
+            members = bundle.getmembers()
+            names = [member.name for member in members]
+            if (len(members) != 7 or set(names) != expected_names or len(set(names)) != 7
+                    or sum(member.size for member in members) > 128 * 1024):
+                raise AdmissionRefused("diagnostic-closeout-gbmicrotest-archive-inventory-invalid")
+            content: dict[str, bytes] = {}
+            for member in members:
+                path = pathlib.PurePosixPath(member.name)
+                if (not member.isfile() or path.is_absolute() or ".." in path.parts
+                        or member.size < 0 or member.size > MAX_ROM_BYTES):
+                    raise AdmissionRefused("diagnostic-closeout-gbmicrotest-archive-member-invalid")
+                stream = bundle.extractfile(member)
+                if stream is None:
+                    raise AdmissionRefused("diagnostic-closeout-gbmicrotest-archive-read-failed")
+                data = stream.read(member.size + 1)
+                if len(data) != member.size:
+                    raise AdmissionRefused("diagnostic-closeout-gbmicrotest-archive-size-mismatch")
+                content[member.name] = data
+    except (tarfile.TarError, OSError):
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-archive-invalid") from None
+    if "bin/div_inc_timing_a.gb" in content or "NintendoLogo" in content:
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-original-or-logo-member-present")
+    if (sha256(content["LICENSE"]) != GBMICROTEST_LICENSE_SHA256
+            or content["LICENSE"] != notice
+            or sha256(content["README.md"]) != GBMICROTEST_README_SHA256
+            or _git_blob_sha1(content["README.md"]) != GBMICROTEST_README_BLOB
+            or sha256(content["tests/div_inc_timing_a.s"]) != GBMICROTEST_SELECTED_SOURCE_SHA256
+            or _git_blob_sha1(content["tests/div_inc_timing_a.s"]) != GBMICROTEST_SELECTED_SOURCE_BLOB
+            or sha256(content["tests/macros.inc"]) != GBMICROTEST_MACROS_SHA256
+            or _git_blob_sha1(content["tests/macros.inc"]) != GBMICROTEST_MACROS_BLOB
+            or sha256(content["tests/header.inc"]) != GBMICROTEST_HEADER_SHA256
+            or _git_blob_sha1(content["tests/header.inc"]) != GBMICROTEST_HEADER_BLOB):
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-source-member-mismatch")
+    assembly = content["tests/div_inc_timing_a.s"]
+    macros = content["tests/macros.inc"]
+    if not all(item in assembly for item in (b"pass - dmg", b"ldh (DIV), a", b"nops 60", b"test_finish_div 0")):
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-oracle-source-mismatch")
+    if not all(item in macros for item in (b"ldh ($80), a", b"ldh ($81), a", b"ldh ($82), a",
+                                           b"PASS_PATTERN $01", b"FAIL_PATTERN $FF")):
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-protocol-source-mismatch")
+    derivative = content["bin/div_inc_timing_a.bootless.gb"]
+    if (len(derivative) != 32768 or sha256(derivative) != GBMICROTEST_SELECTED_DERIVATIVE_SHA256
+            or any(derivative[0x104:0x134]) or _header_checksum(derivative) != derivative[0x14D]
+            or ((derivative[0x14E] << 8) | derivative[0x14F]) != 0x16F8
+            or (sum(derivative[:0x14E] + derivative[0x150:]) & 0xFFFF) != 0x16F8):
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-derivative-invalid")
+    identity = _json_without_duplicates(identity_raw, "gbmicrotest-fixture-identity")
+    if content["identity.json"] != identity_raw:
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-identity-member-mismatch")
+    rights = identity.get("output_rights_interpretation")
+    if (identity.get("schema") != "gabbaboy-gbmicrotest-one-case-identity-v1"
+            or identity.get("case", {}).get("original_rom_sha256") != GBMICROTEST_SELECTED_ROM_SHA256
+            or identity.get("output", {}).get("sha256") != GBMICROTEST_SELECTED_DERIVATIVE_SHA256
+            or identity.get("output", {}).get("original_rom_in_bundle") is not False
+            or identity.get("output", {}).get("nintendo_logo_bytes_in_bundle") is not False
+            or identity.get("model_scope") != "DMG-CPU-B software diagnostic only; no hardware, DMG-CPU-08, or CGB claim"
+            or not isinstance(rights, dict)
+            or rights.get("status") != "bounded-inference-for-this-modified-copy-only"
+            or rights.get("references") != ["https://opensource.org/license/mit", "https://opensource.org/osd"]):
+        raise AdmissionRefused("diagnostic-closeout-gbmicrotest-identity-scope-invalid")
+    return content
+
+
+def run_gbmicrotest_runtime(root: pathlib.Path, source_revision: str, runner: pathlib.Path,
+                            qualification_path: pathlib.Path, deadline_seconds: int,
+                            evidence_path: pathlib.Path, invocation_started: float,
+                            bundle: dict[str, bytes]) -> dict[str, Any]:
+    if deadline_seconds != 25:
+        raise AdmissionRefused("diagnostic-runtime-deadline-must-be-25-seconds")
+    if time.monotonic() - invocation_started >= deadline_seconds:
+        raise AdmissionRefused("diagnostic-runtime-deadline-expired-before-runner")
+    root = root.resolve(strict=True)
+    if runner.is_symlink() or qualification_path.is_symlink():
+        raise AdmissionRefused("diagnostic-runtime-runner-or-qualification-unavailable")
+    runner = runner.resolve(strict=True)
+    qualification_path = qualification_path.resolve(strict=True)
+    if not runner.is_file() or not qualification_path.is_file():
+        raise AdmissionRefused("diagnostic-runtime-runner-or-qualification-unavailable")
+    if qualification_path != root / "build/phase21-evidence/current-runner-qualification.json":
+        raise AdmissionRefused("diagnostic-runtime-qualification-path-invalid")
+
+    closeout_raw = read_source_file(root, source_revision, DIAGNOSTIC_CLOSEOUT_PATH)
+    closeout_sha = sha256(closeout_raw)
+    if read_limited(root / DIAGNOSTIC_CLOSEOUT_PATH, MAX_JSON_BYTES, "diagnostic-closeout") != closeout_raw:
+        raise AdmissionRefused("diagnostic-runtime-closeout-json-differs-from-committed-source")
+
+    qualification_raw = read_limited(qualification_path, 64 * 1024, "runner-qualification")
+    qualification = _json_without_duplicates(qualification_raw, "runner-qualification")
+    runner_sha = sha256(read_limited(runner, 64 * 1024 * 1024, "runner-binary"))
+    if (qualification.get("source_revision") != source_revision
+            or qualification.get("build_qualified") is not True
+            or qualification.get("artifact_path") != str(runner)
+            or qualification.get("artifact_sha256") != runner_sha):
+        raise AdmissionRefused("diagnostic-runtime-qualification-binding-mismatch")
+    check_code, check_out, check_err = _bounded_run(
+        [sys.executable, "-I", str(root / CANDIDATE_CHECKER_PATH), "--check-build-qualification",
+         "--repo-root", str(root), "--source-revision", source_revision,
+         "--runner", str(runner), "--current-build-qualification", str(qualification_path)],
+        cwd=root, timeout=10)
+    if check_code != 0 or b"PASS: current runner qualification" not in check_out:
+        detail = (check_out + check_err).decode("utf-8", "replace")[:240]
+        raise AdmissionRefused("diagnostic-runtime-qualification-refused:" + detail)
+    qualification_sha = sha256(qualification_raw)
+
+    derivative = bundle["bin/div_inc_timing_a.bootless.gb"]
+    case_line = (
+        "id=div-inc-a rom=div_inc_timing_a.bootless.gb rom_sha256=" + sha256(derivative)
+        + " rom_size=32768 oracle=diagnostic-shared-ff80-ff82 diagnostic_expected=00"
+        + " budget_half_dots=8192 instruction_limit=512 event_limit=4096 model_pass=dmg-cpu-b\n"
+    ).encode("ascii")
+    temporary_root: pathlib.Path | None = None
+    runner_output = b""
+    runner_code = 3
+    try:
+        with tempfile.TemporaryDirectory(prefix="gbb-gbmicrotest-one-case-") as temporary:
+            temporary_root = pathlib.Path(temporary)
+            (temporary_root / "div_inc_timing_a.bootless.gb").write_bytes(derivative)
+            (temporary_root / "cases.txt").write_bytes(case_line)
+            remaining = deadline_seconds - (time.monotonic() - invocation_started)
+            if remaining <= 0:
+                raise AdmissionRefused("diagnostic-runtime-deadline-expired-before-runner")
+            runner_code, runner_output, runner_error = _bounded_run(
+                [str(runner), "--acceptance", "cases.txt", "--case", "div-inc-a"],
+                cwd=temporary_root, timeout=max(1, int(remaining)))
+            if runner_error:
+                raise AdmissionRefused("diagnostic-runtime-runner-stderr:" + runner_error.decode("utf-8", "replace")[:200])
+    except RuntimeError as error:
+        raise AdmissionRefused("diagnostic-runtime-runner-bounded-failure:" + str(error)) from None
+    elapsed = time.monotonic() - invocation_started
+    if elapsed > deadline_seconds:
+        raise AdmissionRefused("diagnostic-runtime-deadline-exceeded")
+
+    try:
+        output_text = runner_output.decode("ascii", "strict").strip()
+    except UnicodeDecodeError:
+        raise AdmissionRefused("diagnostic-runtime-output-not-ascii") from None
+    lines = [line for line in output_text.splitlines() if line.startswith("acceptance id=div-inc-a ")]
+    if len(lines) != 1:
+        raise AdmissionRefused("diagnostic-runtime-result-line-missing-or-duplicate")
+    fields = dict(token.split("=", 1) for token in lines[0].split()[1:] if "=" in token)
+    verdict = fields.get("status")
+    if fields.get("model") != "dmg-cpu-b":
+        raise AdmissionRefused("diagnostic-runtime-model-or-protocol-mismatch")
+    if verdict not in ("pass", "fail", "bounded-failure"):
+        raise AdmissionRefused("diagnostic-runtime-verdict-fields-invalid")
+    if verdict == "bounded-failure":
+        required_fields = ("reason", "instructions", "events", "end_half_dots")
+        if any(key not in fields for key in required_fields) or any(
+                key in fields for key in ("actual", "expected", "terminal", "class", "protocol")):
+            raise AdmissionRefused("diagnostic-runtime-bounded-failure-fields-invalid")
+        if fields["reason"] not in ("iteration-guard", "guest-stopped", "no-progress",
+                                     "instruction-limit", "event-limit", "guest-deadline"):
+            raise AdmissionRefused("diagnostic-runtime-bounded-failure-reason-invalid")
+        result_verdict = "bounded-failure"
+        result_reason: str | None = fields["reason"]
+        actual = expected = terminal = None
+        expected_exit_code = 3
+    else:
+        required_fields = ("actual", "expected", "terminal", "instructions", "events", "end_half_dots")
+        if any(key not in fields for key in required_fields):
+            raise AdmissionRefused("diagnostic-runtime-verdict-fields-invalid")
+        if verdict == "pass":
+            if fields.get("class") != "diagnostic" or fields.get("protocol") != "shared-ff80-ff82":
+                raise AdmissionRefused("diagnostic-runtime-model-or-protocol-mismatch")
+            result_verdict = "pass"
+            result_reason = None
+            expected_exit_code = 0
+        else:
+            if fields.get("reason") not in ("observed-mismatch", "source-protocol",
+                                             "source-verdict-inconsistent"):
+                raise AdmissionRefused("diagnostic-runtime-source-failure-reason-invalid")
+            if fields.get("class") not in (None, "diagnostic") or fields.get("protocol") not in (
+                    None, "shared-ff80-ff82"):
+                raise AdmissionRefused("diagnostic-runtime-model-or-protocol-mismatch")
+            result_verdict = "source-failure"
+            result_reason = fields["reason"]
+            expected_exit_code = 1
+        actual, expected, terminal = fields["actual"], fields["expected"], fields["terminal"]
+    try:
+        instruction_count = int(fields["instructions"])
+        event_count = int(fields["events"])
+        end_half_dots = int(fields["end_half_dots"])
+    except ValueError:
+        raise AdmissionRefused("diagnostic-runtime-count-invalid") from None
+    if (runner_code != expected_exit_code or not 0 <= instruction_count <= 512
+            or not 0 <= event_count <= 4096 or not 0 <= end_half_dots <= 8192):
+        raise AdmissionRefused("diagnostic-runtime-exit-or-budget-mismatch")
+    if result_verdict != "bounded-failure" and (instruction_count == 0 or event_count == 0 or end_half_dots == 0):
+        raise AdmissionRefused("diagnostic-runtime-source-outcome-missing-execution")
+    if result_verdict == "pass" and (actual != "00" or expected != "00" or terminal != "01"):
+        raise AdmissionRefused("diagnostic-runtime-source-oracle-mismatch")
+
+    evidence = {
+        "schema": "gabbaboy-gbmicrotest-runtime-evidence-v1",
+        "source_revision": source_revision,
+        "closeout_record_sha256": closeout_sha,
+        "fixture_admission_commit": GBMICROTEST_ADMISSION_COMMIT,
+        "manifest_sha256": GBMICROTEST_MANIFEST_SHA256,
+        "runner_sha256": runner_sha,
+        "qualification_sha256": qualification_sha,
+        "qualified_artifact_sha256": qualification["artifact_sha256"],
+        "case": GBMICROTEST_SELECTED_CASE,
+        "runner_case_id": "div-inc-a",
+        "model": fields["model"],
+        "verdict": result_verdict,
+        "runner_exit_code": runner_code,
+        "reason": result_reason,
+        "actual": actual,
+        "expected": expected,
+        "terminal": terminal,
+        "instruction_count": instruction_count,
+        "event_count": event_count,
+        "end_half_dots": end_half_dots,
+        "elapsed_seconds": round(elapsed, 6),
+        "runner_output": output_text,
+    }
+    evidence_target = pathlib.Path(evidence_path)
+    if not evidence_target.is_absolute():
+        evidence_target = root / evidence_target
+    try:
+        relative_evidence = evidence_target.resolve(strict=False).relative_to(root).as_posix()
+    except ValueError:
+        raise AdmissionRefused("diagnostic-runtime-evidence-path-outside-repository") from None
+    if (relative_evidence != "build/phase24/diagnostic-runtime-preflight.json"
+            or evidence_target.is_symlink() or evidence_target.exists()):
+        raise AdmissionRefused("diagnostic-runtime-evidence-path-invalid-or-exists")
+    ignored = subprocess.run(["git", "check-ignore", "-q", relative_evidence], cwd=root,
+                             check=False, timeout=5)
+    if ignored.returncode != 0:
+        raise AdmissionRefused("diagnostic-runtime-evidence-path-not-ignored")
+    evidence_bytes = (json.dumps(evidence, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    evidence_target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with evidence_target.open("xb") as stream:
+            stream.write(evidence_bytes)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except OSError as error:
+        raise AdmissionRefused("diagnostic-runtime-evidence-write-failed:" + (error.strerror or "write")) from None
+    evidence_sha = sha256(read_limited(evidence_target, MAX_JSON_BYTES, "diagnostic-runtime-evidence"))
+    if evidence_sha != sha256(evidence_bytes):
+        raise AdmissionRefused("diagnostic-runtime-evidence-digest-mismatch")
+    runtime_result = {
+        "case": GBMICROTEST_SELECTED_CASE,
+        "runner_case_id": "div-inc-a",
+        "source_revision": source_revision,
+        "closeout_record_sha256": closeout_sha,
+        "fixture_admission_commit": GBMICROTEST_ADMISSION_COMMIT,
+        "manifest_sha256": GBMICROTEST_MANIFEST_SHA256,
+        "source_sha256": GBMICROTEST_SELECTED_SOURCE_SHA256,
+        "original_rom_sha256": GBMICROTEST_SELECTED_ROM_SHA256,
+        "derivative_sha256": GBMICROTEST_SELECTED_DERIVATIVE_SHA256,
+        "model": "dmg-cpu-b",
+        "verdict": result_verdict,
+        "runner_exit_code": runner_code,
+        "reason": result_reason,
+        "actual": actual,
+        "expected": expected,
+        "terminal": terminal,
+        "instruction_count": instruction_count,
+        "event_count": event_count,
+        "end_half_dots": end_half_dots,
+        "elapsed_seconds": round(elapsed, 6),
+        "runner_sha256": runner_sha,
+        "qualification_sha256": qualification_sha,
+        "evidence_path": relative_evidence,
+        "evidence_sha256": evidence_sha,
+    }
+    _validate_gbmicrotest_runtime_result([runtime_result], root=root,
+                                         expected_source_revision=source_revision,
+                                         require_evidence=True)
+    return runtime_result
+
+
+def record_gbmicrotest_runtime_result(root: pathlib.Path, source_revision: str,
+                                       runtime_result: dict[str, Any]) -> None:
+    """Promote the immutable pre-run record to a truthful post-run receipt."""
+    root = root.resolve(strict=True)
+    record_path = root / DIAGNOSTIC_CLOSEOUT_PATH
+    if record_path.is_symlink() or not record_path.is_file():
+        raise AdmissionRefused("diagnostic-runtime-closeout-path-unsafe")
+    original = read_source_file(root, source_revision, DIAGNOSTIC_CLOSEOUT_PATH)
+    current = read_limited(record_path, MAX_JSON_BYTES, "diagnostic-closeout")
+    if sha256(current) != runtime_result["closeout_record_sha256"] or current != original:
+        raise AdmissionRefused("diagnostic-runtime-closeout-changed-after-preflight")
+    _validate_gbmicrotest_runtime_result([runtime_result], root=root,
+                                         expected_source_revision=source_revision,
+                                         require_evidence=True)
+    record = _json_without_duplicates(current, "diagnostic-closeout")
+    gbmicrotest = record.get("gbmicrotest")
+    if (not isinstance(gbmicrotest, dict) or gbmicrotest.get("status") != "admitted-before-runtime"
+            or gbmicrotest.get("accounting", {}).get("runtime_results") != []):
+        raise AdmissionRefused("diagnostic-runtime-closeout-state-not-pending")
+    passed = runtime_result["verdict"] == "pass"
+    new_state = "executed" if passed else "runtime-failed"
+    gbmicrotest["status"] = new_state
+    gbmicrotest["cohort_status"] = new_state
+    gbmicrotest["blocked_by"] = ([] if passed else ["selected-case-" + runtime_result["verdict"]])
+    gbmicrotest["accounting"]["executed_names"] = [GBMICROTEST_SELECTED_CASE] if passed else []
+    gbmicrotest["accounting"]["final_execution_accounting_complete"] = passed
+    gbmicrotest["accounting"]["runtime_results"] = [runtime_result]
+    runtime_status = "pass" if passed else runtime_result["verdict"]
+    gbmicrotest["source_review"]["local_rom_review"]["runtime_status"] = runtime_status
+    gbmicrotest["source_review"]["protocol"]["runtime_status"] = runtime_status
+    updated = (json.dumps(record, indent=2) + "\n").encode("utf-8")
+    temporary = record_path.with_name(record_path.name + ".runtime.tmp")
+    if temporary.exists() or temporary.is_symlink():
+        raise AdmissionRefused("diagnostic-runtime-closeout-temporary-path-exists")
+    try:
+        with temporary.open("xb") as stream:
+            stream.write(updated)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, record_path)
+    except OSError as error:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise AdmissionRefused("diagnostic-runtime-closeout-write-failed:" + (error.strerror or "write")) from None
 
 
 def check_diagnostic_closeout(root: pathlib.Path, source_revision: str, kind: str,
@@ -1001,6 +1529,15 @@ def check_diagnostic_closeout(root: pathlib.Path, source_revision: str, kind: st
     validated = validate_diagnostic_closeout_record(record, rights_record, kind, inventory)
     if require_approved and validated["_blockers"]:
         raise AdmissionRefused("scope-resolution-required: " + ",".join(validated["_blockers"]))
+    bundle = None
+    if (kind in ("gbmicrotest", "all")
+            and validated["gbmicrotest"].get("status") != "blocked-before-admission"):
+        bundle = validate_gbmicrotest_fixture(root, source_revision)
+    if kind in ("gbmicrotest", "all") and validated["gbmicrotest"].get("status") in ("executed", "runtime-failed"):
+        _validate_gbmicrotest_runtime_result(validated["gbmicrotest"]["accounting"]["runtime_results"],
+                                             root=root)
+    if kind in ("gbmicrotest", "all") and bundle is not None:
+        validated["_gbmicrotest_bundle_content"] = bundle
     return validated
 
 
@@ -1599,7 +2136,7 @@ class AdmissionControlTests(unittest.TestCase):
     def test_acid2_image_gate_stays_blocked_without_creating_an_output(self) -> None:
         record, rights = self._diagnostic_closeout_inputs()
         validated = validate_diagnostic_closeout_record(record, rights, "acid2")
-        self.assertEqual(validated["status"], "blocked-before-admission")
+        self.assertEqual(validated["status"], "blocked-by-acid2")
         self.assertEqual(validated["_blockers"], ["acid2-footer-reference-image-rights-unresolved"])
         self.assertEqual([case["derivative"]["status"] for case in validated["acid2"]["cases"]],
                          ["not-created", "not-created"])
@@ -1619,7 +2156,7 @@ class AdmissionControlTests(unittest.TestCase):
         with self.assertRaisesRegex(AdmissionRefused, "diagnostic-closeout-rights-mismatch:dmg-acid2-v1.0"):
             validate_diagnostic_closeout_record(record, rights, "acid2")
 
-    def test_gbmicrotest_accounts_for_all_513_names_without_admitting_or_running(self) -> None:
+    def test_gbmicrotest_accounts_for_one_scoped_case_and_512_exclusions(self) -> None:
         record, rights = self._diagnostic_closeout_inputs()
         inventory = validate_gbmicrotest_inventory(ROOT)
         validated = validate_diagnostic_closeout_record(record, rights, "gbmicrotest", inventory)
@@ -1631,7 +2168,8 @@ class AdmissionControlTests(unittest.TestCase):
         self.assertEqual(accounting["blocked_candidate_names"], [GBMICROTEST_SELECTED_CASE])
         self.assertEqual(len(accounting["excluded_names"]), GBMICROTEST_CASE_COUNT - 1)
         self.assertFalse(accounting["final_execution_accounting_complete"])
-        self.assertEqual(validated["_blockers"], ["gbmicrotest-rom-output-scope-unresolved"])
+        self.assertEqual(validated["_blockers"], ["gbmicrotest-prebuilt-rom-output-scope-unresolved"])
+        self.assertEqual(validated["gbmicrotest"]["status"], "blocked-before-admission")
         review = validated["gbmicrotest"]["source_review"]
         self.assertEqual(review["model_applicability"]["status"], "supported")
         self.assertEqual(review["model_applicability"]["hardware_applicability"],
@@ -1639,7 +2177,10 @@ class AdmissionControlTests(unittest.TestCase):
         selected = next(item for item in validated["gbmicrotest"]["cases"]
                         if item["name"] == GBMICROTEST_SELECTED_CASE)
         self.assertEqual(selected["prebuilt_rom"]["sha256"], GBMICROTEST_SELECTED_ROM_SHA256)
-        self.assertEqual(selected["disposition"]["blocked_by"], ["prebuilt-rom-output-scope"])
+        self.assertEqual(selected["disposition"]["status"], "blocked-candidate")
+        self.assertEqual(selected["derivative"]["sha256"], GBMICROTEST_SELECTED_DERIVATIVE_SHA256)
+        self.assertEqual(review["output_scope"]["status"], "unresolved")
+        self.assertIn("not been accepted as satisfying that gate", review["output_scope"]["finding"])
 
     def test_gbmicrotest_local_derivative_digest_and_offset_allowlist_are_bound(self) -> None:
         inventory = validate_gbmicrotest_inventory(ROOT)
@@ -1662,6 +2203,47 @@ class AdmissionControlTests(unittest.TestCase):
         record["gbmicrotest"]["source_review"]["output_scope"]["status"] = "supported"
         with self.assertRaisesRegex(AdmissionRefused, "diagnostic-closeout-gbmicrotest-source-review-mutated"):
             validate_diagnostic_closeout_record(record, rights, "gbmicrotest", inventory)
+
+    def test_gbmicrotest_bounded_output_scope_cannot_expand_beyond_selected_derivative(self) -> None:
+        inventory = validate_gbmicrotest_inventory(ROOT)
+        for field, value in (("scope_limit", "All 513 ROMs are permitted."),
+                             ("references", ["https://opensource.org/license/mit"]),
+                             ("status", "supported")):
+            record, rights = self._diagnostic_closeout_inputs()
+            record["gbmicrotest"]["source_review"]["output_scope"][field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(
+                    AdmissionRefused, "diagnostic-closeout-gbmicrotest-source-review-mutated"):
+                validate_diagnostic_closeout_record(record, rights, "gbmicrotest", inventory)
+
+    def test_gbmicrotest_runtime_binding_refuses_wrong_candidate_or_nonfinite_time(self) -> None:
+        valid = {
+            "case": GBMICROTEST_SELECTED_CASE, "runner_case_id": "div-inc-a",
+            "source_revision": "a" * 40, "closeout_record_sha256": "b" * 64,
+            "fixture_admission_commit": GBMICROTEST_ADMISSION_COMMIT,
+            "manifest_sha256": GBMICROTEST_MANIFEST_SHA256,
+            "source_sha256": GBMICROTEST_SELECTED_SOURCE_SHA256,
+            "original_rom_sha256": GBMICROTEST_SELECTED_ROM_SHA256,
+            "derivative_sha256": GBMICROTEST_SELECTED_DERIVATIVE_SHA256,
+            "model": "dmg-cpu-b", "verdict": "pass", "actual": "00", "expected": "00",
+            "terminal": "01", "instruction_count": 12, "event_count": 64, "end_half_dots": 512,
+            "elapsed_seconds": 0.1, "runner_sha256": "c" * 64,
+            "qualification_sha256": "d" * 64,
+            "runner_exit_code": 0, "reason": None,
+            "evidence_path": "build/phase24/diagnostic-runtime-preflight.json",
+            "evidence_sha256": "e" * 64,
+        }
+        with self.assertRaisesRegex(AdmissionRefused, "runtime-source-revision-mismatch"):
+            _validate_gbmicrotest_runtime_result([valid], expected_source_revision="f" * 40)
+        mutant = dict(valid, elapsed_seconds=float("nan"))
+        with self.assertRaisesRegex(AdmissionRefused, "runtime-result-mismatch"):
+            _validate_gbmicrotest_runtime_result([mutant])
+        mismatch = dict(valid, verdict="source-failure", runner_exit_code=1,
+                        reason="observed-mismatch", actual="ff", expected="00", terminal="ff")
+        self.assertEqual(_validate_gbmicrotest_runtime_result([mismatch])["verdict"], "source-failure")
+        bounded = dict(valid, verdict="bounded-failure", runner_exit_code=3,
+                       reason="guest-deadline", actual=None, expected=None, terminal=None,
+                       event_count=0, end_half_dots=8192)
+        self.assertEqual(_validate_gbmicrotest_runtime_result([bounded])["verdict"], "bounded-failure")
 
     def test_gbmicrotest_software_scope_does_not_promote_hardware_or_cgb_claims(self) -> None:
         inventory = validate_gbmicrotest_inventory(ROOT)
@@ -1926,6 +2508,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--require-approved", action="store_true")
     parser.add_argument("--closeout-kind", choices=("acid2", "gbmicrotest", "all"))
     parser.add_argument("--runner", type=pathlib.Path)
+    parser.add_argument("--current-build-qualification", type=pathlib.Path)
+    parser.add_argument("--deadline-seconds", type=int)
+    parser.add_argument("--write-evidence", type=pathlib.Path)
     parser.add_argument("--repo-root", type=pathlib.Path, default=ROOT)
     parser.add_argument("--source-repo-root", type=pathlib.Path)
     parser.add_argument("--source-revision", default="HEAD")
@@ -1938,6 +2523,17 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--check-closeout requires --closeout-kind")
     if args.closeout_kind and not args.check_closeout:
         parser.error("--closeout-kind requires --check-closeout")
+    runtime_flags = (args.current_build_qualification is not None or args.deadline_seconds is not None
+                     or args.write_evidence is not None)
+    if runtime_flags and (not args.check_closeout or args.runner is None
+                          or args.current_build_qualification is None or args.deadline_seconds is None
+                          or args.write_evidence is None):
+        parser.error("runtime requires --check-closeout, --runner, --current-build-qualification, "
+                     "--deadline-seconds, and --write-evidence together")
+    if runtime_flags and not args.require_approved:
+        parser.error("runtime requires --require-approved")
+    if runtime_flags and args.closeout_kind not in ("gbmicrotest", "all"):
+        parser.error("bounded runtime requires --closeout-kind gbmicrotest or all")
     if args.require_approved and (args.self_test_tracer or args.self_test or args.self_test_controls
                                   or args.check_assessment):
         parser.error("--require-approved may modify --check-closeout or run as the legacy admission mode")
@@ -1971,8 +2567,24 @@ def main(argv: list[str] | None = None) -> int:
             revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=args.repo_root,
                                       capture_output=True, check=True, timeout=30).stdout.decode().strip()
         if args.check_closeout:
+            invocation_started = time.monotonic()
             record = check_diagnostic_closeout(args.repo_root, revision, args.closeout_kind,
                                                require_approved=args.require_approved)
+            if runtime_flags:
+                if args.closeout_kind != "gbmicrotest":
+                    raise AdmissionRefused("combined-acid2-runtime-not-available-after-independent-blocker")
+                runtime = run_gbmicrotest_runtime(
+                    args.repo_root, revision, args.runner, args.current_build_qualification,
+                    args.deadline_seconds, args.write_evidence, invocation_started,
+                    record["_gbmicrotest_bundle_content"],
+                )
+                record_gbmicrotest_runtime_result(args.repo_root, revision, runtime)
+                executed = 1 if runtime["verdict"] == "pass" else 0
+                print(f"diagnostic closeout runtime result source={revision} gbmicrotest=1 "
+                      f"eligible=1 executed={executed} excluded={len(record['gbmicrotest']['accounting']['excluded_names'])} "
+                      f"verdict={runtime['verdict']} reason={runtime['reason'] or 'none'} "
+                      f"runner={runtime['runner_sha256']} evidence={runtime['evidence_sha256']}")
+                return 0 if runtime["verdict"] == "pass" else 1
             print(f"diagnostic closeout valid kind={args.closeout_kind} status={record['status']} "
                   f"blockers={','.join(record['_blockers']) or 'none'}")
             return 0
