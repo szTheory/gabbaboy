@@ -60,7 +60,11 @@ GBMICROTEST_PROTOCOL_COUNTS = {
 }
 GBMICROTEST_ROSTER_PROJECTION_SHA256 = "29c610580ee8d953ac9a85a80db7d46bba80908e888cb91d65e327ce25a3651b"
 GBMICROTEST_SELECTED_CASE = "div_inc_timing_a"
+GBMICROTEST_SELECTED_SOURCE_BLOB = "8b6d36902ca5ff2fee6f98c308639dfb309272cc"
+GBMICROTEST_SELECTED_SOURCE_SIZE = 268
 GBMICROTEST_SELECTED_SOURCE_SHA256 = "ea6017487ac860fa29e54c43d2d1a73659ed3662b7ba3c7c91cc41faf5ef6deb"
+GBMICROTEST_MACROS_BLOB = "085c7d472fbaa724756968936ea84861962af8f1"
+GBMICROTEST_MACROS_SIZE = 6175
 GBMICROTEST_MACROS_SHA256 = "d3964ffc94d5ef110b3536b7bb9448840ef88d718ebca1ee662670680164c3a3"
 GBMICROTEST_INLINE_CASES = frozenset(("mbc1_ram_banks", "mbc1_rom_banks"))
 GBMICROTEST_INITIAL_EXCLUSIONS = frozenset((
@@ -491,7 +495,8 @@ def _diagnostic_component(source: dict[str, Any], component_id: str) -> dict[str
 
 
 def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: dict[str, Any],
-                                         kind: str) -> dict[str, Any]:
+                                         kind: str,
+                                         inventory: dict[str, Any] | None = None) -> dict[str, Any]:
     """Validate current diagnostic outcomes without treating blockers as approval."""
     if kind not in ("acid2", "gbmicrotest", "all"):
         raise AdmissionRefused("diagnostic-closeout-kind-invalid")
@@ -540,9 +545,120 @@ def validate_diagnostic_closeout_record(record: dict[str, Any], rights_record: d
                 raise AdmissionRefused(f"diagnostic-closeout-font-rights-mutated:{source_id}")
         blockers.append("acid2-footer-reference-image-rights-unresolved")
     if kind in ("gbmicrotest", "all"):
-        if "gbmicrotest" not in record:
+        gbmicrotest = record.get("gbmicrotest")
+        if not isinstance(gbmicrotest, dict) or inventory is None:
             raise AdmissionRefused("diagnostic-closeout-gbmicrotest-stage-missing")
-        blockers.append("gbmicrotest-stage-not-yet-validated")
+        source = _diagnostic_source_by_id(rights_record, "gbmicrotest-463eb6b")
+        if (source.get("commit") != GBMICROTEST_COMMIT
+                or source.get("root_tree_sha1") != GBMICROTEST_TREE):
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-rights-pin-mismatch")
+        source_component = _diagnostic_component(source, "source-code")
+        rom_component = _diagnostic_component(source, "prebuilt-roms")
+        logo_component = _diagnostic_component(source, "embedded-logo")
+        if source_component.get("outcome") != "supported":
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-source-scope-mismatch")
+        if rom_component.get("outcome") != "unresolved" or logo_component.get("outcome") != "unresolved":
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-rights-mismatch")
+        expected_source_review = {
+            "selected_case": GBMICROTEST_SELECTED_CASE,
+            "selection_basis": "One DIV-counter software diagnostic selected from the pinned shared-macro protocol group before any emulator outcome was observed.",
+            "source": {
+                "repository": "https://github.com/aappleby/gbmicrotest",
+                "commit": GBMICROTEST_COMMIT,
+                "path": "tests/div_inc_timing_a.s",
+                "git_blob_sha1": GBMICROTEST_SELECTED_SOURCE_BLOB,
+                "size_bytes": GBMICROTEST_SELECTED_SOURCE_SIZE,
+                "sha256": GBMICROTEST_SELECTED_SOURCE_SHA256,
+                "url": f"https://raw.githubusercontent.com/aappleby/gbmicrotest/{GBMICROTEST_COMMIT}/tests/div_inc_timing_a.s",
+            },
+            "macros": {
+                "repository": "https://github.com/aappleby/gbmicrotest",
+                "commit": GBMICROTEST_COMMIT,
+                "path": "tests/macros.inc",
+                "git_blob_sha1": GBMICROTEST_MACROS_BLOB,
+                "size_bytes": GBMICROTEST_MACROS_SIZE,
+                "sha256": GBMICROTEST_MACROS_SHA256,
+                "url": f"https://raw.githubusercontent.com/aappleby/gbmicrotest/{GBMICROTEST_COMMIT}/tests/macros.inc",
+            },
+            "protocol": {
+                "initial_operations": ["clear DIV", "execute 60 NOPs", "read DIV"],
+                "expected_div": 0,
+                "report_registers": {"actual": "FF80", "expected": "FF81", "status": "FF82"},
+                "status_values": {"pass": "01", "fail": "FF"},
+                "terminal_behavior": "The report macro enters a VRAM display loop; a runner must stop on the terminal marker under explicit bounded guest execution.",
+                "source_oracle": "source-defined DIV expectation and pass/fail result are explicit in the pinned assembly and macros",
+                "runtime_status": "not-run",
+            },
+            "model_applicability": {
+                "status": "unresolved",
+                "candidate_scope": "DMG-CPU-B software diagnostic only",
+                "reason": "The pinned suite statement is uncertain and suite-wide; it does not establish this case's hardware revision or CGB applicability.",
+            },
+        }
+        if gbmicrotest.get("status") != "blocked-before-admission":
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-status-mutated")
+        if gbmicrotest.get("source") != {
+                "repository": "https://github.com/aappleby/gbmicrotest",
+                "commit": GBMICROTEST_COMMIT, "root_tree_sha1": GBMICROTEST_TREE,
+                "tree_entry_count": 1034, "tree_truncated": False}:
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-source-mutated")
+        if gbmicrotest.get("source_review") != expected_source_review:
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-source-review-mutated")
+        if gbmicrotest.get("blocked_by") != ["prebuilt-roms", "embedded-logo", "case-applicability"]:
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-blockers-mutated")
+        if gbmicrotest.get("cohort_status") != "blocked-before-admission":
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-cohort-status-mutated")
+        roster = inventory.get("cases")
+        cohort_cases = gbmicrotest.get("cases")
+        if (not isinstance(roster, list) or len(roster) != GBMICROTEST_CASE_COUNT
+                or not isinstance(cohort_cases, list) or len(cohort_cases) != GBMICROTEST_CASE_COUNT):
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-roster-count-mismatch")
+        expected_rows: list[dict[str, Any]] = []
+        excluded_names: list[str] = []
+        for item in roster:
+            name = item["name"]
+            source_identity = item["source"]
+            rom_identity = item["prebuilt_rom"]
+            if name == GBMICROTEST_SELECTED_CASE:
+                disposition = {
+                    "status": "blocked-candidate",
+                    "blocked_by": ["prebuilt-roms", "embedded-logo", "case-applicability"],
+                    "reason": "Source review found an independent DIV expectation, but no ROM bytes, component output grants, per-case model evidence, or runner terminal bound are admitted.",
+                }
+            else:
+                excluded_names.append(name)
+                reason = ("unsupported-verdict-protocol" if item["protocol"]["kind"] == "no-verdict-protocol"
+                          else "not-selected-for-the-source-review-question")
+                disposition = {"status": "excluded-from-cohort", "reason": reason}
+            expected_rows.append({
+                "name": name,
+                "source": {"path": source_identity["path"],
+                           "git_blob_sha1": source_identity["git_blob_sha1"],
+                           "size_bytes": source_identity["size_bytes"]},
+                "prebuilt_rom": {"path": rom_identity["path"],
+                                 "git_blob_sha1": rom_identity["git_blob_sha1"],
+                                 "size_bytes": rom_identity["size_bytes"],
+                                 "sha256": None},
+                "protocol_kind": item["protocol"]["kind"],
+                "disposition": disposition,
+            })
+        cohort = gbmicrotest.get("accounting")
+        if cohort != {
+                "roster_projection_sha256": GBMICROTEST_ROSTER_PROJECTION_SHA256,
+                "roster_count": GBMICROTEST_CASE_COUNT,
+                "roster_accounting_complete": True,
+                "admitted_eligible_names": [],
+                "executed_names": [],
+                "blocked_candidate_names": [GBMICROTEST_SELECTED_CASE],
+                "excluded_names": excluded_names,
+                "runtime_results": [],
+                "final_execution_accounting_complete": False,
+            }:
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-accounting-mutated")
+        if cohort_cases != expected_rows:
+            raise AdmissionRefused("diagnostic-closeout-gbmicrotest-case-accounting-mutated")
+        blockers.extend(("gbmicrotest-rom-byte-and-logo-rights-unresolved",
+                         "gbmicrotest-case-applicability-unresolved"))
     if record.get("status") != "blocked-before-admission":
         raise AdmissionRefused("diagnostic-closeout-status-mutated")
     record["_blockers"] = blockers
@@ -559,15 +675,20 @@ def check_diagnostic_closeout(root: pathlib.Path, source_revision: str, kind: st
                                  root / ADMISSION_CHECKER_PATH)
     require_worktree_source_file(root, source_revision, DIAGNOSTIC_CLOSEOUT_PATH,
                                  root / DIAGNOSTIC_CLOSEOUT_PATH)
+    if kind in ("gbmicrotest", "all"):
+        require_worktree_source_file(root, source_revision, INVENTORY, root / INVENTORY)
     record_raw = read_source_file(root, source_revision, DIAGNOSTIC_CLOSEOUT_PATH)
     record = _json_without_duplicates(record_raw, "diagnostic-closeout")
-    if (record.get("rights_input", {}).get("commit") != DIAGNOSTIC_RIGHTS_REVISION):
+    rights_input = record.get("rights_input")
+    if (not isinstance(rights_input, dict)
+            or rights_input.get("commit") != DIAGNOSTIC_RIGHTS_REVISION):
         raise AdmissionRefused("diagnostic-closeout-input-identity-invalid")
     rights_raw = read_source_file(root, DIAGNOSTIC_RIGHTS_REVISION, CANDIDATE_CLOSEOUT_PATH)
     if len(rights_raw) != DIAGNOSTIC_RIGHTS_SIZE or sha256(rights_raw) != DIAGNOSTIC_RIGHTS_SHA256:
         raise AdmissionRefused("diagnostic-closeout-rights-input-digest-mismatch")
     rights_record = _json_without_duplicates(rights_raw, "diagnostic-rights-input")
-    validated = validate_diagnostic_closeout_record(record, rights_record, kind)
+    inventory = validate_gbmicrotest_inventory(root) if kind in ("gbmicrotest", "all") else None
+    validated = validate_diagnostic_closeout_record(record, rights_record, kind, inventory)
     if require_approved and validated["_blockers"]:
         raise AdmissionRefused("scope-resolution-required: " + ",".join(validated["_blockers"]))
     return validated
@@ -1145,6 +1266,46 @@ class AdmissionControlTests(unittest.TestCase):
         component["outcome"] = "supported"
         with self.assertRaisesRegex(AdmissionRefused, "diagnostic-closeout-rights-mismatch:dmg-acid2-v1.0"):
             validate_diagnostic_closeout_record(record, rights, "acid2")
+
+    def test_gbmicrotest_accounts_for_all_513_names_without_admitting_or_running(self) -> None:
+        record, rights = self._diagnostic_closeout_inputs()
+        inventory = validate_gbmicrotest_inventory(ROOT)
+        validated = validate_diagnostic_closeout_record(record, rights, "gbmicrotest", inventory)
+        accounting = validated["gbmicrotest"]["accounting"]
+        self.assertEqual(accounting["roster_count"], GBMICROTEST_CASE_COUNT)
+        self.assertTrue(accounting["roster_accounting_complete"])
+        self.assertEqual(accounting["admitted_eligible_names"], [])
+        self.assertEqual(accounting["executed_names"], [])
+        self.assertEqual(accounting["blocked_candidate_names"], [GBMICROTEST_SELECTED_CASE])
+        self.assertEqual(len(accounting["excluded_names"]), GBMICROTEST_CASE_COUNT - 1)
+        self.assertFalse(accounting["final_execution_accounting_complete"])
+
+    def test_gbmicrotest_accounting_refuses_candidate_promotion(self) -> None:
+        record, rights = self._diagnostic_closeout_inputs()
+        inventory = validate_gbmicrotest_inventory(ROOT)
+        accounting = record["gbmicrotest"]["accounting"]
+        accounting["admitted_eligible_names"] = [GBMICROTEST_SELECTED_CASE]
+        accounting["executed_names"] = [GBMICROTEST_SELECTED_CASE]
+        accounting["blocked_candidate_names"] = []
+        with self.assertRaisesRegex(AdmissionRefused, "diagnostic-closeout-gbmicrotest-accounting-mutated"):
+            validate_diagnostic_closeout_record(record, rights, "gbmicrotest", inventory)
+
+    def test_gbmicrotest_roster_refuses_a_substituted_rom_digest(self) -> None:
+        record, rights = self._diagnostic_closeout_inputs()
+        inventory = validate_gbmicrotest_inventory(ROOT)
+        row = next(item for item in record["gbmicrotest"]["cases"]
+                   if item["name"] == GBMICROTEST_SELECTED_CASE)
+        row["prebuilt_rom"]["sha256"] = "a" * 64
+        with self.assertRaisesRegex(AdmissionRefused, "diagnostic-closeout-gbmicrotest-case-accounting-mutated"):
+            validate_diagnostic_closeout_record(record, rights, "gbmicrotest", inventory)
+
+    def test_gbmicrotest_rights_mutant_does_not_approve_generated_roms(self) -> None:
+        record, rights = self._diagnostic_closeout_inputs()
+        inventory = validate_gbmicrotest_inventory(ROOT)
+        source = _diagnostic_source_by_id(rights, "gbmicrotest-463eb6b")
+        _diagnostic_component(source, "prebuilt-roms")["outcome"] = "supported"
+        with self.assertRaisesRegex(AdmissionRefused, "diagnostic-closeout-gbmicrotest-rights-mismatch"):
+            validate_diagnostic_closeout_record(record, rights, "gbmicrotest", inventory)
 
     def test_unresolved_candidate_component_reaches_intended_admission_refusal(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gbb-candidate-rights-admission-") as name:

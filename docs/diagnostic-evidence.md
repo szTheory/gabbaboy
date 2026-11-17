@@ -20,6 +20,14 @@ The pinned acid2 tags still resolve to `dmg-acid2` v1.0 commit `dc2295408f881637
 
 The pinned `gbmicrotest` commit `463eb6bc0fe31d61781ef63060ad6d74090c0255` has 513 exact source/ROM pairs in complete Git tree metadata. The inventory records every source path, ROM path, byte size, Git blob identity, and reviewed protocol class. This assessment did not calculate SHA-256 values from raw ROM payloads; those remain required before Phase 20 can admit any ROM bytes.
 
+## Phase 24 diagnostic continuation status
+
+The current Task 6 record is [diagnostic-closeout.json](../tests/external/diagnostic-closeout.json), bound to the T5 component-rights record. Both Acid2 variants remain blocked before derivative creation because the footer/reference-image scope is unresolved. The upstream font data remains excluded. No replacement glyph, derivative, reference image, ROM payload, fixture manifest, or admission snapshot was created.
+
+The independent source review selected `div_inc_timing_a` before observing any emulator outcome. Its pinned [assembly](https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/tests/div_inc_timing_a.s) clears DIV, waits 60 NOPs, reads DIV, and expects zero. The pinned [shared macros](https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/tests/macros.inc) write actual, expected, and pass/fail bytes to FF80–FF82. The terminal macro then loops while drawing to VRAM, so a future runner needs an explicit terminal observation and bounded guest-work limit. This is a source-level oracle review only; it does not establish per-case hardware revision applicability or a runtime result.
+
+The current record accounts for all 513 pinned names: one reviewed candidate is blocked by unresolved generated-ROM and embedded-logo output rights and by unresolved case applicability; the other 512 are excluded from this candidate cohort because their oracle/model scope was not selected for review or their recorded protocol is unsupported. No case is admitted or executed, and the roster accounting is explicitly not a completed runtime result. DIAG-01 and DIAG-02 remain Pending under their original owners.
+
 ## Phase 22 disposition
 
 | Claim area | Phase 22 disposition |
