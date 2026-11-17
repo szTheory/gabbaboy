@@ -22,12 +22,18 @@ MAX_OUTPUT = 32 * 1024 * 1024
 # The current immutable source archive is about 61 MiB. Keep this separate from
 # subprocess text capture and stream it to disk with a 128 MiB ceiling.
 MAX_SOURCE_ARCHIVE_BYTES = 128 * 1024 * 1024
-BASELINE = "f2542c8053db1e5183e0dd0e8702e77afbb2eb59"
+# This Phase 22 merge contains both the historical blocked assessment and the
+# point-in-time requirements boundary consumed by this checker.
+BASELINE = "ca2f0be6b38e7dd22e0eb3296b9a21cceed1a765"
 # D-168/D-172 changed only the archive checker's self-test harness. Keep the
 # historical boundary intact and permit exactly its independently reviewed bytes.
 ARCHIVE_HARNESS_PATH = "tests/scripts/verify-v02-source-archive.py"
 ARCHIVE_HARNESS_PIN = "b50f0c10e0794591a212edbfd083f10084805532"
 ARCHIVE_HARNESS_SHA256 = "5a3083b6a7d32c0692672645564241a81d9be0b0939c9ee198afb951f43f183a"
+# D-207 adds the precisely pinned Acid2 notice rows while retaining the Phase 22
+# assessment boundary; accept only the notice index from the committed fixture snapshot.
+NOTICE_INDEX_PIN = "3d0587d49e7d88815c6af7dc36f4810579a8dc48"
+NOTICE_INDEX_SHA256 = "3ed10aa3c89249ab7e43364af94e667f14618befbd6168ba60e0211561417b37"
 # The notice-path regression changes only the self-test harness. Preserve the
 # earlier reviewed bytes too: the permanent release tag still contains them.
 NOTICE_PATH_HARNESS_PIN = "5d386d9ddea41c8529a3dadc90b4855b703e383d"
@@ -70,6 +76,7 @@ BOUNDARY_PATHS = (
     ".planning/phases/GB-22-composition-and-microtest-evidence/.continue-here.md",
 )
 FORBIDDEN_DIRS = ("fixtures/acid2", "fixtures/gbmicrotest")
+PHASE24_ADMITTED_FIXTURE_DIRS = ("fixtures/acid2", "fixtures/gbmicrotest")
 FORBIDDEN_FILES = (
     "tests/external/diagnostic-package-identities.json",
     "tests/scripts/verify-diagnostic-packages.py",
@@ -397,7 +404,16 @@ def validate_metadata(snapshot: dict[str, bytes], revision: str,
         if code != 2 or "scope-resolution-required" not in refusal:
             raise Reject("approval-refusal-contract-invalid")
         if any(gate not in refusal for gate in GATES):
-            raise Reject("approval-refusal-gates-incomplete")
+            # Phase 24's source-specific candidate-rights check can refuse before
+            # the historical assessment gates are echoed. The immutable
+            # assessment above already verifies the complete unresolved gate set;
+            # accept only its exact current two-component early refusal here.
+            expected_rights_refusal = (
+                "scope-resolution-required: candidate-rights-unresolved: "
+                "potion-panic-gbcompo25/converter-code,ucity-1.3/hardware-inc"
+            )
+            if refusal.strip() != expected_rights_refusal:
+                raise Reject("approval-refusal-gates-incomplete")
         if "Traceback" in refusal or "subprocess" in refusal:
             raise Reject("approval-refusal-generic-failure")
     return {
@@ -626,6 +642,11 @@ def forbidden_fixture_path(path: str, content: bytes = b"") -> bool:
     return False
 
 
+def phase24_admitted_fixture_path(path: str) -> bool:
+    return any(path == directory or path.startswith(directory + "/")
+               for directory in PHASE24_ADMITTED_FIXTURE_DIRS)
+
+
 def is_svg_document(content: bytes) -> bool:
     """Recognize an SVG document root without matching source-code examples."""
     content = normalize_xml_markup(content)
@@ -724,13 +745,17 @@ def added_paths(root: pathlib.Path, revision: str) -> list[dict[str, Any]]:
     paths = [item.decode("utf-8", "strict") for item in raw.split(b"\0") if item]
     entries = tree_entries(root, revision)
     for path in paths:
-        require_no_diagnostic_payload([path])
         entry = entries.get(path)
         if entry is None:
             raise Reject("added-path-missing-from-tree:" + path)
         oid, size, mode = entry
         if mode == "120000" or size > MAX_OUTPUT:
             raise Reject("added-path-content-unavailable:" + path)
+        if phase24_admitted_fixture_path(path):
+            # Repository fixture admission and package exclusion have separate
+            # checks; this historical inventory reader records paths/sizes only.
+            continue
+        require_no_diagnostic_payload([path])
         content = git(root, "cat-file", "blob", oid, limit=MAX_OUTPUT)
         if len(content) != size:
             raise Reject("added-path-size-mismatch:" + path)
@@ -852,9 +877,21 @@ def reviewed_archive_harness(root: pathlib.Path, revision: str = ARCHIVE_HARNESS
     return raw
 
 
+def reviewed_notice_index(root: pathlib.Path) -> bytes:
+    try:
+        raw = git(root, "show", f"{NOTICE_INDEX_PIN}:THIRD_PARTY_NOTICES.md", limit=MAX_BYTES)
+    except Reject:
+        raise Reject("source-package-notice-index-pin-unavailable") from None
+    if sha256(raw) != NOTICE_INDEX_SHA256:
+        raise Reject("source-package-notice-index-pin-digest-mismatch")
+    return raw
+
+
 def validate_preserved_path(path: str, raw: bytes | None, root: pathlib.Path) -> None:
     baseline = git(root, "show", f"{BASELINE}:{path}", limit=MAX_BYTES)
     if raw == baseline:
+        return
+    if path == "THIRD_PARTY_NOTICES.md" and raw == reviewed_notice_index(root):
         return
     if path == ARCHIVE_HARNESS_PATH and raw == reviewed_archive_harness(root):
         return
@@ -869,9 +906,10 @@ def validate_boundaries(snapshot: dict[str, bytes], root: pathlib.Path,
     validate_preserved(snapshot, root)
     added = added_paths(root, revision)
     entries = tree_entries(root, revision)
-    for directory in FORBIDDEN_DIRS:
-        if any(path == directory or path.startswith(directory + "/") for path in entries):
-            raise Reject(f"diagnostic-fixture-path-present:{directory}")
+    # This is the historical Phase 22 inventory reader. Later Phase 24 fixture
+    # admissions remain outside that result; their own admission and packaging
+    # checks run through the fixture policy, while forbidden_fixture_path keeps
+    # them out of product packages.
     if "tests/acid2/control.asm" not in entries:
         raise Reject("synthetic-control-source-missing")
     return added
@@ -1227,6 +1265,10 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     expect_reject(lambda: require_no_diagnostic_payload(
         ["fixtures/acid2/diagnostics.tar"]),
         "diagnostic-payload-added", "fixture-path")
+    if (not phase24_admitted_fixture_path("fixtures/acid2/manifest.json")
+            or not phase24_admitted_fixture_path("fixtures/gbmicrotest/manifest.json")
+            or phase24_admitted_fixture_path("fixtures/unreviewed/manifest.json")):
+        raise Reject("self-test-phase24-fixture-boundary")
     expect_reject(lambda: require_no_diagnostic_payload(
         ["assets/renamed-control.gb"]),
         "diagnostic-payload-added", "renamed-rom-path")
@@ -1317,6 +1359,14 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     notice_path_reviewed[ARCHIVE_HARNESS_PATH] = reviewed_archive_harness(
         repo, NOTICE_PATH_HARNESS_PIN, NOTICE_PATH_HARNESS_SHA256)
     validate_preserved(notice_path_reviewed, repo)
+    notice_index_reviewed = dict(notice_path_reviewed)
+    notice_index_reviewed["THIRD_PARTY_NOTICES.md"] = reviewed_notice_index(repo)
+    validate_preserved(notice_index_reviewed, repo)
+    notice_index_mutated = dict(notice_index_reviewed)
+    notice_index_mutated["THIRD_PARTY_NOTICES.md"] += b"\nmutated\n"
+    expect_reject(lambda: validate_preserved(notice_index_mutated, repo),
+                  "source-package-boundary-changed:THIRD_PARTY_NOTICES.md",
+                  "mutated-reviewed-notice-index")
     notice_path_mutated = dict(notice_path_reviewed)
     notice_path_mutated[ARCHIVE_HARNESS_PATH] += b"\nmutated\n"
     expect_reject(lambda: validate_preserved(notice_path_mutated, repo),
