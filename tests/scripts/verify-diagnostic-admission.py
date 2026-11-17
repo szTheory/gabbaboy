@@ -70,6 +70,10 @@ GBMICROTEST_MACROS_SHA256 = "d3964ffc94d5ef110b3536b7bb9448840ef88d718ebca1ee662
 GBMICROTEST_SELECTED_ROM_BLOB = "8ff913924540b1bbc4363744f020b38e96c94a3a"
 GBMICROTEST_SELECTED_ROM_SHA256 = "1530b5a34af78e182c8b1f5f9043f8e5ae3e9f2fac13d43f3c5714eece282706"
 GBMICROTEST_SELECTED_DERIVATIVE_SHA256 = "53b0624af64524fe7cdf9b0aed3456ca60c7b30fe25cd5202b6b77855f57ffa8"
+GBMICROTEST_REVIEW_DIR = pathlib.Path("build/phase24/source-review/gbmicrotest")
+GBMICROTEST_FIXTURE_DIR = pathlib.Path("fixtures/gbmicrotest")
+GBMICROTEST_LOGO_START, GBMICROTEST_LOGO_END = 0x0104, 0x0133
+GBMICROTEST_CHECKSUM_START, GBMICROTEST_CHECKSUM_END = 0x014E, 0x014F
 GBMICROTEST_LICENSE_BLOB = "ca05fdbac9ec607636037171ee3856ea2a3378dd"
 GBMICROTEST_LICENSE_SHA256 = "0b3557142dfcce65428fafb9c8254d9d59c027a008af4810867efd7342b77c25"
 GBMICROTEST_README_BLOB = "e184a72ed5f6f1b76f5124762c6ed3f79f139e4e"
@@ -115,6 +119,201 @@ REQUIRED_COMPONENT_IDS = (
 
 class AdmissionRefused(ValueError):
     pass
+
+
+def _git_blob_sha1(data: bytes) -> str:
+    return hashlib.sha1(b"blob " + str(len(data)).encode("ascii") + b"\0" + data).hexdigest()
+
+
+def _header_checksum(rom: bytes) -> int:
+    result = 0
+    for offset in range(0x134, 0x14D):
+        result = (result - rom[offset] - 1) & 0xFF
+    return result
+
+
+def build_bootless_derivative(original: bytes) -> bytes:
+    """Reproduce the selected, source-reviewed logo removal and checksum update."""
+    if (len(original) != 32768 or sha256(original) != GBMICROTEST_SELECTED_ROM_SHA256
+            or _git_blob_sha1(original) != GBMICROTEST_SELECTED_ROM_BLOB):
+        raise AdmissionRefused("gbmicrotest-original-identity-mismatch")
+    if _header_checksum(original) != original[0x14D]:
+        raise AdmissionRefused("gbmicrotest-original-header-checksum-invalid")
+    original_checksum = (original[0x14E] << 8) | original[0x14F]
+    if (sum(original[:0x14E] + original[0x150:]) & 0xFFFF) != original_checksum or original_checksum != 0x2C3E:
+        raise AdmissionRefused("gbmicrotest-original-global-checksum-invalid")
+    result = bytearray(original)
+    result[GBMICROTEST_LOGO_START:GBMICROTEST_LOGO_END + 1] = bytes(GBMICROTEST_LOGO_END - GBMICROTEST_LOGO_START + 1)
+    result[GBMICROTEST_CHECKSUM_START:GBMICROTEST_CHECKSUM_END + 1] = b"\0\0"
+    checksum = sum(result[:0x14E] + result[0x150:]) & 0xFFFF
+    result[0x14E], result[0x14F] = checksum >> 8, checksum & 0xFF
+    output = bytes(result)
+    allowed = set(range(GBMICROTEST_LOGO_START, GBMICROTEST_LOGO_END + 1)) | {0x14E, 0x14F}
+    changed = {i for i, (before, after) in enumerate(zip(original, output, strict=True)) if before != after}
+    if not changed or not changed <= allowed:
+        raise AdmissionRefused("gbmicrotest-derivative-change-allowlist-failed")
+    if (any(output[i] for i in range(GBMICROTEST_LOGO_START, GBMICROTEST_LOGO_END + 1))
+            or output[0x14D] != original[0x14D] or _header_checksum(output) != output[0x14D]):
+        raise AdmissionRefused("gbmicrotest-derivative-header-checksum-invalid")
+    derived_checksum = (output[0x14E] << 8) | output[0x14F]
+    if ((sum(output[:0x14E] + output[0x150:]) & 0xFFFF) != derived_checksum
+            or derived_checksum != 0x16F8 or sha256(output) != GBMICROTEST_SELECTED_DERIVATIVE_SHA256):
+        raise AdmissionRefused("gbmicrotest-derivative-identity-invalid")
+    return output
+
+
+def _deterministic_tar(members: dict[str, bytes]) -> bytes:
+    target = io.BytesIO()
+    with tarfile.open(fileobj=target, mode="w", format=tarfile.USTAR_FORMAT) as archive:
+        for name, data in sorted(members.items()):
+            info = tarfile.TarInfo(name)
+            info.size, info.mode, info.uid, info.gid, info.mtime = len(data), 0o644, 0, 0, 0
+            info.uname = info.gname = ""
+            archive.addfile(info, io.BytesIO(data))
+    return target.getvalue()
+
+
+def prepare_gbmicrotest_fixture(root: pathlib.Path) -> None:
+    root = root.resolve(strict=True)
+    review, fixture = root / GBMICROTEST_REVIEW_DIR, root / GBMICROTEST_FIXTURE_DIR
+    ignored = subprocess.run(["git", "check-ignore", "-q", str(GBMICROTEST_REVIEW_DIR / "local-review.json")],
+                             cwd=root, check=False, timeout=5)
+    tracked = subprocess.run(["git", "ls-files", "--error-unmatch", str(GBMICROTEST_REVIEW_DIR / "bin/div_inc_timing_a.gb")],
+                             cwd=root, capture_output=True, check=False, timeout=5)
+    if ignored.returncode != 0 or tracked.returncode == 0 or review.is_symlink() or not review.is_dir():
+        raise AdmissionRefused("gbmicrotest-review-area-not-ignored-or-bounded")
+    if sum(p.stat().st_size for p in review.rglob("*") if p.is_file() and not p.is_symlink()) > 1024 * 1024:
+        raise AdmissionRefused("gbmicrotest-review-area-size-limit")
+    fixture.mkdir(parents=True, exist_ok=True)
+    names = ("cohort.tar", "LICENSE.txt", "SOURCES.md", "identity.json", "manifest.json", "admission.commit")
+    if any((fixture / name).exists() or (fixture / name).is_symlink() for name in names):
+        raise AdmissionRefused("gbmicrotest-fixture-output-already-exists")
+
+    specs = {
+        "tests/div_inc_timing_a.s": (GBMICROTEST_SELECTED_SOURCE_BLOB, GBMICROTEST_SELECTED_SOURCE_SHA256, 268),
+        "tests/macros.inc": (GBMICROTEST_MACROS_BLOB, GBMICROTEST_MACROS_SHA256, 6175),
+        "tests/header.inc": (GBMICROTEST_HEADER_BLOB, GBMICROTEST_HEADER_SHA256, 956),
+        "README.md": (GBMICROTEST_README_BLOB, GBMICROTEST_README_SHA256, 1616),
+        "LICENSE": (GBMICROTEST_LICENSE_BLOB, GBMICROTEST_LICENSE_SHA256, 1065),
+    }
+    content: dict[str, bytes] = {}
+    for path, (expected_blob, expected_hash, expected_size) in specs.items():
+        item = review / path
+        if item.is_symlink() or not item.is_file():
+            raise AdmissionRefused(f"gbmicrotest-review-member-unavailable:{path}")
+        data = item.read_bytes()
+        if (len(data) != expected_size or sha256(data) != expected_hash
+                or _git_blob_sha1(data) != expected_blob):
+            raise AdmissionRefused(f"gbmicrotest-review-member-identity-mismatch:{path}")
+        content[path] = data
+    original_path = review / "bin/div_inc_timing_a.gb"
+    derivative_path = review / "derived/div_inc_timing_a.bootless.gb"
+    if original_path.is_symlink() or derivative_path.is_symlink():
+        raise AdmissionRefused("gbmicrotest-review-rom-symlink-refused")
+    original = original_path.read_bytes()
+    derivative = build_bootless_derivative(original)
+    if not derivative_path.is_file() or derivative_path.read_bytes() != derivative:
+        raise AdmissionRefused("gbmicrotest-local-derivative-differs-from-transform")
+
+    identity = {
+        "schema": "gabbaboy-gbmicrotest-one-case-identity-v1",
+        "source": {"repository": "https://github.com/aappleby/gbmicrotest", "commit": GBMICROTEST_COMMIT,
+                   "tree": GBMICROTEST_TREE},
+        "case": {"name": GBMICROTEST_SELECTED_CASE, "source_blob_sha1": GBMICROTEST_SELECTED_SOURCE_BLOB,
+                 "source_sha256": GBMICROTEST_SELECTED_SOURCE_SHA256,
+                 "original_rom_blob_sha1": GBMICROTEST_SELECTED_ROM_BLOB,
+                 "original_rom_sha256": GBMICROTEST_SELECTED_ROM_SHA256, "original_rom_size_bytes": len(original)},
+        "output": {"kind": "bootless header derivative", "sha256": sha256(derivative),
+                   "size_bytes": len(derivative), "original_rom_in_bundle": False,
+                   "nintendo_logo_bytes_in_bundle": False},
+        "transform": {"zero_bytes_inclusive": ["0x0104", "0x0133"],
+                      "recompute_global_checksum_inclusive": ["0x014E", "0x014F"],
+                      "allowed_changed_ranges": ["0x0104-0x0133", "0x014E-0x014F"],
+                      "changed_offset_count": 44, "header_checksum_0x014D_preserved": True,
+                      "header_checksum_valid": True, "global_checksum": "0x16F8",
+                      "global_checksum_valid": True},
+        "model_scope": "DMG-CPU-B software diagnostic only; no hardware, DMG-CPU-08, or CGB claim",
+        "output_rights_interpretation": {
+            "status": "bounded-inference-for-this-modified-copy-only",
+            "basis": ["pinned root MIT grant applies to Software without a source-only restriction",
+                      "OSI OSD permits compiled-form distribution and derived works",
+                      "complete pinned MIT notice is included"],
+            "limit": "The upstream README does not explicitly state a binary-output license. This interpretation covers only this source-bound bootless derivative; it excludes the original ROM, removed logo, other 512 ROMs, and other sources, and is not legal certainty.",
+            "references": ["https://opensource.org/license/mit", "https://opensource.org/osd"]},
+    }
+    identity_bytes = (json.dumps(identity, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    archive_bytes = _deterministic_tar({
+        "LICENSE": content["LICENSE"], "README.md": content["README.md"], "identity.json": identity_bytes,
+        "tests/div_inc_timing_a.s": content["tests/div_inc_timing_a.s"],
+        "tests/header.inc": content["tests/header.inc"], "tests/macros.inc": content["tests/macros.inc"],
+        "bin/div_inc_timing_a.bootless.gb": derivative,
+    })
+    source_doc = (
+        "# gbmicrotest div_inc_timing_a source and output\n\n"
+        f"Pinned source: https://github.com/aappleby/gbmicrotest/tree/{GBMICROTEST_COMMIT} "
+        f"(tree {GBMICROTEST_TREE}).\n\n"
+        f"The only runtime payload is the bootless derivative SHA-256 {sha256(derivative)}.\n\n"
+        "The case declares pass - dmg, resets DIV, executes 60 NOPs, and requires DIV=0. "
+        "This supports DMG-CPU-B software diagnostic scope only.\n\n"
+        "The complete pinned root MIT notice is included. The pinned README lists prebuilt ROMs in bin/ "
+        "but does not explicitly state binary-output terms. Applying the MIT Software grant and OSI "
+        "compiled-form/derived-work language to this single modified copy is a bounded interpretation, "
+        "not an upstream explicit ROM-output statement or legal certainty. It excludes the original ROM, "
+        "removed Nintendo logo bytes, the other 512 ROMs, and other sources.\n\n"
+        "The original ROM and all Nintendo logo bytes are excluded. No WLA-DX build or hardware claim is made.\n"
+    ).encode("utf-8")
+    files_data = {"cohort.tar": archive_bytes, "LICENSE.txt": content["LICENSE"],
+                  "SOURCES.md": source_doc, "identity.json": identity_bytes}
+    fixture_files = {str(GBMICROTEST_FIXTURE_DIR / name): data for name, data in files_data.items()}
+    for name, data in files_data.items():
+        (fixture / name).write_bytes(data)
+    file_records = [{"path": path, "size_bytes": len(data), "sha256": sha256(data)}
+                    for path, data in sorted(fixture_files.items())]
+    file_index = {item["path"]: item for item in file_records}
+    license_path = str(GBMICROTEST_FIXTURE_DIR / "LICENSE.txt")
+    code_paths = [str(GBMICROTEST_FIXTURE_DIR / name) for name in ("cohort.tar", "SOURCES.md", "identity.json")]
+    tool_revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True,
+                                   check=True, timeout=5).stdout.decode("ascii").strip()
+    manifest = {
+        "schema_version": 1, "fixture_kind": "gbmicrotest-bootless-diagnostic",
+        "decision": {"status": "approved", "reviewer_role": "project-maintainer",
+                     "rationale": "One source-selected DMG-CPU-B software diagnostic with a logo-free output and a narrowly bounded MIT compiled-copy interpretation.",
+                     "component_rationale": {"code": "Only the pinned case source and one bootless derivative are included.",
+                                             "notices": "The complete pinned upstream MIT notice accompanies the derivative."}},
+        "permissions": {"repository": True, "public_ci": True},
+        "source": {"repository": "https://github.com/aappleby/gbmicrotest", "revision": GBMICROTEST_COMMIT},
+        "inputs": [file_index[str(GBMICROTEST_FIXTURE_DIR / "cohort.tar")]], "files": file_records,
+        "build": {"recipe": "No upstream WLA-DX build is claimed. The supplied ROM was transformed only by zeroing 0x0104-0x0133 and recomputing 0x014E-0x014F; exact output identity and changed-offset proof are in identity.json.",
+                  "tools": [{"name": "verify-diagnostic-admission.py bootless-header-transform", "version": "1",
+                             "terms": "GabbaBoy MIT", "source_repository": "https://github.com/szTheory/gabbaboy",
+                             "revision": tool_revision, "disposition": "build_only", "component": None,
+                             "covered_paths": []}]},
+        "components": {
+            "code": {"presence": "present", "terms": "MIT; bounded interpretation for this one modified copy only",
+                     "evidence": {"path": license_path, "sha256": file_index[license_path]["sha256"]},
+                     "covered_paths": code_paths, "scope": {"repository": True, "public_ci": True}},
+            "art": {"presence": "absent", "reason": "Nintendo logo bytes are removed; no reference art is included."},
+            "audio_driver": {"presence": "absent", "reason": "The selected DIV diagnostic has no audio driver."},
+            "build_inputs": {"presence": "absent", "reason": "No unpinned WLA-DX build closure or reproducible build is claimed."},
+            "notices": {"presence": "present", "terms": "MIT",
+                         "evidence": {"path": license_path, "sha256": file_index[license_path]["sha256"]},
+                         "covered_paths": [license_path], "scope": {"repository": True, "public_ci": True}},
+        },
+        "notices": {"local_path": license_path, "sha256": file_index[license_path]["sha256"],
+                    "index_path": "THIRD_PARTY_NOTICES.md"},
+    }
+    manifest_bytes = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    (fixture / "manifest.json").write_bytes(manifest_bytes)
+    notice_index = root / "THIRD_PARTY_NOTICES.md"
+    current = notice_index.read_text(encoding="utf-8")
+    if "| `gbmicrotest` |" in current:
+        raise AdmissionRefused("gbmicrotest-notice-row-already-exists")
+    marker = "| Fixture directory | `manifest.json` SHA-256 | `LICENSE.txt` SHA-256 |\n|---|---|---|\n"
+    if marker not in current:
+        raise AdmissionRefused("gbmicrotest-notice-table-shape-invalid")
+    row = f"| `gbmicrotest` | `{sha256(manifest_bytes)}` | `{sha256(content['LICENSE'])}` |\n"
+    notice_index.write_text(current.replace(marker, marker + row, 1), encoding="utf-8")
+    print(f"prepared gbmicrotest one-case bundle derivative_sha256={sha256(derivative)} tar_sha256={sha256(archive_bytes)}")
 
 
 def validate_identity_bundle(expected: dict[str, str], candidate: dict[str, str]) -> None:
@@ -1367,6 +1566,10 @@ class AdmissionControlTests(unittest.TestCase):
                     0x3E, terminal, 0xE0, 0x82,  # FF82 terminal
                     0x18, 0xFE,  # bounded post-terminal loop
                 ))
+                checksum = 0
+                for offset in range(0x134, 0x14D):
+                    checksum = (checksum - rom[offset] - 1) & 0xFF
+                rom[0x14D] = checksum
                 rom_path = root / "synthetic.gb"
                 rom_path.write_bytes(rom)
                 case = (
@@ -1718,6 +1921,7 @@ def main(argv: list[str] | None = None) -> int:
     modes.add_argument("--self-test-controls", action="store_true")
     modes.add_argument("--check-assessment", action="store_true")
     modes.add_argument("--check-closeout", action="store_true")
+    modes.add_argument("--prepare-gbmicrotest-fixture", action="store_true")
     parser.add_argument("--require-approved", action="store_true")
     parser.add_argument("--closeout-kind", choices=("acid2", "gbmicrotest", "all"))
     parser.add_argument("--runner", type=pathlib.Path)
@@ -1726,7 +1930,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-revision", default="HEAD")
     args = parser.parse_args(argv)
     if not any((args.self_test_tracer, args.self_test, args.self_test_controls,
-                args.check_assessment, args.check_closeout, args.require_approved)):
+                args.check_assessment, args.check_closeout, args.prepare_gbmicrotest_fixture,
+                args.require_approved)):
         parser.error("one checker mode is required")
     if args.check_closeout and args.closeout_kind is None:
         parser.error("--check-closeout requires --closeout-kind")
@@ -1739,6 +1944,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.runner is None:
             parser.error("--self-test-tracer requires --runner")
         return run_tracer(args.runner.resolve())
+    if args.prepare_gbmicrotest_fixture:
+        try:
+            prepare_gbmicrotest_fixture(args.repo_root)
+            return 0
+        except (AdmissionRefused, OSError, subprocess.SubprocessError) as error:
+            print(f"REJECT {error}", file=sys.stderr)
+            return 2
     if args.self_test or args.self_test_controls:
         if args.runner is not None:
             AdmissionControlTests.runner_path = args.runner.resolve()
