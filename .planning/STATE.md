@@ -5,15 +5,15 @@ milestone_name: Evidence Floor
 current_phase: GB-24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
 current_plan: 01
-status: blocked
-stopped_at: Phase 24 context gathered
+status: in_progress
+stopped_at: Owner-authorized Phase 24 Task 4 recovery
 last_updated: "2026-11-17T00:08:06.221Z"
 state_head: 56b7b62025929d9ddddb5bcca03de5b2f6505e49
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 33
-  completed_plans: 33
+  completed_plans: 32
   percent: 83
 last_activity: 2026-11-16
 ---
@@ -25,10 +25,10 @@ last_activity: 2026-11-16
 **Current Phase:** GB-24
 **Current Phase Name:** Resolve remaining v0.4 evidence and verification gaps
 **Current Plan:** 1 of 1
-**Status:** Plan execution complete — phase verification blocked by a Critical code-review finding
+**Status:** Owner-authorized Task 4 is in progress; phase verification remains blocked pending correction, review, and focused checks
 **Progress:** [████████░░] 83%
 
-Completed stages: Phase 23.1 verification passed 18/18 after the owner confirmed the recorded Task 11 → clean review → verification-only order. Phase 24 plan 24-01 execution is complete; the corrected candidate's 628-control self-test, six-phase/40-plan cap, immutable report/handoff stages, and only the two authorized focused CTests passed. The fresh independent review at `0320a081bb5076682b2b99a55eb0d1375db87cdd` found Critical CR-01: a BOM-prefixed YAML plan can bypass the gap-closure plan guard. Phase 24 is blocked before verification; the bounded fix/review pass is exhausted, and no verifier or further correction/review has run. Owner acts next to decide whether to authorize a new bounded recovery. The v0.4 audit remains open with `gaps_found`; all four requirements remain Pending, Phase 20/21 stay stale, and D-103 remains unfulfilled. Preserve the 40-plan ceiling and every suite, lifecycle, release, fixture, rights, and milestone stop.
+Completed stages: Phase 23.1 verification passed 18/18 after the owner confirmed the recorded Task 11 → clean review → verification-only order. Phase 24 Tasks 1–3 and their recorded checks remain historical. The fresh independent review at `0320a081bb5076682b2b99a55eb0d1375db87cdd` found Critical CR-01: a BOM-prefixed YAML plan can bypass the gap-closure plan guard. The owner has authorized exactly one same-plan Task 4 correction and one fresh independent review; Task 4 is executing. No new candidate, review, focused hook, or verifier has run. After correction, any Critical/correctness/security finding or new blocker stops before the hook and verifier. The v0.4 audit remains open with `gaps_found`; all four requirements remain Pending, Phase 20/21 stay stale, and D-103 remains unfulfilled. Preserve the 40-plan ceiling and every suite, lifecycle, release, fixture, rights, and milestone stop.
 
 Historical D-200 snapshot: Task 8 corrected YAML syntax-whitespace handling and passed its bounded checks at candidate `9991327df736f668bd8c98f4fd9441a4c563905b`. At that time, the D-200 review and phase verification were pending; later D-201–D-203 recoveries are recorded below and in the Phase 23.1 artifacts.
 
@@ -61,7 +61,7 @@ Historical D-199 checkpoint (superseded): The tested source candidate was `7fda5
 
 Superseded Phase 24 handoff (before the fresh review): Plan execution and automated closure were complete, and the configured independent reviews and phase verifier had not run. This earlier route was superseded when the exact-candidate review found CR-01.
 
-Current handoff: Phase 24 plan execution and automated assessment closure are complete, but Phase verification is blocked before `$gsd-verify-work 24`. The fresh independent review of candidate `0320a081bb5076682b2b99a55eb0d1375db87cdd` found Critical CR-01: a UTF-8 BOM before the YAML frontmatter fence lets a `gap_closure: true` Phase 24 plan bypass the plan-cap guard. The prior bounded fix/review pass is exhausted; no further fix, review, or phase verifier is authorized. The owner acts next by running `$gsd-discuss-phase 24` to decide whether to authorize a new bounded recovery for this finding. If separately authorized and corrected, the candidate needs a production-CLI negative control and canonical positive twin, a clean independent review, and the already-scoped regression hook before the orchestrator can run `$gsd-verify-work 24`. The immutable assessment input is `f511baa8c0330f5cd90d56da55d79dbc873b0559`; the protected baseline is `f6fe166a7c2a3668f5a412a82b648dd062329d3c`; the corrected checker/report candidate is `a1e8067500016158347e92522934b9af45d78386`; the final pre-review handoff commit is `0320a081bb5076682b2b99a55eb0d1375db87cdd`. FIXT-01 — Pending, original owner Phase 21. RIGHTS-01 — Pending, original owner Phase 20. DIAG-01 — Pending, original owner Phase 22. DIAG-02 — Pending, original owner Phase 22. The v0.4 audit remains open with `gaps_found`; Phase 20 and Phase 21 are stale; D-103 is unfulfilled. No broad local suite, no third local lifecycle retest, no release retry, no tag/asset/rights action, and no fixture admission. Evidence: [24-EVIDENCE.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-EVIDENCE.md), [24-01-SUMMARY.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-SUMMARY.md), [24-VALIDATION.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md), and [24-UAT.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-UAT.md).
+Current handoff: The owner authorized exactly one same-plan Task 4 and one fresh independent review for Critical CR-01, which affects BOM-prefixed YAML plan fences. Task 4 is executing; after correction, require cheap syntax/direct production-CLI controls, then one review of the exact full commit. Only a clean review permits configure-only binding and the two focused CTests (`plan_cap`, `planning_hygiene_controls`) with their existing 30-second timeout and 125-control floor. Run `$gsd-verify-work 24` only after those gates pass. Any Critical/correctness/security finding or new blocker stops before the focused hook and verifier; no extra fix/review cycle is authorized. The immutable assessment input is `f511baa8c0330f5cd90d56da55d79dbc873b0559`; the protected baseline is `f6fe166a7c2a3668f5a412a82b648dd062329d3c`; the corrected checker/report candidate is `a1e8067500016158347e92522934b9af45d78386`; the reviewed handoff commit is `0320a081bb5076682b2b99a55eb0d1375db87cdd`. FIXT-01 — Pending, original owner Phase 21. RIGHTS-01 — Pending, original owner Phase 20. DIAG-01 — Pending, original owner Phase 22. DIAG-02 — Pending, original owner Phase 22. The v0.4 audit remains open with `gaps_found`; Phase 20 and Phase 21 are stale; D-103 is unfulfilled. No broad local suite, no third local lifecycle retest, no release retry, no tag/asset/rights action, and no fixture admission. Evidence: [24-EVIDENCE.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-EVIDENCE.md), [24-01-SUMMARY.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-SUMMARY.md), [24-VALIDATION.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md), and [24-UAT.md](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-UAT.md).
 
 ## Accumulated Context
 
@@ -105,6 +105,7 @@ Current handoff: Phase 24 plan execution and automated assessment closure are co
 - [Phase 24]: Phase 24 assessment keeps each original v0.4 criterion, owner, tracker status, audit status, historical outcome, freshness, boundary, and remaining gate distinct.
 - [Phase 24]: D-205 remains the exact one-plan Phase 24 exception within the 40-plan ceiling; the assessment completes no original requirement and does not satisfy D-103.
 - [Phase 24]: The configured phase1 tests are restricted to plan_cap and planning_hygiene_controls at the committed candidate; preserve the 30-second timeout and 125-control floor.
+- [Phase 24]: D-07–D-10 authorize exactly one same-plan Task 4 and one independent exact-candidate review for the BOM plan-cap bypass; all other stops remain. Resume `$gsd-execute-phase 24`; verify only after a clean review and focused hook.
 
 ## Session
 
