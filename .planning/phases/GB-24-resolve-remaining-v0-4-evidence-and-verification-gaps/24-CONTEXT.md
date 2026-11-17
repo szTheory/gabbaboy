@@ -1,7 +1,7 @@
 # Phase 24: Resolve remaining v0.4 evidence and verification gaps - Context
 
 **Gathered:** 2026-11-16
-**Status:** Ready for planning
+**Status:** D-206 closeout decisions recorded; the amended existing plan is awaiting independent review
 
 <domain>
 ## Phase Boundary
@@ -140,3 +140,19 @@ This recovery adds no plan, dependency, or CTest identity and does not reset any
 
 *Phase: 24-Resolve remaining v0.4 evidence and verification gaps*
 *Context gathered: 2026-11-16*
+
+## D-206 Closeout Addendum (owner-authorized)
+
+**Scope:** Complete the original v0.4 requirement criteria and final milestone gate in the existing Phase 24. Reuse the single `24-01-PLAN.md`; do not create a phase or plan file. Keep original requirement ownership and the actual 40-plan ceiling. Preserve all Phase 24 assessment and verification results as point-in-time history.
+
+**Named candidate set:** Potion Panic (GB Compo 2025), then µCity 1.3 as the only fallback; dmg-acid2 v1.0, cgb-acid2 v1.1, and gbmicrotest at `463eb6bc0fe31d61781ef63060ad6d74090c0255`. No other game or diagnostic source is in scope.
+
+**Rights and source integrity:** Inspect the exact pinned source tree, each code/art/audio/build-input component and submodule, notices, release payload identity, and repository/public-CI terms. Do not admit or stage a component payload until its distribution permission and notice requirements are verified. Keep license metadata, a legal conclusion, and an access failure distinct. A no-go is not a license prohibition. For game candidates, preserve source/build/ROM/header/mode identity even when an earlier candidate cannot be admitted. Use µCity only after a documented Potion Panic outcome. For diagnostic derivatives, preserve upstream references, replace glyph tiles with project-authored content, mask only source-anchored text, and claim controlled composition rather than timing. For gbmicrotest, bind each chosen source and exact ROM bytes, document model applicability, and account for every roster member as eligible/executed/excluded with disjoint denominators.
+
+**Technical and test strategy:** Reuse existing Phase 20 admission, Phase 21 candidate, Phase 22 diagnostic, RGBDS reproduction, CGB runner, mask, and immutable-evidence seams. Keep dependencies unchanged and use standard-library/CMake/CTest code already in the tree. Pin any build tools used; do not call an unpinned toolchain reproducible. Add causal negative controls to existing test identities and use cheap syntax, direct checker, fixture-boundary and inventory checks before focused CTests. Do not run a broad local suite.
+
+**Operations and release boundary:** Run exactly one full required CI matrix at the final closeout candidate through the reviewed PR path to satisfy D-103. Keep the published v0.4.0 release, tags, and assets unchanged. Merge only after an independent review and all required checks pass, then finish on `main` at the merged head with a clean worktree. Keep both automatic-advance flags false.
+
+**Acceptance:** The original eight requirements and their owners remain authoritative. Do not promote status based on phase-plan metadata or earlier reports. Evaluate only the evidence each criterion requires; if a required source identity, component right, byte identity, model applicability, runtime accounting, or package boundary is unresolved, preserve that affected requirement as Pending and do not close/archive v0.4.
+
+**Synthesis across lenses:** Product: preserve the bounded original criteria and candidate order. Security/rights: require exact source and per-component notices before distribution. Architecture: prefer existing seams and no new dependencies. QA: test intended refusals with negative controls and distinguish historical, focused, and final-head evidence. Operations: one final PR CI run, then reviewed merge and clean `main` handoff. Adversarial check: do not mistake repository labels, build success, a screenshot, or a passing historical report for permission or requirement completion.

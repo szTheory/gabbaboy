@@ -18,6 +18,10 @@
 | Decode all plan inputs with UTF-8-SIG | Centralize BOM removal at decoding, but changes multiple reader paths instead of the narrow classifier. | |
 
 **User's choice:** The owner said to follow the bounded recovery recommendation after the fresh Critical review. This locks one same-plan correction and one clean independent review.
+
+## D-206 bounded v0.4 closeout
+
+The owner authorized a bounded closeout after asking how to finish the milestone and return to `main` through a PR. The decision reuses Phase 24's sole existing plan, preserves all eight original acceptance criteria and owners, uses only the named Potion Panic/µCity/Acid2/gbmicrotest sources, requires component-specific rights and notices before repository/public-CI staging, and spends one full exact-candidate PR CI matrix only after the candidate is frozen. Unresolved criteria remain Pending; no gap acceptance, extra plan/phase, broad local suite, additional full-CI retry, third lifecycle retest, release/tag/asset change, or unauthorized worktree removal is allowed. The exact route is `$gsd-execute-phase 24` after independent plan approval, then `$gsd-autonomous --from 24` for the remaining authorized milestone lifecycle.
 **Notes:** The BOM policy stays local to the existing Python standard-library plan classifier. The independent advisor found that a repeated leading BOM must fail closed or it could remain unrecognized. Python's official [UTF-8-SIG codec documentation](https://docs.python.org/3.13/library/codecs.html#encodings.utf_8_sig) describes BOM handling at the start of the byte stream.
 
 | Option | Description | Selected |
@@ -77,3 +81,19 @@
 
 - Candidate-specific rights determination and any fixture/source payload acquisition, build, run, or admission require separate explicit authorization.
 - The D-103 exact-final-head broad suite and v0.4 milestone archival remain separate owner-controlled gates.
+
+---
+
+## D-206 bounded closeout authorization (2026-11-16)
+
+| Lens | Evidence / risk | Adopted direction |
+|---|---|---|
+| Product | The v0.4 acceptance criteria already name a bounded game pair and diagnostic sources. | Keep the original eight criteria and requirement owners; no candidate expansion or gap acceptance. |
+| Rights/security | Page labels do not establish every embedded component grant; unreviewed binaries or submodules can cross the public-repository/CI boundary. | Check pinned component terms/notices first; admit only exact, rights-supported payloads. Record no-go without inferring a license ban. |
+| Architecture | Existing fixture admission, CGB candidate, RGBDS, acid2 mask, diagnostic, and immutable evidence tooling already cover most seams. | Extend existing standard-library/CMake/CTest paths; add no dependencies and reuse the existing Phase 24 plan. |
+| QA | Phase 20/21 reports are historical and current GSD freshness is stale; focused checks and the final suite prove different things. | Add causal negatives, keep evidence labels distinct, run cheap checks first, and use one exact final-head CI matrix for D-103. |
+| Operations | Opening the current branch as a PR triggers full CI; no current PR can safely precede the closeout. | Open the PR only after the final candidate and evidence are ready; merge after independent review and required checks, then verify clean `main`. |
+
+**Owner choice:** “Authorize bounded closeout.” D-206 records reuse of the sole Phase 24 plan, the exact named candidate set, component-level rights review, one final required CI matrix, and the 40-plan ceiling. Existing Phase 24 evidence remains historical; no requirement is complete until its original criterion passes.
+
+**Research already underway:** canonical Potion Panic and µCity source refs and exact µCity v1.3 commit were confirmed from upstream metadata. Acid2 v1.0/v1.1 and pinned gbmicrotest root LICENSE files are MIT, but these labels do not alone resolve font, image, ROM-header, or build-input scope. Those components remain under review.
