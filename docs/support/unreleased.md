@@ -21,14 +21,16 @@ Optional Mealybug CGB-C cases are `not-run:rights-gate-G1`, informational only, 
 ## Phase 21 — native-CGB harness and game-candidate outcome
 
 No CGB game-level evidence exists. The original native-CGB harness passed on the CGB-CPU-E
-software model in native mode and remains harness-only. Neither ordered candidate was admitted:
-Potion Panic stopped at an unestablished creator-linked source/component grant and
-repository/public-CI scope; µCity 1.3 stopped at the required `source/engine/hardware.inc`
-component, for which no identified grant or notice establishes repository/public-CI scope.
-These are rights/source-scope no-go findings, not license prohibitions. Toolchain/build facts,
-candidate ROMs, game execution, progress, observations, and receipts remain not observed. The
-unreleased result does not qualify physical CGB-E, mode-3 timing, perceptual output, or general
-game compatibility. See [the source-bound outcome and reproduction commands](../game-acceptance.md#phase-21-outcome).
+software model in native mode and remains harness-only. Neither ordered candidate was admitted.
+Potion Panic's pinned source and creator-published ROM metadata are observed, but its required
+build invokes the D-207-excluded WLE converter and the downloaded ROM has no build receipt binding
+it to that source commit. µCity 1.3 stopped at the required `source/engine/hardware.inc` component,
+for which no identified grant or notice establishes repository/public-CI scope. These are
+rights/source-scope no-go findings, not license prohibitions. No candidate build, admission, native
+mode, game execution, progress, observations, or receipts were produced; the creator ROM and
+bootless derivative remain ignored local metadata. The unreleased result does not qualify physical
+CGB-E, mode-3 timing, perceptual output, or general game compatibility. See [the source-bound
+outcome and reproduction commands](../game-acceptance.md#phase-21-outcome).
 
 ## Reconciled into v0.3.0
 

@@ -258,18 +258,34 @@ def validate_no_go_record(record: dict[str, Any], expected_id: str) -> None:
             raise Reject("candidate-cutoff-stage-mismatch", f"{expected_id}:{field}")
     if expected_id == "potion-panic-gbcompo25":
         source = _nested(record, "source")
-        if not isinstance(source, dict) or source.get("state") != "not_observed" or source.get("blocked_by") != "rights":
+        source_value = _nested(record, "source", "value")
+        if not isinstance(source, dict) or source.get("state") != "observed" \
+                or not isinstance(source_value, dict) \
+                or source_value.get("repository") != "https://codeberg.org/DevEd/potion-panic" \
+                or source_value.get("revision") != "321b8365d31a3239d3d7f54831d0339991e2c49c":
             raise Reject("primary-source-cutoff-invalid")
         disposition_evidence = _nested(record, "disposition", "evidence")
-        if not isinstance(disposition_evidence, dict) or disposition_evidence.get("kind") != "creator-linked-source-and-rights-cutoff":
+        if not isinstance(disposition_evidence, dict) \
+                or disposition_evidence.get("kind") != "creator-linked-source-and-build-rights-cutoff" \
+                or disposition_evidence.get("source_repository") != source_value["repository"] \
+                or disposition_evidence.get("source_revision") != source_value["revision"]:
             raise Reject("primary-rights-cause-invalid")
-        if disposition_evidence.get("upstream_scripts_executed") is not False or disposition_evidence.get("candidate_rom_acquired_or_executed") is not False:
+        if disposition_evidence.get("source_build_performed") is not False \
+                or disposition_evidence.get("candidate_runtime_performed") is not False \
+                or disposition_evidence.get("creator_prebuilt_acquired") is not True \
+                or disposition_evidence.get("candidate_rom_admitted") is not False:
             raise Reject("primary-execution-fact-inflated")
-        if disposition_evidence.get("source_repository") != "https://codeberg.org/DevEd/potion-panic":
-            raise Reject("primary-source-authority-mismatch")
         admission_evidence = admission.get("evidence", {})
         if admission_evidence.get("creator_page") != "https://deved.itch.io/potion-panic":
             raise Reject("primary-creator-evidence-mismatch")
+        prebuilt = admission_evidence.get("creator_published_prebuilt")
+        metadata_evidence = prebuilt.get("metadata_evidence") if isinstance(prebuilt, dict) else None
+        if not isinstance(prebuilt, dict) \
+                or prebuilt.get("sha256") != "86922a48308031d5ca7e79cecbfbe3b4d41c8f094e0c2a5f90b6ced362d708f8" \
+                or not isinstance(metadata_evidence, dict) \
+                or metadata_evidence.get("path") != \
+                "tests/data/cgb-candidates/evidence/potion-panic-build-review.json":
+            raise Reject("primary-prebuilt-metadata-invalid")
     elif expected_id == "ucity-1.3":
         source = _nested(record, "source", "value")
         if not isinstance(source, dict) or source.get("revision") != UCITY_13_REVISION:
@@ -475,15 +491,19 @@ def validate_documentation(snapshot: dict[str, bytes], records: list[dict[str, A
         _require_markers(game, (
             "No CGB game-level evidence exists",
             "https://codeberg.org/DevEd/potion-panic",
-            "creator-linked source could not be reached",
-            "component-level repository/public-CI scope remains unestablished",
+            "321b8365d31a3239d3d7f54831d0339991e2c49c",
+            "creator-page asset category is accepted for the pinned visual and music components",
+            "no build receipt binds the downloaded bytes to the pinned commit",
+            "ROM, sidecar, header/checksums, and local bootless transform are recorded as ignored local metadata only",
+            "the Pigu/AYCE WLE converter is excluded",
+            "no source build, candidate admission, or game runtime was performed",
             "does not establish a license prohibition",
             UCITY_13_REVISION,
             "source/engine/hardware.inc",
             UCITY_HARDWARE_SHA256,
             "no identified grant or notice",
             "toolchain identity, build confinement, rom bytes, cartridge header, loaded mode, progress, rgb555/pcm observations, and candidate receipt remain not observed",
-            "no upstream tool, script, or rom was run",
+            "no upstream tool or script was executed and no fallback rom was acquired",
             "no fallback fixture, case, input, predicate, or notice row was created",
         ), "no-game-outcome")
         if not isinstance(primary_evidence, dict) or primary_evidence.get("creator_page") != "https://deved.itch.io/potion-panic":
