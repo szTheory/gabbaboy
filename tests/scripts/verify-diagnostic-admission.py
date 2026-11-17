@@ -1545,7 +1545,9 @@ def validate_gbmicrotest_fixture(root: pathlib.Path, source_revision: str) -> di
 
 def validate_current_runner_qualification(root: pathlib.Path, source_revision: str,
                                          runner: pathlib.Path,
-                                         qualification_path: pathlib.Path) -> dict[str, Any]:
+                                         qualification_path: pathlib.Path,
+                                         invocation_started: float | None = None,
+                                         deadline_seconds: int = 25) -> dict[str, Any]:
     root = root.resolve(strict=True)
     if runner.is_symlink() or qualification_path.is_symlink():
         raise AdmissionRefused("diagnostic-runtime-runner-or-qualification-unavailable")
@@ -1562,14 +1564,20 @@ def validate_current_runner_qualification(root: pathlib.Path, source_revision: s
             or qualification.get("artifact_path") != str(runner)
             or qualification.get("artifact_sha256") != runner_sha):
         raise AdmissionRefused("diagnostic-runtime-qualification-binding-mismatch")
+    remaining = (deadline_seconds - (time.monotonic() - invocation_started)
+                 if invocation_started is not None else 10)
+    if remaining <= 0:
+        raise AdmissionRefused("diagnostic-runtime-deadline-expired-before-qualification")
     check_code, check_out, check_err = _bounded_run(
         [sys.executable, "-I", str(root / CANDIDATE_CHECKER_PATH), "--check-build-qualification",
          "--repo-root", str(root), "--source-revision", source_revision,
          "--runner", str(runner), "--current-build-qualification", str(qualification_path)],
-        cwd=root, timeout=10)
+        cwd=root, timeout=min(10, remaining))
     if check_code != 0 or b"PASS: current runner qualification" not in check_out:
         detail = (check_out + check_err).decode("utf-8", "replace")[:240]
         raise AdmissionRefused("diagnostic-runtime-qualification-refused:" + detail)
+    if invocation_started is not None and time.monotonic() - invocation_started >= deadline_seconds:
+        raise AdmissionRefused("diagnostic-runtime-deadline-expired-after-qualification")
     return {"runner": runner, "qualification_path": qualification_path,
             "runner_sha256": runner_sha, "qualification_sha256": sha256(qualification_raw),
             "qualification": qualification}
@@ -1659,7 +1667,7 @@ def run_gbmicrotest_runtime(root: pathlib.Path, source_revision: str, runner: pa
     if read_limited(root / DIAGNOSTIC_CLOSEOUT_PATH, MAX_JSON_BYTES, "diagnostic-closeout") != closeout_raw:
         raise AdmissionRefused("diagnostic-runtime-closeout-json-differs-from-committed-source")
     qualified = qualified_runner or validate_current_runner_qualification(
-        root, source_revision, runner, qualification_path)
+        root, source_revision, runner, qualification_path, invocation_started, deadline_seconds)
     runner = qualified["runner"]
     qualification = qualified["qualification"]
     runner_sha = qualified["runner_sha256"]
@@ -1684,7 +1692,7 @@ def run_gbmicrotest_runtime(root: pathlib.Path, source_revision: str, runner: pa
                 raise AdmissionRefused("diagnostic-runtime-deadline-expired-before-runner")
             runner_code, runner_output, runner_error = _bounded_run(
                 [str(runner), "--acceptance", "cases.txt", "--case", "div-inc-a"],
-                cwd=temporary_root, timeout=max(1, int(remaining)))
+                cwd=temporary_root, timeout=remaining)
             if runner_error:
                 raise AdmissionRefused("diagnostic-runtime-runner-stderr:" + runner_error.decode("utf-8", "replace")[:200])
     except RuntimeError as error:
@@ -3179,7 +3187,8 @@ def main(argv: list[str] | None = None) -> int:
                                                require_approved=args.require_approved)
             if runtime_flags:
                 qualified = validate_current_runner_qualification(
-                    args.repo_root, revision, args.runner, args.current_build_qualification)
+                    args.repo_root, revision, args.runner, args.current_build_qualification,
+                    invocation_started, args.deadline_seconds)
                 if args.closeout_kind == "acid2":
                     if args.write_evidence.resolve(strict=False) != (
                             args.repo_root.resolve() / ACID2_RUNTIME_EVIDENCE_PATH):
