@@ -45,13 +45,16 @@ The creator metadata for [Potion Panic](https://deved.itch.io/potion-panic) is t
 
 ## Stage A validation and Stage B stop
 
-The intended validation sequence is:
+Stage A is committed at `e930e3d7f8d2f8b2fc38be5cffb91985354f0ec4`. These checks passed against that immutable commit:
 
-1. `python3 -I tests/scripts/verify-cgb-candidates.py --check-closeout --closeout-stage rights --repo-root . --source-revision "$PHASE24_CLOSEOUT_REV"`
-2. `python3 -I tests/scripts/verify-cgb-candidates.py --self-test-controls --repo-root . --source-revision "$PHASE24_CLOSEOUT_REV"`
-3. The diagnostic admission control must refuse with `candidate-rights-unresolved` naming the unresolved game components.
+- Python AST parsing for both changed checkers and the focused closeout CLI argument test.
+- The rights-stage checker accepted the five exact named sources and reported eight unresolved components.
+- Candidate self-test controls passed, including source, rights-scope, component-digest, notice-digest, extra-source, component-set, order and requirement-status mutants.
+- Diagnostic self-test controls passed, including the control that reaches the candidate rights refusal.
 
-The unresolved game-stage refusal is the current Stage B outcome. Stage B did not modify either candidate attempt record: no candidate build was lawful until its applicable local-build grants are established, and no public payload could be staged without repository/public-CI grants. No game source hook was executed, no external dependency was installed, no game or diagnostic payload was acquired, and no broad suite or build was run.
+The admission gate refused for the intended cause. `--check-closeout --closeout-stage games --require-satisfied` reported the unresolved Potion Panic visual assets, music and converter, plus µCity `hardware.inc`. The diagnostic `--require-approved` path returned its scope-resolution refusal naming those same components. These are expected blockers, not passing game admissions.
+
+Stage B did not modify either candidate attempt record: no candidate build was lawful until its applicable local-build grants are established, and no public payload could be staged without repository/public-CI grants. No downloaded game source hook was executed, no external dependency was installed, no game ROM or diagnostic fixture payload was acquired or staged, and no build, runner execution, or broad suite was run.
 
 | Gate | Current result | Consequence |
 |---|---|---|
