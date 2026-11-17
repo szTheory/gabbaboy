@@ -2,25 +2,27 @@
 status: complete
 phase: GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps
 source: 24-01-SUMMARY.md
-started: 2026-11-16T23:45:04.599554+00:00
-updated: 2026-11-16T23:45:04.599554+00:00
+started: 2026-11-17T01:05:54.592326+00:00
+updated: 2026-11-17T01:05:54.592326+00:00
 ---
 
 ## Automated Evidence
 
-# Phase 24 execution handoff
+# Phase 24 recovery handoff
 
-**Stage completed:** Plan 24-01 execution, its review-fix pass, the corrected candidate's bounded checks, and one fresh independent review. Phase verification is blocked.
+**Stage completed:** Phase 24 Plan 01 execution, the one owner-authorized Task 4 correction, its exact-candidate independent review, and the two focused regression checks are complete. Phase 24 verification has not run yet.
 
-**Next actor:** the owner, using `$gsd-discuss-phase 24` to decide whether to authorize a new bounded recovery. The fresh review found Critical CR-01 on exact candidate `0320a081bb5076682b2b99a55eb0d1375db87cdd`: a BOM-prefixed YAML frontmatter fence lets a `gap_closure: true` plan bypass the Phase 24 plan-cap guard. The prior bounded fix/review pass is exhausted, so no further fix, review, configured regression hook, or `$gsd-verify-work 24` is authorized now. If authorized, the recommended correction is to strip exactly one leading UTF-8 BOM in the plan parser and add a production-CLI BOM-prefixed gap-plan negative with a canonical ordinary-plan positive twin; then require a clean independent review and only the two existing focused CTests. After that owner-authorized correction, clean review, and regression hook, the orchestrator can run `$gsd-verify-work 24`.
+**Next actor:** the orchestrator, dispatching the phase verifier once against the completed plan and current codebase.
 
-The immutable assessment input is `f511baa8c0330f5cd90d56da55d79dbc873b0559`; the protected baseline is `f6fe166a7c2a3668f5a412a82b648dd062329d3c`; the corrected checker/report candidate is `a1e8067500016158347e92522934b9af45d78386`; the reviewed handoff candidate is `0320a081bb5076682b2b99a55eb0d1375db87cdd`. The corrected candidate's 628-control self-test, six-phase/40-plan cap check, immutable report and handoff stages, and only the two focused CTests passed. The final handoff stages passed, but the independent review found CR-01; no CTest result is attributed to the later handoff commit.
+The reviewed code candidate is `65b31a69840bfec232806f808f03fb44c6e21174`. The original immutable production-CLI control failed as intended because a BOM-prefixed `gap_closure: true` plan was accepted; the correction normalizes exactly one leading BOM and rejects repeated BOMs. The candidate passed syntax, the 632-control immutable self-test, and the six-phase/40-plan cap check. One independent exact-candidate review found no findings. Configure-only generation bound CTest to that candidate, and only `plan_cap` plus `planning_hygiene_controls` ran; both passed with `TIMEOUT=30` and the 125-control minimum. The temporary test-command override was restored. Do not rerun review, broad regression, or either focused CTest.
 
-FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending under their original owners. Phase 20/21 remain stale; v0.4 remains open with `gaps_found`; D-103 is unfulfilled. No broad local suite, no third local lifecycle retest, no release retry, no tag/asset/rights action, and no fixture admission. Do not run the phase verifier, milestone close, archival, or cleanup while blocked. No phase or milestone completion is claimed.
+The verifier must consume these results and must not dispatch the exhausted code-review hook or the configured broad regression gate. If its report is `passed`, the next GSD command is `$gsd-verify-work 24`; that command should consume the passed report and complete the phase transition without rerunning those gates.
 
-FIXT-01 — Pending, original owner Phase 21. RIGHTS-01 — Pending, original owner Phase 20. DIAG-01 — Pending, original owner Phase 22. DIAG-02 — Pending, original owner Phase 22. Preserve the 40-plan ceiling and all existing test, lifecycle, release, fixture, rights, and milestone boundaries.
+The next phase has not been selected because v0.4 remains open with `gaps_found`; Phase 24 is the phase currently awaiting verification. FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending under their original owners. Phase 20/21 remain stale, and D-103 remains unfulfilled. Preserve the 40-plan ceiling and all existing suite, lifecycle, release, fixture, rights, and milestone stops. No phase or milestone completion is claimed until the verifier and phase transition pass.
 
-Evidence: [24-EVIDENCE.md](24-EVIDENCE.md), [24-01-SUMMARY.md](24-01-SUMMARY.md), [24-VALIDATION.md](24-VALIDATION.md), and [24-UAT.md](24-UAT.md).
+The earlier [24-REVIEW.md](24-REVIEW.md) remains the historical CR-01 finding at `0320a081bb5076682b2b99a55eb0d1375db87cdd`. The exact fix disposition is recorded in [24-REVIEW-DISPOSITION.md](24-REVIEW-DISPOSITION.md), and the clean recovery review is [24-RECOVERY-REVIEW.md](24-RECOVERY-REVIEW.md).
+
+Evidence: [24-EVIDENCE.md](24-EVIDENCE.md), [24-01-SUMMARY.md](24-01-SUMMARY.md), [24-VALIDATION.md](24-VALIDATION.md), [24-SECURITY.md](24-SECURITY.md), and [24-UAT.md](24-UAT.md).
 
 ## Current Test
 
@@ -50,7 +52,7 @@ result: pass
 source: automated
 summary_file: 24-01-SUMMARY.md
 coverage_id: D3
-evidence: ["verify-planning-hygiene.py --self-test; 628 controls passed at a1e8067500016158347e92522934b9af45d78386"]
+evidence: ["verify-planning-hygiene.py --self-test; 632 controls passed at 65b31a69840bfec232806f808f03fb44c6e21174"]
 
 ### 4. The exact D-205 allowance preserves one ordinary Phase 24 plan and the actual 40-plan ceiling.
 expected: "The exact D-205 allowance preserves one ordinary Phase 24 plan and the actual 40-plan ceiling."
@@ -58,7 +60,7 @@ result: pass
 source: automated
 summary_file: 24-01-SUMMARY.md
 coverage_id: D4
-evidence: ["plan_cap passed at candidate a1e8067500016158347e92522934b9af45d78386"]
+evidence: ["plan_cap and immutable BOM refusal controls passed at candidate 65b31a69840bfec232806f808f03fb44c6e21174; phases=6 plans=40"]
 
 ### 5. Only the two authorized focused CTests pass at the full configured candidate with their original timeout and control floor.
 expected: "Only the two authorized focused CTests pass at the full configured candidate with their original timeout and control floor."
@@ -66,7 +68,7 @@ result: pass
 source: automated
 summary_file: 24-01-SUMMARY.md
 coverage_id: D5
-evidence: ["24-VALIDATION.md; plan_cap and planning_hygiene_controls passed 2/2 at a1e8067500016158347e92522934b9af45d78386"]
+evidence: ["24-VALIDATION.md; plan_cap and planning_hygiene_controls passed 2/2 at 65b31a69840bfec232806f808f03fb44c6e21174; TIMEOUT=30 and controls minimum=125 preserved"]
 
 ### 6. The assessment summary uses the shared block-style coverage contract consumed by the existing automated closure workflow.
 expected: "The assessment summary uses the shared block-style coverage contract consumed by the existing automated closure workflow."

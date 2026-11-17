@@ -13,10 +13,10 @@ provides:
 affects: [v0.4-audit, phase-24-verification, requirement-traceability]
 actuals:
   tokens: 34592.25
-  tasks: 3
-  commits: 9
+  tasks: 4
+  commits: 11
 plan_head_before: f511baa8c0330f5cd90d56da55d79dbc873b0559
-plan_head_after: 45fd1846610733a02cdcd34dcef4db9783d75189
+plan_head_after: 65b31a69840bfec232806f808f03fb44c6e21174
 tech-stack:
   added: []
   patterns: [immutable committed-input assessment, causal CLI refusal controls]
@@ -26,11 +26,15 @@ key-files:
     - .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-SUMMARY.md
     - .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-UAT.md
     - .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md
+    - .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-RECOVERY-REVIEW.md
+    - .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-REVIEW-DISPOSITION.md
   modified:
     - tests/scripts/verify-planning-hygiene.py
     - .planning/ROADMAP.md
     - .planning/STATE.md
     - .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md
+    - .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-SECURITY.md
+    - .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md
 key-decisions:
   - "Keep each original requirement, tracker state, audit state, historical result, freshness, source boundary, and remaining gate distinct."
   - "Retain the exact D-205 six-phase exception and 40-plan ceiling; this assessment satisfies no requirement and closes no milestone gate."
@@ -59,21 +63,21 @@ coverage:
     human_judgment: false
     verification:
       - kind: integration
-        ref: "verify-planning-hygiene.py --self-test; 628 controls passed at a1e8067500016158347e92522934b9af45d78386"
+        ref: "verify-planning-hygiene.py --self-test; 632 controls passed at 65b31a69840bfec232806f808f03fb44c6e21174"
         status: pass
   - id: D4
     description: "The exact D-205 allowance preserves one ordinary Phase 24 plan and the actual 40-plan ceiling."
     human_judgment: false
     verification:
       - kind: integration
-        ref: "plan_cap passed at candidate a1e8067500016158347e92522934b9af45d78386"
+        ref: "plan_cap and immutable BOM refusal controls passed at candidate 65b31a69840bfec232806f808f03fb44c6e21174; phases=6 plans=40"
         status: pass
   - id: D5
     description: "Only the two authorized focused CTests pass at the full configured candidate with their original timeout and control floor."
     human_judgment: false
     verification:
       - kind: integration
-        ref: "24-VALIDATION.md; plan_cap and planning_hygiene_controls passed 2/2 at a1e8067500016158347e92522934b9af45d78386"
+        ref: "24-VALIDATION.md; plan_cap and planning_hygiene_controls passed 2/2 at 65b31a69840bfec232806f808f03fb44c6e21174; TIMEOUT=30 and controls minimum=125 preserved"
         status: pass
   - id: D6
     description: "The assessment summary uses the shared block-style coverage contract consumed by the existing automated closure workflow."
@@ -84,7 +88,7 @@ coverage:
         status: pass
 duration: 98min
 completed: 2026-11-16
-status: blocked
+status: complete
 ---
 
 # Phase GB-24 Plan 01: Resolve Remaining v0.4 Evidence and Verification Gaps Summary
@@ -93,17 +97,20 @@ status: blocked
 
 ## Performance
 
-- **Duration:** 98 min
+- **Duration:** 98 min for Tasks 1–3; Task 4 recovery duration was not separately measured
 - **Started:** 2026-11-16T20:46:22Z
 - **Completed:** 2026-11-16
-- **Tasks:** 3
-- **Files modified:** 8
+- **Tasks:** 4
+- **Files modified:** 12 across the plan, including recovery and verification records
 
 ## Accomplishments
 
 - Added an immutable `24-EVIDENCE.md` assessment for all eight requirement rows. It separates original criteria and owners, tracker status, audit disposition, historical result, current freshness, evidence boundary, and remaining gate.
 - Extended the existing planning hygiene checker with production report/handoff stages, exact D-205 cap handling, and causal semantic mutation controls while preserving the prior report contract and 125-control floor.
 - Recorded and passed the bounded regression on the configured full candidate, then generated the shared UAT closure from this summary's block-style coverage.
+- Fixed CR-01 in the same plan by normalizing one leading UTF-8 BOM before frontmatter recognition and rejecting a repeated BOM. Immutable production-CLI controls cover BOM-prefixed and repeated-BOM input.
+- Preserved the original critical review and recorded its exact-candidate disposition. A fresh independent review of `65b31a69840bfec232806f808f03fb44c6e21174` found no findings.
+- Ran configure-only candidate binding and only the authorized `plan_cap` and `planning_hygiene_controls` CTests; both passed with the existing timeout and control floor.
 - Kept all four requirements Pending, Phase 20/21 stale, the milestone `open` with `gaps_found`, and D-103 unfulfilled. This is plan execution evidence only; it does not claim Phase 24 verification or milestone completion.
 
 ## Task Commits
@@ -160,16 +167,24 @@ Evidence links: [24-EVIDENCE.md](24-EVIDENCE.md), [24-VALIDATION.md](24-VALIDATI
 - **Issue:** The first committed handoff omitted explicit owner facts, scoped-stop wording, evidence links, and the tested candidate identity required by the production handoff stage.
 - **Fix:** Added the exact Pending-owner facts, open/stale/D-103 stops, commit-boundary identities, local evidence links, and the explicit Phase 24 verification route to the summary, continuation, and current STATE handoff.
 - **Files modified:** `.planning/STATE.md`, `.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-SUMMARY.md`, `.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md`
-- **Commits:** `c661e4e`, `45fd184`.
-- **Verification:** The committed report and handoff stages passed at `45fd1846610733a02cdcd34dcef4db9783d75189`; the corrected checker/report/handoff candidate also passed both stages at `a1e8067500016158347e92522934b9af45d78386`.
+- **Commits:** The nine original task commits through `45fd184`, plus Task 4 RED `0aa954bc239016235e7a4fc8d2c40350ab7d0edd` and GREEN `65b31a69840bfec232806f808f03fb44c6e21174`.
+- **Verification:** Earlier report and handoff checks remain historical. The exact Task 4 candidate passed the 632-control immutable self-test and plan-cap check; configure-only binding and the two focused CTests passed at the same full commit.
 
 ## TDD Evidence
 
-The D-205 path-renewal control was committed RED as `9d3eb7b`; direct self-test failed with the intended message `path-based D-205 reserve renewal was accepted: []`. The original production cap/report/handoff controls passed in checker candidate `a7d49bb4b7dbf9d0088cfe6800f3f19ddddc6d39`; after the review fixes, all 628 controls and the immutable plan-cap/report/handoff stages passed at `a1e8067500016158347e92522934b9af45d78386`.
+The D-205 path-renewal control was committed RED as `9d3eb7b`; direct self-test failed with the intended message `path-based D-205 reserve renewal was accepted: []`. Task 4 was committed RED as `0aa954bc239016235e7a4fc8d2c40350ab7d0edd`; its immutable production-CLI test failed because the BOM-prefixed gap plan was accepted. The GREEN candidate `65b31a69840bfec232806f808f03fb44c6e21174` passes the regression, including exactly-one-BOM normalization and repeated-BOM refusal.
 
 ## Shared Automated Closure
 
-The shared closure generator wrote `24-UAT.md` from all six passing assessment coverage entries (`automated=6`, `human=0`). The generated closure passed with `automated=6`, `gaps=0`; its 21-control mutation self-test also passed. It creates no human checkpoint and asserts no original requirement completion. The separate fresh code review found CR-01; the phase verifier did not run.
+The shared closure generator wrote `24-UAT.md` from all six passing assessment coverage entries (`automated=6`, `human=0`). The generated closure passed with `automated=6`, `gaps=0`; its 21-control mutation self-test also passed. It creates no human checkpoint and asserts no original requirement completion. The original review's CR-01 is preserved in `24-REVIEW.md`; its fix disposition and the clean exact-candidate recovery review are in `24-REVIEW-DISPOSITION.md` and `24-RECOVERY-REVIEW.md`. The phase verifier has not run.
+
+## Recovery Verification Results
+
+- RED: immutable production CLI accepted the BOM-prefixed `gap_closure: true` plan instead of refusing it with `plan-cap-d205-phase24-gap`, so the new control failed as intended.
+- GREEN: checker syntax passed; immutable self-test passed 632 controls; immutable plan-cap check passed with `phases=6 plans=40`; the working checker matched the committed candidate.
+- Review: independent exact-candidate review of `65b31a69840bfec232806f808f03fb44c6e21174` reported zero findings.
+- Configure and inventory: configure-only generation bound CMake tests to the candidate. Inventory confirmed exactly `plan_cap` and `planning_hygiene_controls`, both `TIMEOUT=30`, with the 125-control minimum preserved.
+- Focused regression: both authorized CTests passed (`plan_cap` and `planning_hygiene_controls`). No build, broad suite, emulator run, fixture run, or repeated review was performed.
 
 ## Known Stubs
 
@@ -177,8 +192,8 @@ None found in files created or modified by this plan. The historical, stale, rig
 
 ## Next Phase Readiness
 
-Tasks 1–3 and the shared automated assessment closure remain historical. The owner authorized exactly one same-plan Task 4 correction and one fresh independent review for the BOM-prefixed YAML plan-cap bypass; Task 4 has not yet completed. Keep the plan status blocked until the correction, cheap direct controls, one exact-candidate clean review, and the two approved focused CTests pass. Only then may the orchestrator run `$gsd-verify-work 24`. Any Critical/correctness/security finding or new blocker stops before the focused hook and verifier; no extra fix/review cycle is authorized. v0.4 remains open with `gaps_found`; all four requirements remain Pending, Phase 20/21 remain stale, and the separate D-103 exact-final-head milestone gate remains unfulfilled.
+Plan Tasks 1–4, the shared automated assessment closure, the one authorized exact-candidate recovery review, and the two focused CTests are complete. The code and closure gates passed at `65b31a69840bfec232806f808f03fb44c6e21174`; the phase verifier is the next stage. Run `$gsd-verify-work 24` only through a route that consumes this passed review and focused regression evidence without repeating them or invoking the configured broad suite. v0.4 remains open with `gaps_found`; all four requirements remain Pending, Phase 20/21 remain stale, and the separate D-103 exact-final-head milestone gate remains unfulfilled.
 
 ## Self-Check: PASSED
 
-The single expected plan file exists. All nine task commits (`b5eb1a6`, `883fdbb`, `9d3eb7b`, `eb43d88`, `a7d49bb`, `5f49629`, `bc48569`, `c661e4e`, and `45fd184`) are ancestors of the completed task head `45fd1846610733a02cdcd34dcef4db9783d75189`. The summary records the measured task-commit count and plan-head boundary; the separate final metadata commit is not counted as a task commit.
+The single expected plan file exists. All nine original task commits (`b5eb1a6`, `883fdbb`, `9d3eb7b`, `eb43d88`, `a7d49bb`, `5f49629`, `bc48569`, `c661e4e`, and `45fd184`) and Task 4 RED/GREEN commits (`0aa954b` and `65b31a6`) are ancestors of candidate `65b31a69840bfec232806f808f03fb44c6e21174`. The summary records eleven task commits; later review and phase-record commits are not counted as task commits.

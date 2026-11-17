@@ -1,8 +1,8 @@
 ---
 phase: "24"
 slug: "resolve-remaining-v0-4-evidence-and-verification-gaps"
-status: open
-threats_open: 1
+status: verified
+threats_open: 0
 asvs_level: 1
 created: "2026-11-16"
 ---
@@ -28,14 +28,14 @@ created: "2026-11-16"
 
 | Threat ID | Category | Component | Severity | Disposition | Mitigation | Status |
 |-----------|----------|-----------|----------|-------------|------------|--------|
-| T-24-01 | Tampering | v04-gap-assessment report parser | high | mitigate | Exact row/key/source checks plus causal production-CLI controls for false completion, owner drift, and freshness promotion; post-review-fix 628-control self-test passed at `a1e8067500016158347e92522934b9af45d78386`. | closed |
-| T-24-02 | Tampering / Repudiation | Git snapshot and evidence boundary | high | mitigate | Full immutable input and baseline commits, source digests, historical-byte comparison, and substitution/dirty-tree controls; report and handoff stages passed at `a1e8067500016158347e92522934b9af45d78386`. | closed |
-| T-24-03 | Elevation of privilege | Evidence and pending-verification handoff | high | mitigate | Production handoff validation preserves Pending owners, `open`/`gaps_found`, the independent D-103 gate, and phase-verification routing; handoff stage passed at `a1e8067500016158347e92522934b9af45d78386`. | closed |
-| T-24-04 | Tampering | D-205 plan-cap exception | high | mitigate | Exact phase/cap/approval checks and causal refusal controls reject reserve renewal; however, review CR-01 found a BOM-prefixed YAML frontmatter fence can bypass gap-plan classification at candidate `0320a081bb5076682b2b99a55eb0d1375db87cdd`. | open |
-| T-24-05 | Denial of service | planning_hygiene_controls | medium | mitigate | Reused bounded fixtures and the existing 30-second timeout; only `plan_cap` and `planning_hygiene_controls` ran at candidate `a1e8067500016158347e92522934b9af45d78386`, preserving the 125-control floor. | closed |
+| T-24-01 | Tampering | v04-gap-assessment report parser | high | mitigate | Exact row/key/source checks plus causal production-CLI controls for false completion, owner drift, and freshness promotion; the complete 632-control self-test passed at `65b31a69840bfec232806f808f03fb44c6e21174`. | closed |
+| T-24-02 | Tampering / Repudiation | Git snapshot and evidence boundary | high | mitigate | Full immutable input and baseline commits, source digests, historical-byte comparison, and substitution/dirty-tree controls; immutable controls pass at `65b31a69840bfec232806f808f03fb44c6e21174`. | closed |
+| T-24-03 | Elevation of privilege | Evidence and pending-verification handoff | high | mitigate | Production handoff validation preserves Pending owners, `open`/`gaps_found`, the independent D-103 gate, and phase-verification routing; immutable controls pass at `65b31a69840bfec232806f808f03fb44c6e21174`. | closed |
+| T-24-04 | Tampering | D-205 plan-cap exception | high | mitigate | Candidate `65b31a69840bfec232806f808f03fb44c6e21174` strips exactly one leading BOM before the canonical fence match and fails closed on repeated BOMs. Immutable production-CLI controls pass with 632 controls; the exact-candidate deep review is clean; only the two configured CTests passed with TIMEOUT=30 and the 125-control floor. See `24-RECOVERY-REVIEW.md` and `24-VALIDATION.md`. | closed |
+| T-24-05 | Denial of service | planning_hygiene_controls | medium | mitigate | Reused bounded fixtures and the existing 30-second timeout; only `plan_cap` and `planning_hygiene_controls` ran at candidate `65b31a69840bfec232806f808f03fb44c6e21174`, preserving the 125-control floor. | closed |
 | T-24-SC | Tampering | Package installs | high | mitigate | No dependency or package-manager installation was introduced; the checker uses the existing Python standard library and CMake tooling. | closed |
 
-*Status: open · closed · open — one high-severity threat remains open and blocks phase verification*
+*Status: verified — all six threats are mitigated; no accepted risk or requirement status changed*
 *Severity: critical > high > medium > low — only open threats at or above workflow.security_block_on count toward threats_open*
 *Disposition: mitigate (implementation required) · accept (documented risk) · transfer (third-party)*
 
@@ -52,6 +52,7 @@ No accepted risks.
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-11-16 | 6 | 5 | 1 | Orchestrator; T-24-04 reopened by exact-candidate code review |
+| 2026-11-17 | 6 | 6 | 0 | Orchestrator; exact-candidate recovery review and focused checks |
 
 ---
 
@@ -59,7 +60,7 @@ No accepted risks.
 
 - [x] All threats have a disposition (mitigate / accept / transfer)
 - [x] Accepted risks documented in Accepted Risks Log
-- [ ] `threats_open: 0` confirmed
-- [ ] `status: verified` set in frontmatter
+- [x] `threats_open: 0` confirmed
+- [x] `status: verified` set in frontmatter
 
-**Approval:** blocked pending owner-authorized remediation and clean review
+**Approval:** recovery mitigation verified for Phase 24 assessment scope; original requirements and milestone gates remain open
