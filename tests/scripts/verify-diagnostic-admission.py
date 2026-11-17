@@ -22,6 +22,15 @@ ADMISSION_CHECKER_PATH = "tests/scripts/verify-diagnostic-admission.py"
 PHASE20_CHECKER_PATH = "tests/scripts/verify-fixture-admission.py"
 PHASE20_POLICY_PATH = "cmake/FixtureAdmissionPolicy.json"
 PHASE20 = ROOT / "tests/scripts/verify-fixture-admission.py"
+CANDIDATE_CHECKER_PATH = "tests/scripts/verify-cgb-candidates.py"
+CANDIDATE_CLOSEOUT_PATH = "tests/data/v04-closeout.json"
+CANDIDATE_CONTRACT_PATHS = (
+    CANDIDATE_CHECKER_PATH,
+    PHASE20_CHECKER_PATH,
+    "tests/cmake/game-evidence.cmake",
+    "docs/cgb-game-candidates.md",
+    CANDIDATE_CLOSEOUT_PATH,
+)
 ACID2_TOOL = ROOT / "tests/scripts/run-acid2-local.py"
 CONTROL_SOURCE = ROOT / "tests/acid2/control.asm"
 SCANNER = ROOT / "cmake/ScanForbiddenFixtures.cmake"
@@ -673,6 +682,26 @@ def check_synthetic_admission(root: pathlib.Path, manifest_path: pathlib.Path,
     return code, stdout + stderr
 
 
+def require_candidate_rights(source_root: pathlib.Path, source_revision: str) -> None:
+    """Use the immutable candidate checker to stop diagnostic admission on unresolved rights."""
+    checker = source_root / CANDIDATE_CHECKER_PATH
+    for relative, path in ((CANDIDATE_CHECKER_PATH, checker),
+                           (CANDIDATE_CLOSEOUT_PATH, source_root / CANDIDATE_CLOSEOUT_PATH)):
+        require_worktree_source_file(source_root, source_revision, relative, path)
+    code, stdout, stderr = _bounded_run(
+        [sys.executable, "-I", str(checker), "--check-closeout", "--closeout-stage", "games",
+         "--require-satisfied", "--repo-root", str(source_root), "--source-revision", source_revision],
+        cwd=source_root,
+    )
+    output = (stderr + stdout).decode("utf-8", errors="replace").strip()
+    if code == 0:
+        return
+    if code == 1 and output.startswith("candidate-closeout-rights-unresolved:"):
+        details = output.partition(":")[2].strip()
+        raise AdmissionRefused(f"candidate-rights-unresolved: {details}")
+    raise AdmissionRefused(f"candidate-rights-check-failed: {output[:384] or 'no checker output'}")
+
+
 def _commit_test_admission_source(root: pathlib.Path, *, inventory: bool = False) -> str:
     """Create a local immutable source fixture for admission-gate controls."""
     _git(root, "init", "-q")
@@ -687,8 +716,13 @@ def _commit_test_admission_source(root: pathlib.Path, *, inventory: bool = False
     phase20_policy = root / PHASE20_POLICY_PATH
     phase20_policy.parent.mkdir(parents=True, exist_ok=True)
     phase20_policy.write_bytes((ROOT / PHASE20_POLICY_PATH).read_bytes())
+    for relative in CANDIDATE_CONTRACT_PATHS:
+        destination = root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes((ROOT / relative).read_bytes())
     files = [ADMISSION_CHECKER_PATH, "tests/external/diagnostic-assessment.json"]
     files.extend((PHASE20_CHECKER_PATH, PHASE20_POLICY_PATH))
+    files.extend(CANDIDATE_CONTRACT_PATHS)
     if inventory:
         files.append("tests/external/gbmicrotest-inventory.json")
     _git(root, "add", *files)
@@ -699,7 +733,8 @@ def _commit_test_admission_source(root: pathlib.Path, *, inventory: bool = False
 def require_approved(root: pathlib.Path, source_revision: str,
                      manifest_path: pathlib.Path | None = None, *,
                      source_repo_root: pathlib.Path | None = None,
-                     source_paths: tuple[tuple[str, pathlib.Path], ...] = ()) -> dict:
+                     source_paths: tuple[tuple[str, pathlib.Path], ...] = (),
+                     candidate_rights: bool = False) -> dict:
     """Require committed evidence and policy bytes before any real fixture can be used."""
     if not re.fullmatch(r"[0-9a-f]{40}", source_revision):
         raise AdmissionRefused("source-revision-invalid")
@@ -719,6 +754,8 @@ def require_approved(root: pathlib.Path, source_revision: str,
                                  source_root / PHASE20_CHECKER_PATH)
     require_worktree_source_file(source_root, source_revision, PHASE20_POLICY_PATH,
                                  source_root / PHASE20_POLICY_PATH)
+    if candidate_rights:
+        require_candidate_rights(source_root, source_revision)
     if manifest_path is not None:
         relative = repository_relative_path(source_root, manifest_path)
         require_worktree_source_file(source_root, source_revision, relative, manifest_path)
@@ -970,6 +1007,17 @@ class AdmissionContractTests(unittest.TestCase):
 
 
 class AdmissionControlTests(unittest.TestCase):
+    def test_unresolved_candidate_component_reaches_intended_admission_refusal(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gbb-candidate-rights-admission-") as name:
+            root = pathlib.Path(name)
+            self._copy_review_records(root)
+            revision = _commit_test_admission_source(root, inventory=True)
+            with self.assertRaisesRegex(AdmissionRefused, "candidate-rights-unresolved:") as caught:
+                require_approved(root, revision, candidate_rights=True)
+            detail = str(caught.exception)
+            self.assertIn("potion-panic-gbcompo25/visual-assets", detail)
+            self.assertIn("ucity-1.3/hardware-inc", detail)
+
     def test_each_mutated_identity_refuses(self) -> None:
         expected = {name: sha256(("expected:" + name).encode("ascii")) for name in IDENTITY_FIELDS}
         validate_identity_bundle(expected, dict(expected))
@@ -1208,7 +1256,7 @@ def main(argv: list[str] | None = None) -> int:
                                       capture_output=True, check=True, timeout=30).stdout.decode().strip()
         source_root = (args.source_repo_root or args.repo_root).resolve(strict=True)
         require_approved(args.repo_root.resolve(strict=True), revision,
-                         source_repo_root=source_root)
+                         source_repo_root=source_root, candidate_rights=True)
     except (AdmissionRefused, OSError, subprocess.SubprocessError) as error:
         message = str(error)
         if message.startswith("scope-resolution-required:"):
