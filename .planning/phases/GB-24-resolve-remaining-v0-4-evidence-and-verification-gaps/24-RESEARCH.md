@@ -493,4 +493,35 @@ No external package, product recommendation, or third-party fixture research was
 
 **Research date:** 2026-11-18
 **Valid until:** Revisit if Python/Git version requirements, D-215 authority, phase requirements, or CI matrix membership change.
-**Research execution boundary:** This research does not authorize implementation, tests, configure/build, review, CI, push, merge, Phase 24 verification, milestone audit/archive, or v0.5.
+**Research execution boundary:** The original D-215 research did not authorize implementation. The additive D-216 research below records the owner's later authorization only for the four exact findings and focused local execution; protected review/matrix, merge and phase/milestone boundaries remain governed by current decisions.
+
+## D-216 Review Addendum — Escaped Paths, Git Isolation and Exact Tree Census
+
+The D-215 review receipt at candidate `e1d3200b1568fb619759c0f31cf4a8605e57ea06` identified four new trust-boundary defects. Three are in already-scoped checker surfaces; the newline-bearing tree-path omission was newly out of scope until the owner explicitly extended the same plan. The owner now authorizes all four, but no wider inventory or admission change.
+
+### Findings and bounded remedies
+
+| Finding | Failure mode | Bounded remedy and causal control |
+|---|---|---|
+| Escaped path construction | Protected-value analysis does not see `Path(chr(46) + "planning/phases/private.md").read_text()` if the seed depends on recognized literal spellings. | Fold only a direct, one-integer-literal `chr()` call in the finite evaluator; leave arbitrary calls unresolved. Run the semantic reader detector even without a lexical hit. Inject this exact reader into disposable checker source and require the live-phase-reader refusal. |
+| Helper name as trust | A resolved function named `git_run` is exempt even if its body adds live path traversal. | Inspect the narrow helper body or enforce an equally narrow structural contract for the reviewed immutable Git adapter. Mutate its body to use `(repo / args[-1]).iterdir()` and require a causal refusal while keeping the lexical count fixed. |
+| Git environment inheritance | The diagnostic evidence helper's generic process runner forwards all `GIT_*`; its boundary-history control writes a synthetic repository. | Preserve generic non-Git execution; use a minimal allowlist for Git-only children, clear repository/index/object/config redirects, and assert candidate Git-dir/worktree/HEAD before writes under hostile `GIT_DIR` and `GIT_WORK_TREE`. Use a decoy and prove its refs/index/status remain unchanged; restore injected variables in `finally`. |
+| Newline-bearing Git paths | Text-mode, line-delimited `ls-tree` output can be quoted or split so a tracked `.../manifest.json` path disappears from the inventory. | Capture `git ls-tree -rz --name-only` as raw bytes, split on NUL, select manifest suffixes at byte level, and decode selected paths strictly. In the existing inventory-control seam, add a harmless newline path and a synthetic newline-bearing manifest that must fail exact census comparison. Never execute the synthetic manifest. |
+
+### Primary-source interpretation
+
+The official [Git `ls-tree` documentation](https://git-scm.com/docs/git-ls-tree.html) specifies that `-z` emits path names verbatim and NUL-terminated without pathname quoting. That makes the byte delimiter unambiguous because a Git pathname cannot contain NUL. The official [Git environment documentation](https://git-scm.com/docs/git) documents `GIT_DIR` and `GIT_WORK_TREE` as repository/worktree selectors; tests that create or mutate temporary repositories must therefore remove those variables from child environments and assert the selected repository before writes. Python's standard-library [AST reference](https://docs.python.org/3/library/ast.html) supports inspection of syntax nodes; a bounded evaluator should fold only known literal constructs and must never execute analyzed checker source. These sources justify the test contract; they do not establish fixture execution, fixture rights, or broader Git-path policy.
+
+### Integration and validation order
+
+Keep the current candidate's exact state-fork list at 153 and both diagnostic exclusions intact. Do not edit `tests/data/state-forks.json`, run fixture-bearing commands, replay Acid2 or `div_inc_timing_a`, execute excluded gbmicrotest ROMs, change production admission policy, add a dependency, or register another CTest. Run syntax, direct path/diagnostic/census controls and immutable identity checks first; then the existing `plan_cap`, evidence/path/trust CTests, and `planning_hygiene_controls` last. Preserve configured timeouts and control floors. Only after local convergence freeze a source candidate and spend the authorized independent review cycle; only a clean final review permits the one protected matrix. Record the actual matrix timings and dependency waits without changing required membership or protection.
+
+### D-216 source findings
+
+- [VERIFIED: `build/phase24/d215-review-e1d3200b.md`] — exact CR-01, CR-02, WR-02 and fixture-census findings at the immutable D-215 review head.
+- [VERIFIED: `tests/scripts/verify-no-phase-paths.py`] — bounded evaluator/reader rules and current `git_run` exemption under review.
+- [VERIFIED: `tests/scripts/verify-diagnostic-evidence.py`] — generic `run()` and `boundary_history_control` Git process/write paths.
+- [VERIFIED: `tests/scripts/verify-state-forks.py`] — line-delimited `ls-tree` path enumeration and existing `--inventory-controls` seam.
+- [VERIFIED: `tests/scripts/verify-planning-hygiene.py`] — existing narrow allowlisted Git environment adapter for local precedent.
+
+**D-216 validity:** Revisit if the four reviewed defects are replaced by new evidence, the Python/Git version contract changes, the state-fork inventory changes, or existing CTest membership/branch protection changes. This addendum records the authorized scope; successful verification remains pending execution.

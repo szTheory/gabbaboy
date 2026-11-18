@@ -1,7 +1,7 @@
 # Phase 24: Resolve remaining v0.4 evidence and verification gaps - Context
 
-**Gathered:** 2026-11-18; updated after the D-215 discussion
-**Status:** D-214's local T10–T12 gates passed at candidate `feb195f5e50eb4669b5bdb8b62e50459ec84121d` (tree `a28ca6b6644e90bde15b7ecc5c6e10bc94e7e0a6`). Its one fresh exact-head review found four blockers and two warnings. The owner selected a same-plan correction proposal covering all six findings, a Phase 24-only exception to the spent review/gap caps, up to two post-correction review-fix passes, one full protected PR matrix after a clean review, and conditional merge after all required checks pass. This is discussion/planning direction only; execution still requires separate authorization. Task 7, Phase 24 verification, milestone audit/archive, and v0.5 remain out of scope.
+**Gathered:** 2026-11-18; updated after the D-216 recovery authorization
+**Status:** D-215 local T10–T12 checks passed at candidate `e1d3200b1568fb619759c0f31cf4a8605e57ea06` (tree `1dd6999e95076662c21eb79c63c4baf3188cdb1e`), but its independent exact-head review found three path/Git-environment blockers and a separate newline-bearing Git-path census blocker. The owner extended the sole plan to cover all four findings and explicitly authorized the correction, focused local retests, up to two scoped post-correction review-fix passes, one full protected PR matrix after a clean review, and conditional protected merge of the identical qualified head. D-215's first blocked candidate and review remain immutable history. Task 7, Phase 24 verification, milestone audit/archive, v0.5 and worktree cleanup remain outside this scope.
 
 <domain>
 ## Phase Boundary
@@ -69,6 +69,23 @@ This discussion authorizes planning only; a separate owner authorization is requ
 - Read admission pins as raw Git blob bytes and accept only exactly 40 lowercase hexadecimal ASCII bytes, optionally followed by LF or CRLF; also accept the exact 40 bytes with no terminator. Reject bare CR, whitespace, extra bytes, uppercase, and non-ASCII. Sanitize repository-redirection `GIT_*` variables for temporary-repository operations and assert the selected Git directory and candidate HEAD.
 - Add causal negative controls for escaped/concatenated paths, helper-argument flow, temporary-root escape, paired archive removal, malformed pin terminators, and Git environment redirection; retain positive controls for the approved immutable reads, historical boundary, exact archive pair, and valid pin forms. Reuse existing self-test/CTest identities and run cheap checks before longer gates.
 
+### D-216 — Extend and execute recovery after the D-215 review (owner-authorized, 2026-11-18)
+
+The frozen D-215 candidate `e1d3200b1568fb619759c0f31cf4a8605e57ea06` (tree `1dd6999e95076662c21eb79c63c4baf3188cdb1e`) passed its seven focused local CTests, but its fresh review identified four defects. The review receipt is [D-215 review](../../../build/phase24/d215-review-e1d3200b.md); it made no source edits and ran no tests. The owner explicitly extends the recovery to these exact four findings, superseding only the review's “out-of-scope” stop for the manifest-census finding:
+
+1. `verify-no-phase-paths.py` misses a protected path built by bounded literal `chr()` plus concatenation because semantic analysis is gated on recognized literal values. Add safe finite folding and a causal production-source reader negative.
+2. The same path checker trusts any helper named `git_run` without inspecting its body. Inspect or otherwise constrain the adapter so a helper body that reads/traverses a live checkout is rejected; add the same-count causal control while retaining the approved immutable Git reader positive.
+3. `verify-diagnostic-evidence.py`'s generic `run()` forwards inherited `GIT_*` into the synthetic boundary-history repository control. Keep generic non-Git execution behavior; sanitize Git-only subprocesses with a narrow environment and assert the intended temporary repo and untouched decoy under hostile `GIT_DIR`/`GIT_WORK_TREE`.
+4. `verify-state-forks.py` parses text-mode newline-delimited `git ls-tree` paths. Switch census enumeration to raw NUL-delimited bytes, decode candidate manifest paths strictly, and add synthetic newline-path controls without executing fixtures or changing the real manifest set.
+
+Update only the sole existing Phase 24 plan, context and execution records; add no plan, dependency, CTest identity, fixture, active requirement, or source-candidate expansion. Reuse the existing Python standard library and existing `--self-test` / `--self-test-controls` / `--inventory-controls` seams. Run cheap syntax/identity/control checks first and retain the seven existing focused CTests, their identities, timeout and floors. The D-215 candidate's prior local passes remain evidence at that candidate and are not replayed wholesale; each newly affected contract is tested at its corrected immutable candidate.
+
+This authorization permits the new correction and local diagnosis/fix/retest convergence. After local gates pass, obtain an independent review bound to the complete frozen candidate and cumulative diff. The D-215 phase-local exception allows up to two scoped fix-and-re-review passes after this correction; retain actual findings and stop on an out-of-scope trust/correctness issue or unresolved review finding after those passes. Only a clean final review permits one full protected matrix on the existing PR; any failed, skipped, stale or missing required context stops without a matrix retry. If all required contexts pass for the identical reviewed/tested head, merge it through existing branch protection. Do not alter workflow membership, coverage, timeout, cache or concurrency speculatively. Record actual job/step time, queue/dependency wait, timeout headroom and package-work execution/skips; keep the measured preview-waiter redesign separate.
+
+Preserve D-209 statuses and owners, FIXT-01 Pending, the failed unreplayed Acid2 comparison, excluded diagnostic ROMs, published v0.4.0 bytes, D-103, Task 7, all other suite/lifecycle/release/fixture/rights stops, and the separate phase/milestone closure boundary. Keep this worktree until a successful protected merge is reconciled; no phase verification, milestone audit/archive, v0.5 or cleanup follows from this execution.
+
+**Primary-source basis:** Git documents `git ls-tree -z` as emitting path names verbatim and NUL-terminated ([git-ls-tree](https://git-scm.com/docs/git-ls-tree.html)); its environment documentation explains repository redirection by `GIT_DIR`/`GIT_WORK_TREE` ([Git environment](https://git-scm.com/docs/git)). These support the byte-delimited census and isolated-Git test boundary; neither changes fixture policy.
+
 ### the agent's Discretion
 - Select the existing focused CTest targets that match the files and claims touched by the one plan; keep the existing test identities and CMake/Python standard-library patterns.
 - Use machine-checkable positive and negative controls for the Phase 24 report so false requirement completion, ownership changes, or milestone closure are rejected.
@@ -87,7 +104,7 @@ This discussion authorizes planning only; a separate owner authorization is requ
 - `.planning/milestones/v0.4-REQUIREMENTS.md` — Archived original v0.4 requirement definitions and current tracker dispositions; there is no active root requirements tracker.
 - `.planning/PROJECT.md` — Product scope, current limits, and milestone status.
 - `.planning/STATE.md` — Current owner handoff and preserved verification/lifecycle limits.
-- `.planning/context/DECISIONS.md` — D-103, D-193 through D-215; read the latest Phase 24 scope decisions alongside historical limits.
+- `.planning/context/DECISIONS.md` — D-103, D-193 through D-216; read the latest Phase 24 scope decisions alongside historical limits.
 - `.planning/context/WORKFLOW.md#cicd-efficiency` — standing policy for measured CI/CD timing, cheap-before-expensive checks, and preserving required coverage.
 - `.planning/v0.4-MILESTONE-AUDIT.md` — Current requirement, phase freshness, integration, and flow assessment.
 
@@ -102,7 +119,7 @@ This discussion authorizes planning only; a separate owner authorization is requ
 - [Current continuation handoff](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md) — Owner handoff, bounded recovery proposal, and stops to preserve.
 - [24-SECURITY.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-SECURITY.md) — T-24-04 and its open status before the recovery.
 - [24-01-PLAN.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md) and [24-VALIDATION.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md) — Existing one-plan scope and the two authorized focused CTests.
-- [24-CLOSEOUT.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md) — D-214 local candidate, focused checks, and preserved failed-run evidence; the fresh review report is summarized in D-215 above.
+- [24-CLOSEOUT.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md) — D-214/D-215 local candidates, focused checks and preserved failures; D-216 adds the latest exact-head review and execution authorization.
 
 ### Existing checkers and wiring
 - [Plan checker](tests/scripts/verify-planning-hygiene.py) — Plan frontmatter classifier, immutable plan-cap CLI, and current production-CLI self-test seam for the BOM regression.
@@ -121,10 +138,11 @@ This discussion authorizes planning only; a separate owner authorization is requ
 - `tests/scripts/verify-scene-report.py` — Scene-intake/promotion contract checks.
 - `tests/scripts/verify-summary-coverage.py` and `tests/scripts/verify-uat-closure.py` — Existing automated planning/UAT closure patterns.
 
-### Primary-language and Git behavior references for D-215
+### Primary-language and Git behavior references for D-215/D-216
 - [Python AST](https://docs.python.org/3/library/ast.html) and [Python lexical analysis](https://docs.python.org/3/reference/lexical_analysis.html) — AST constants represent decoded literal values; escapes and adjacent string literals affect runtime values.
 - [Python pathlib](https://docs.python.org/3/library/pathlib.html) — Path containment and resolution semantics; lexical parent operations alone do not prove filesystem containment.
 - [Git documentation](https://git-scm.com/docs/git) — `GIT_DIR`, `GIT_WORK_TREE`, and related environment variables can redirect repository discovery and operations.
+- [Git `ls-tree`](https://git-scm.com/docs/git-ls-tree.html) — `-z` emits path names verbatim and NUL-terminated, avoiding quote/newline ambiguity in the state-fork census.
 
 ### First-party source metadata
 - [Potion Panic creator page](https://deved.itch.io/potion-panic) — Shows the creator's source link and page-level code/asset license labels. These labels are recorded only as page metadata, not as a rights determination.

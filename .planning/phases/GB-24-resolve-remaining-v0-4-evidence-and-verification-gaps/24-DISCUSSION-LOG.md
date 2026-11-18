@@ -5,7 +5,7 @@
 
 **Date:** 2026-11-17; updated 2026-11-18
 **Phase:** 24-Resolve remaining v0.4 evidence and verification gaps
-**Areas discussed:** Additive verification evidence, Read-only candidate research, Phase exit with gaps, BOM normalization and plan-cap regression, post-T6 Acid2 mismatch, literal RIGHTS-01/DIAG-01/DIAG-02 reconciliation, FIXT-01 execution boundary, D-211 protected CI boundary, D-213 integrated recovery, and D-215 post-review correction scope, review limits, CI efficiency, and conditional merge
+**Areas discussed:** Additive verification evidence, Read-only candidate research, Phase exit with gaps, BOM normalization and plan-cap regression, post-T6 Acid2 mismatch, literal RIGHTS-01/DIAG-01/DIAG-02 reconciliation, FIXT-01 execution boundary, D-211 protected CI boundary, D-213 integrated recovery, D-215 post-review correction scope, review limits, CI efficiency and conditional merge, and D-216's four exact-head path/Git/census findings and execution extension
 
 ---
 
@@ -241,6 +241,25 @@ After reviewing the D-213 plan and its independent plan-check result, the owner 
 ## CI efficiency and required coverage
 
 **Owner direction carried forward:** Measure actual CI job/step times, queue/dependency waits, and timeout headroom. Run cheap checks before long gates. Preserve the complete required matrix and branch protection. Record run-specific findings in Phase 24 evidence and keep package-waiter workflow redesign separate from this checker recovery. The standing policy is `.planning/context/WORKFLOW.md#cicd-efficiency`.
+
+## D-216 — Extend and execute the four-finding recovery (2026-11-18)
+
+The fresh independent D-215 review is bound to candidate `e1d3200b1568fb619759c0f31cf4a8605e57ea06` / tree `1dd6999e95076662c21eb79c63c4baf3188cdb1e`. It found the following exact gaps; the receipt is [D-215 review](../../../build/phase24/d215-review-e1d3200b.md):
+
+| Finding | Risk | Recommendation | Control |
+|---|---|---|---|
+| Protected path built by `chr()` plus literal concatenation is invisible to the path checker's protected-value seed | A live phase path reader can evade the semantic check while adding no protected string literal | Fold only a one-argument integer-literal `chr()` call in the bounded constant evaluator; keep all other calls unresolved and fail closed at readers | Production-source mutant `Path(chr(46) + "planning/phases/private.md").read_text()` must be refused specifically as a live-phase reader; the approved source/read positives stay accepted |
+| A helper named `git_run` is exempt without body inspection | An adapter can introduce a live filesystem traversal while retaining its trusted name | Validate the helper body against the narrow approved immutable-Git adapter behavior; do not treat names alone as trust | Mutate the real `git_run(*args)` body to read/traverse `(repo / args[-1])`; require a causal refusal even with lexical count held constant |
+| Diagnostic boundary control inherits `GIT_DIR` and `GIT_WORK_TREE` into synthetic repo writes | Git may select or mutate a decoy/external repository during an isolation control | Isolate Git subprocesses through a small environment allowlist; leave non-Git `run()` behavior unchanged | Inject hostile vars with candidate and decoy repos; assert subject absolute Git-dir/HEAD before writes and unchanged decoy refs/index/status; restore env in `finally` |
+| State-fork inventory uses newline-delimited text path output | Git quoting/splitting may omit a tracked manifest whose filename contains a newline | Enumerate with `git ls-tree -rz --name-only`, parse NUL-delimited bytes, and strictly decode manifest paths | Add a synthetic newline-bearing non-manifest positive and newline-bearing manifest negative in the existing non-executing inventory-control seam; preserve exact 153 real cases and exclusions |
+
+**Owner choice:** “Extend and execute.” The D-215 review marked the census finding out of scope under the earlier plan; this explicit extension covers that exact finding and no broader fixture or admission work. Update the existing context and sole plan, add one same-plan correction task, execute the four corrections and focused local retests, then obtain a fresh review with the remaining two review-fix passes available for in-scope follow-up. One full protected matrix remains available only after a clean final review, and conditional merge is allowed only for the identical head with every required context passing. Existing branch protection and all prior stop conditions remain.
+
+**Unchanged boundaries:** Do not modify the fixture specification or fixture bytes, execute any Acid2 or excluded gbmicrotest case, alter production admission policy/rights, change requirements, widen the PR matrix or change workflow triggers/coverage/timeouts/caches/concurrency. Task 7, phase verification, D-103, milestone audit/archive, v0.5 and worktree cleanup remain separate. Local checks and CTests must stay ordered cheap-to-expensive; after the protected run, use measured timings to record either a safe concrete CI efficiency change or “no justified safe change.”
+
+**Next route:** The owner has authorized the extended correction and execution. Update/check the existing sole plan, commit the coherent planning boundary, then execute the new D-216 correction task followed by final T12 qualification. The exact handoff is `$gsd-execute-phase 24` in this same worktree.
+
+**Independent plan check:** PASS after correcting the first review's route/status mismatch and adding T12's immutable-head dense-input control. The checker confirmed only T13 then T12 are active; T10/T11 are historical; the dense-input Git/raw-pin and exact inventory controls run against `PHASE24_D216_REV`; and all seven existing CTests, floors, timeouts, exclusions, and protected qualification limits remain consistent. This was a read-only document review; no tests, configure, build, or CI ran during planning.
 
 ## Cross-role synthesis
 

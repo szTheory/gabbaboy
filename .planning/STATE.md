@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: D-215 execution authorized; committing execution-authority boundary
-last_updated: "2026-11-18T19:10:15.898Z"
-state_head: fa003c4b69fec7ff4d7686a3a51b903b41a8f99b
+stopped_at: D-216 authorized; commit the updated plan boundary, then execute T13 and T12
+last_updated: "2026-11-18T21:54:23.829Z"
+state_head: e1d3200b1568fb619759c0f31cf4a8605e57ea06
 progress:
   total_phases: 6
   completed_phases: 5
@@ -14,17 +14,17 @@ milestone_name: Evidence Floor
 last_activity: 2026-11-18
 current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: Phase 24 Plan 24-01 D-215 execution authorized; boundary commit before T10
+current_plan: "Phase 24 Plan 24-01 D-216: T13 correction, then T12 qualification"
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone stage:** v0.4 — Evidence Floor remains administratively closed with accepted gaps under D-209. The owner has authorized execution of the checked D-215 Phase 24 recovery plan. Preserve the D-214 review findings and prior D-211 matrix/package-preview failures; do not retry either old candidate or matrix.
+**Milestone stage:** v0.4 remains administratively closed with D-209 gaps. D-216 authorizes only Phase 24's four-finding correction and final qualification; preserve the historical e1d3200 review and D-211 failures.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
-**Phase state:** Phase 24 remains incomplete; Task 7 is deferred, and Phase 20/21/23.1 verification remains stale. D-214 candidate feb195f5e50eb4669b5bdb8b62e50459ec84121d passed local gates but its review found four blockers and two warnings; no push or matrix followed. D-215 replanned the sole plan and passed independent review. The owner authorized active T10–T12 on 2026-11-18; the executor is committing the authorization boundary before implementation. FIXT-01 remains Pending; the Acid2 mismatch remains failed and unreplayed.
-**Next route:** D-215 execution is authorized. First commit the recorded execution authorization and verify the immutable route/history; then execute only T10–T12 in order, preserving Task 7 deferral and leaving the canonical summary absent. After local convergence, perform the scoped fresh review cycle, one full protected matrix after a clean final review, and conditional merge of the identical qualified head through PR #154. Stop on any out-of-scope issue or failed required gate. Keep this recovery worktree and both automatic-advance flags false.
+**Phase state:** Phase 24 remains incomplete; T10/T11 local work and the D-215 review are historical. D-216 authorizes T13's four-finding correction followed by T12 qualification. Task 7 remains deferred; Phase 20/21/23.1 verification stays stale. FIXT-01 remains Pending; Acid2 remains failed and unreplayed.
+**Next route:** Commit the D-216 planning boundary, verify the immutable route/history, then execute only T13 and T12. After local convergence, obtain the bounded fresh review; run one protected matrix only after a clean final review and conditionally merge the identical qualified head. Stop on out-of-scope issues or failed required gates. Keep this worktree and both auto-advance flags false.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -111,7 +111,7 @@ Current stage: **The checked D-215 Phase 24 plan passed independent review, and 
 ## Session
 
 **Last session:** 2026-11-18T19:10:15.541Z
-**Stopped at:** D-215 execution authorized; committing execution-authority boundary
+**Stopped at:** D-216 authorized; commit the updated plan boundary, then execute T13 and T12
 **Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md
 
 ### Blockers
