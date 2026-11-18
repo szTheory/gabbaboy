@@ -9,13 +9,13 @@
 
 ## Next
 
-No new milestone is active. Phase 24 remains a recovery of the D-209 v0.4 closeout candidate; it does not reopen v0.4 or change the archived requirement statuses. D-214 local gates passed, but its independent review found four blockers and two warnings, so no push or matrix followed. D-215 replans the sole existing plan for all six findings, with a phase-local review exception, one full protected matrix after a clean review, and conditional protected merge. Execution requires separate owner authorization after the plan check. After protected reconciliation and separate closure decisions, the recommended next milestone is v0.5 DMG PPU Timing, beginning with exact admission of a small, rights-clear DMG oracle set.
+No new milestone is active. Phase 24 remains a recovery of the D-209 v0.4 closeout candidate; it does not reopen v0.4 or change the archived requirement statuses. D-214 local gates passed, but its independent review found four blockers and two warnings, so no push or matrix followed. D-215 replanned the sole existing plan for all six findings; the checked plan passed, and the owner authorized active T10–T12 on 2026-11-18. Its review exception, one full protected matrix after a clean review, and conditional protected merge apply only to this exact scope. After protected reconciliation and separate closure decisions, the recommended next milestone is v0.5 DMG PPU Timing, beginning with exact admission of a small, rights-clear DMG oracle set.
 
 ## Recovery Phase
 
 ### Phase 24: Resolve remaining v0.4 evidence and verification gaps
 
-**Status:** D-215 planning for the six findings from the D-214 exact-candidate review; execution is not authorized. Reuse the sole plan and T10–T12 task identities. D-214 local passes and failed review remain historical evidence; no D-214 push or matrix followed. v0.4 remains administratively closed with accepted gaps under D-209; archived requirements and original owners/statuses remain authoritative. The original D-211 matrix and package-preview runs ended failed at candidate `96d502d` and remain unchanged.
+**Status:** D-215 execution is authorized for active T10–T12 in the sole existing plan. D-214 local passes and failed review remain historical evidence; no D-214 push or matrix followed. v0.4 remains administratively closed with accepted gaps under D-209; archived requirements and original owners/statuses remain authoritative. The original D-211 matrix and package-preview runs ended failed at candidate `96d502d` and remain unchanged.
 **Goal:** Plan one integrated recovery round for the D-211 CI blockers, the stale Phase 24 path-linter count, and the active-route immutable-candidate gap, preserving v0.4 evidence and trust boundaries.
 **Requirements:** []
 **Requirement boundary:** This recovery does not reassign requirements or change their statuses; the archived v0.4 tracker remains authoritative.
