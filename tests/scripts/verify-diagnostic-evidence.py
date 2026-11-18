@@ -1393,7 +1393,7 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
         archived_only = dict(snapshot)
         archived_only[V04_ROOT_ROADMAP] = snapshot[V04_ARCHIVED_ROADMAP]
         expect_reject(lambda: validate_recovery_contract(archived_only, plan_paths),
-                      "recovery-route-content-invalid", "archive-only-route")
+                      "recovery-route-section-invalid", "archive-only-route")
         expect_reject(lambda: validate_recovery_contract(
             snapshot, [*plan_paths, V04_RECOVERY_PLAN.replace("24-01", "24-02")]),
             "recovery-plan-set-invalid", "extra-recovery-plan")
