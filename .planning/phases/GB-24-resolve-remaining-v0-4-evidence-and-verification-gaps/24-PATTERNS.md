@@ -1,219 +1,254 @@
-# Phase 24: Resolve Remaining v0.4 Evidence and Verification Gaps - Pattern Map
+# Phase 24: Resolve remaining v0.4 evidence and verification gaps - Pattern Map
 
-**Mapped:** 2026-11-16  
-**Files analyzed:** 3 candidate files  
-**Analogs found:** 3 / 3
+**Mapped:** 2026-11-17
+**Files analyzed:** 12 tracked source, test-data, and CMake files across the six D-212 blocker groups
+**Analogs found:** 12 / 12; each group has a useful implementation seam, though several lack an exact precedent for the new boundary
+
+## Scope and authority
+
+D-212 is planning-only in the sole existing Phase 24 plan. This map grants no implementation, test, build, CI, ROM execution, push, review, or merge authority. Preserve the frozen PR #154 candidate and allow the existing D-211 run to conclude without cancellation or rerun. Do not replay Acid2 or any excluded gbmicrotest case. Keep D-209's closed-with-gaps disposition and accepted gaps authoritative; FIXT-01 stays Pending, and no requirement or status changes are in scope. Do not weaken full-commit, fixture-pin, or ancestry validation.
+
+The current root roadmap remains the active Phase 24 route. Use the archived v0.4 roadmap and requirements only for historical v0.4 criteria, owners, and dispositions. Do not restore an active root requirements tracker or reopen v0.4. The project has no .codex/skills or .agents/skills directory with local SKILL.md files.
 
 ## File Classification
 
-| New/Modified File | Role | Data Flow | Closest Analog | Match Quality |
-|---|---|---|---|---|
-| `.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-EVIDENCE.md` | evidence report | batch / commit-pinned reconciliation | `.planning/phases/GB-22-composition-and-microtest-evidence/22-VERIFICATION.md` and `22-EVIDENCE.md` | role + data-flow match |
-| `tests/scripts/verify-planning-hygiene.py` | CLI utility / contract checker | request-response CLI over immutable snapshots | same file's `v04-reconciliation` check and self-test | exact role + data-flow match |
-| `tests/cmake/hygiene.cmake` | CTest configuration | request-response test wrapper | existing `plan_cap` and `planning_hygiene_controls` declarations | exact role + data-flow match; retain identities |
+| Existing D-212 surface | Role | Data flow | Closest analog | Match quality |
+|------------------------|------|-----------|----------------|---------------|
+| tests/scripts/verify-dense-input.py | test harness | batch | Same harness; commit admission in verify-fixture-admission.py | partial: isolated source and baseline exist, but the mutant subject lacks its own Git history |
+| tests/scripts/verify-fixture-admission.py | utility / validator | request-response | Same production CLI and its commit/ancestry checks | exact for fail-closed pin validation |
+| tests/scripts/verify-diagnostic-evidence.py | test / evidence checker | batch transform | Its immutable Git snapshot reader | exact for exact-revision input; source selection is stale for D-209 |
+| tests/scripts/verify-planning-hygiene.py | utility / planning checker | batch transform | Its read_rev and committed-fixture self-tests | partial: immutable reads and archive fallback exist, but not the active Phase 24 plus archived v0.4 combination |
+| tests/scripts/verify-state-forks.py | test / inventory checker | batch transform | Its manifest census and row expansion | partial: active-manifest census exists; the two current diagnostic exclusions do not |
+| tests/data/state-forks.json | test configuration | transform | Same manifest inventory and existing excluded row | partial: existing exclusion is a different path and reason |
+| tests/CMakeLists.txt | test configuration | batch | Existing state-fork fixture setup and dependent controls | exact for the execution dependency chain |
+| tests/scripts/verify-no-phase-paths.py | utility / linter | batch scan | Its tracked-file scan, exception checks, and controls | partial: current exception is file-count based, not exact-line based |
+| tests/data/v04-closeout.json | test/evidence data | transform | Existing JSON evidence values consumed by the path scanner | no logic analog; this is the historical fixture to scope narrowly |
+| tests/scripts/verify-workflow-policy-coverage.py | test / workflow-policy checker | batch | Its immutable tagged-source comparison | exact for preserving the release trust root |
+| tests/cmake/ci-lanes.cmake | test configuration | batch | workflow_policy_coverage_controls registration | exact for preserving the existing CTest identity |
+| tests/cmake/hygiene.cmake | test configuration | batch | plan_cap and planning_hygiene_controls registration | exact for timeout, output floor, and order of cheap checks |
 
-`24-EVIDENCE.md` is the recommended name in `24-RESEARCH.md` (Assumption A1), not a locked filename. If the plan selects another canonical Phase 24 evidence name, retain the same additive, commit-pinned record shape.
+The archived input records, confirmed tracked, are .planning/milestones/v0.4-ROADMAP.md and .planning/milestones/v0.4-REQUIREMENTS.md. They are sources for historical facts, not files to change in this planning-only scope. All 12 paths in the table passed the tracked-source gate with git ls-files.
 
 ## Pattern Assignments
 
-### `.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-EVIDENCE.md` (evidence report, batch / commit-pinned reconciliation)
+### 1. Dense-input isolated Git fixture context
 
-**Analogs:**
+**Affected surfaces:** tests/scripts/verify-dense-input.py and tests/scripts/verify-fixture-admission.py.
+**Classification:** test harness / batch; production admission utility / request-response.
 
-- `.planning/phases/GB-22-composition-and-microtest-evidence/22-EVIDENCE.md`
-- `.planning/phases/GB-22-composition-and-microtest-evidence/22-VERIFICATION.md`
-- `.planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-VERIFICATION.md`
+**Analog:** The current dense-input harness already copies only tracked source into a disposable tree and keeps a pinned baseline object store separate. It does not initialize a subject repository, which is the D-212 gap. Preserve that isolation while adding the candidate HEAD and active admission-pin objects to the temporary subject's Git context; do not solve it by putting candidate history into the separate baseline store. Assert the expected full HEAD and pin ancestry before CMake configure. Keep production admission behavior fail-closed.
 
-All three report paths above are git-tracked. Phase 22's evidence record is the closest format match for a durable evidence artifact; its verification report is the closest semantic match for distinguishing historical outcome, immutable source, and current freshness. Phase 23.1 is the recent example of reporting focused checks while preserving the open milestone and Pending owners.
+**Tracked-source copy and separate baseline pattern** (verify-dense-input.py:97-129):
 
-**Immutable identity and scope pattern** (`22-EVIDENCE.md`, lines 3-9):
+~~~python
+def copy_tracked_source(destination: Path) -> None:
+    listed = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True,
+                            stdout=subprocess.PIPE).stdout.split(b"\0")
+    ...
+    if source.is_symlink():
+        ...
+        shutil.copyfile(resolved, target)
+    else:
+        shutil.copy2(source, target)
 
-```markdown
-**Scope:** Owner-approved D-141 synthetic-plus-metadata closeout plus the single D-143 C1 OSC correction/review cycle in existing Plan 22-12. DIAG-01, DIAG-02, and RIGHTS-01 retain their original definitions and remain Pending. All seven real-fixture gates remain unresolved; no license prohibition is inferred.
+def create_baseline_object_store(destination: Path) -> None:
+    initialized = run(["git", "init", "--bare", str(destination)], cwd=ROOT)
+    ...
+    fetched = run(["git", "--git-dir", str(destination), "fetch", "--no-tags",
+                   str(ROOT), BASELINE_COMMIT], cwd=ROOT)
+    ...
+    verified = run(["git", "--git-dir", str(destination), "cat-file", "-e",
+                    f"{BASELINE_COMMIT}^{{commit}}"], cwd=ROOT)
+~~~
 
-## Immutable Source and Metadata
+**Admission guard to retain** (verify-fixture-admission.py:146-153, 771-787):
 
-The source-bound metadata assessment preserves historical source revision `559b5f7296f957a1a1fea278056a908f9a3d9339`. Local immutable checks at reviewed source `06d2cbc1e0ceaa100cc0ecc28826e39794a73f04` report 513 named metadata cases...
-```
+~~~python
+def check_commit(root: Path, revision: object, token: str) -> str:
+    if not isinstance(revision, str) or not HEX40.fullmatch(revision):
+        raise Reject(token, "expected one full lowercase commit id")
+    git(root, "cat-file", "-e", f"{revision}^{{commit}}")
+    return revision
 
-Use separate full commit fields for the assessment input and historical comparison baseline. State what each revision contains and what the check establishes. The record's containing commit can be referenced later by SUMMARY/verification evidence; do not make the record self-referential by requiring its own future commit ID.
+pin = check_commit(root, pin_text, "admission-pin-invalid")
+current_head = git(root, "rev-parse", "--verify", "HEAD^{commit}")...
+ancestry = subprocess.run(["git", "merge-base", "--is-ancestor", pin, current_head], ...)
+if ancestry.returncode != 0:
+    raise Reject("admission-pin-not-in-history", pin)
+~~~
 
-**Historical status versus freshness pattern** (`22-VERIFICATION.md`, lines 6-12, 50-57, 95-99):
+The existing harness uses expected rejection reasons for missing or wrong baseline objects (verify-dense-input.py:132-140, 211-234). Reuse that causal-control style for missing candidate objects and wrong ancestry. Preserve its source-archive qualification assertion at lines 244-257, which checks that a gitless source copy stays unqualified with revision "unknown". The dense-input self-test builds a runner and executes the admitted Libbet case (lines 167-173, 244-272); it is not a local planning check.
 
-```yaml
-source_head: d18db4c56d2a79e6138df37a9d16e3d346a86e13
-implementation_head: ca2f0be6b38e7dd22e0eb3296b9a21cceed1a765
-implementation_tree: e768b7ec26d7c07542d6aa29aef53ae8fc826c5e
-evidence_head: d18db4c56d2a79e6138df37a9d16e3d346a86e13
-report_kind: boundary_reconstruction
-current_freshness: not_evaluated
-```
+### 2. Archived v0.4 planning evidence with the active recovery route
 
-The body explains that the report reconstructs facts from pinned evidence and that a historical pass does not refresh another phase's report. Apply this distinction to every row: original acceptance text and owner, tracker status, milestone-audit disposition, historical report result, current freshness, and exact unsatisfied gate are separate facts. Cover all eight original v0.4 requirements, including the four Complete tracker rows whose audit freshness is Partial/Stale; keep FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 Pending under their original owners. Do not copy Phase 22's statuses or counts as Phase 24 facts.
+**Affected surfaces:** tests/scripts/verify-diagnostic-evidence.py and tests/scripts/verify-planning-hygiene.py. Read-only historical sources: .planning/milestones/v0.4-REQUIREMENTS.md and .planning/milestones/v0.4-ROADMAP.md.
+**Classification:** evidence/planning checkers / batch transform; archived records / immutable inputs.
 
-**Focused-check reporting pattern** (`23.1-VERIFICATION.md`, lines 42-49):
+**Analog:** Reuse the exact-revision Git tree and snapshot readers, but select archived v0.4 requirement facts while retaining the active Phase 24 route from the root roadmap. The current diagnostic checker hard-codes the removed root requirements path in REQUIRED and BOUNDARY_PATHS (verify-diagnostic-evidence.py:68-79), and its old D-206 validation asserts the former Pending statuses (lines 519-529, 929-943). Preserve its immutable snapshot machinery, not those obsolete source/status assumptions.
 
-```markdown
-The existing plan_cap CTest is wired to the immutable full source revision; the authorized plan_cap and planning_hygiene_controls CTests passed 2/2. The hygiene self-test retains the plan-cap negative controls.
-```
+**Safe immutable snapshot pattern** (verify-diagnostic-evidence.py:257-276):
 
-When the evidence records Phase 24 results, bind the command/result to the checked full commit, call it point-in-time evidence, and explicitly say it does not refresh Phase 20/21 verification or satisfy the D-103 final-head suite gate. No rights conclusion or fixture/source action belongs in this record. Keep upstream page-access failures labeled as access failures.
+~~~python
+def load_snapshot(root: pathlib.Path, revision: str,
+                  paths: tuple[str, ...] = REQUIRED) -> dict[str, bytes]:
+    entries = tree_entries(root, revision)
+    result = {}
+    for path in paths:
+        if not safe_path(path):
+            raise Reject(f"source-path-unsafe:{path}")
+        item = entries.get(path)
+        if item is None:
+            raise Reject(f"source-record-missing:{path}")
+        _oid, size, mode = item
+        if mode == "120000":
+            raise Reject(f"source-symlink-refused:{path}")
+        ...
+        content = git(root, "show", f"{revision}:{path}", ...)
+        ...
+~~~
 
----
+**Planning reader boundary** (verify-planning-hygiene.py:225-279, 282-301): read_rev requires a full commit and uses git show/ls-tree for its data. Its current archive fallback only activates after a completed milestone with no active phase paths and no root requirements file (lines 240-261). That fallback is not the D-209 shape: Phase 24 remains active. Do not reuse its all-or-nothing archive switch. Select the archived requirement/roadmap only for historical v0.4 facts, while preserving the root roadmap's Phase 24 section as the active route.
 
-### `tests/scripts/verify-planning-hygiene.py` (CLI utility / contract checker)
+The archived requirement record says FIXT-01 remains Pending and RIGHTS-01, DIAG-01, and DIAG-02 are complete only for the accepted diagnostic scope (.planning/milestones/v0.4-REQUIREMENTS.md:67-71). Keep those dispositions and the original owner/criterion text; do not synthesize or restore a root requirements tracker. Use negative controls for wrong/missing archive paths, altered owner/status/criteria, and archive selection that drops the active Phase 24 route.
 
-**Analog:** `tests/scripts/verify-planning-hygiene.py`, existing `v04-reconciliation` stage and self-test. This file is git-tracked and already owns planning report contracts; extend its established checker seam rather than create a second snapshot loader or new dependency.
+### 3. State-fork inventory and non-executable diagnostic exclusions
 
-**Imports pattern** (lines 55-69):
+**Affected surfaces:** tests/scripts/verify-state-forks.py, tests/data/state-forks.json, and the existing CTest graph in tests/CMakeLists.txt.
+**Classification:** inventory checker / batch transform; test configuration / batch execution chain.
 
-```python
-from __future__ import annotations
+**Analog:** manifest_cases already enumerates immutable manifests and requires exact equality with the configured list before expanding ROM rows (verify-state-forks.py:133-145). It then expands only fixture_manifests into cases (lines 170-212). The current excluded inventory contains a different optional tests/acid2 manifest and validates that specific exception (verify-state-forks.py:284-289; tests/data/state-forks.json:720-724). Use that fail-closed census pattern, but give the current fixtures/acid2 and fixtures/gbmicrotest manifests explicit exclusion entries with exact identity and non-execution reasons; do not put them in fixture_manifests or row expansion. Research records the current manifest SHA-256 values as 7f198d5964a8547d1a122d5d64d395547ba6f365264cdb00abf190a5880c5da6 for fixtures/acid2/manifest.json and d3aedaa5d9f583bea2951a9a58a3190ff2314fafbfa53b7e63e98ed6349cb7c for fixtures/gbmicrotest/manifest.json (24-RESEARCH.md:134). Keep the accepted case count and census tied to the active union plus explicitly validated exclusions.
 
-import argparse
-import contextlib
-import io
-import json
-import os
-import posixpath
-import re
-import subprocess
-import sys
-import tarfile
-import tempfile
-from collections.abc import Callable
-from pathlib import Path
-```
+**Census and expansion boundary** (verify-state-forks.py:133-145, 170-190):
 
-**Immutable commit snapshot pattern** (lines 256-294):
+~~~python
+listed_manifests = {item["path"] for item in spec.get("fixture_manifests", [])}
+...
+actual_manifests = {line for line in tree.stdout.splitlines()
+                    if line.endswith("/manifest.json")}
+if actual_manifests != listed_manifests:
+    raise ForkError("fixture manifest union differs from immutable tree: ...")
+...
+for item in spec.get("fixture_manifests", []):
+    ...
+    for row in rows:
+        ...
+        case = make_case(path, row, rom_path)
+        add_case(case, cases, ids)
+~~~
 
-```python
-def commit_snapshot(repo: Path, rev: str) -> tuple[dict[str, bytes] | None, str | None]:
-    """Read the planning tree from a commit in one Git operation; cache only immutable object ids."""
-    cache_key = (str(repo.resolve()), rev)
-    if cache_key in COMMIT_SNAPSHOT_CACHE:
-        return COMMIT_SNAPSHOT_CACHE[cache_key], None
-    if not FULL_COMMIT.fullmatch(rev):
-        return None, "v04-reconciliation-rev: --rev must be a full 40-hex commit id"
-    found = git_run(repo, "cat-file", "-t", rev)
-    if found.returncode != 0 or found.stdout.strip() != b"commit":
-        return None, f"v04-reconciliation-rev: {rev} is not a commit in {repo}"
-    archive = git_run(repo, "archive", "--format=tar", rev, "--", ".planning")
-    # Decode only committed planning files; errors fail closed.
-```
+Existing state-fork CTests are execution-bearing: matrix shards set up gbb_state_fork_matrix_shards, the summary sets up gbb_state_fork_matrix_complete, and census/mutant controls require that fixture (tests/CMakeLists.txt:5393-5427). The skipped dependent checks after setup failure are consequences of this dependency chain. Do not run this chain locally under the planning-only authorization, and do not replay Acid2, div_inc_timing_a, or any excluded gbmicrotest case.
 
-Use `commit_file(repo, rev, path)` (lines 291-294) for exact files; it does not fall back to checkout contents. The existing command validates both `--rev` and `--baseline-rev` as full commits before dispatching to a stage (`check_v04_reconciliation`, lines 1103-1117).
+### 4. Historical path scanning for the closeout fixture
 
-**Exact status/owner and protected-baseline pattern** (`check_v04_report`, lines 903-950):
+**Affected surfaces:** tests/scripts/verify-no-phase-paths.py, tests/data/v04-closeout.json, and tests/CMakeLists.txt.
+**Classification:** linter / batch scan; historical test data / transform; CTest registration / batch.
 
-```python
-dispositions = frontmatter_objects(report, "requirement_dispositions") or []
-actual_dispositions = {
-    item.get("id", ""): (item.get("status", ""), item.get("original_owner", ""))
-    for item in dispositions
-}
-expected_dispositions = {
-    key: ("Pending", owner) for key, owner in V04_PENDING_OWNERS.items()
-}
-if actual_dispositions != expected_dispositions:
-    errors.append("v04-report-requirements: four original requirements must remain Pending with their original owners")
-```
+**Analog:** The checker walks git-tracked text outside .planning, enforces must-scan files, rejects unlisted live-phase paths, and validates allowlist hit counts and reasons (verify-no-phase-paths.py:38-65, 95-153). Its current exception is count-based for an entire file. The exact historical value appears twice in v04-closeout.json, at lines 488 and 662. Prefer changing only those exact data values if the schema permits; otherwise extend the checker with exact line/content pins. Do not allowlist the whole file by count, since that would admit unrelated live readers.
 
-The existing checker also compares protected files against a pinned baseline before accepting the report (lines 944-950). For Phase 24, add exact expected owner/status/audit sets for the evidence-map contract and causal controls for false completion, owner reassignment, and milestone closure. Preserve the protected-input comparison for the original tracker and historical reports. Keep source observations, evaluator outcomes, freshness, and authority gates in distinct fields.
+**Tracked walk and stale/over-limit exception checks** (verify-no-phase-paths.py:95-128, 131-153):
 
-**Positive and causal-negative CLI control pattern** (`self_test_v04_reconciliation`, lines 1627-1637 and 1855-1886):
+~~~python
+def tracked_files(root: Path) -> list[str]:
+    result = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], ...)
+    ...
 
-```python
-def cli_check(stage: str, rev: str, expected_code: str | None = None,
-              check_baseline: str | None = None) -> None:
-    nonlocal controls
-    output, error = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
-        result = main(["--check", "v04-reconciliation", "--stage", stage, "--rev", rev,
-                       "--baseline-rev", check_baseline or baseline_rev, "--repo", str(repo)])
-    if expected_code is None:
-        expected_line = f"v04-reconciliation pass stage={stage}"
-        if result != 0 or output.getvalue().strip() != expected_line:
-            raise SystemExit("planning-hygiene self-test FAIL: report CLI positive")
-    elif result != 1 or expected_code not in error.getvalue():
-        raise SystemExit(f"planning-hygiene self-test FAIL: report CLI negative wanted {expected_code}")
+for name in tracked_files(root):
+    if name == ".planning" or name.startswith(".planning/"):
+        continue
+    ...
+    for match in SPELLINGS.finditer(text):
+        ...
+        hits.setdefault(name, []).append((line, match.lastgroup or "?"))
+...
+if len(found) > pins[name]:
+    raise LintError("REJECT over-max: ...")
+...
+need(observed == maximum, "REJECT stale-allowlist: ...")
+~~~
+
+The self-test has a useful exact-path positive and a second-occurrence negative for immutable boundary path pins (lines 242-255), plus negatives for actual reader spellings and broad scope roots (lines 230-240, 282-289). CTest already separates no_phase_paths_controls from the real no_phase_paths tree scan (tests/CMakeLists.txt:3001-3020); retain both identities and their control/output floors.
+
+### 5. v0.4.0 checker trust and the exact D-209 notice overlay
+
+**Affected surfaces:** tests/scripts/verify-workflow-policy-coverage.py, tests/scripts/verify-fixture-admission.py, and tests/cmake/ci-lanes.cmake.
+**Classification:** workflow-policy checker / batch; fixture admission utility / request-response; CTest configuration / batch.
+
+**Analog:** The workflow-policy checker obtains fixture-checker bytes from the fixed v0.4.0 source commit and rejects any byte difference (verify-workflow-policy-coverage.py:2117-2122, 2432-2444). Keep that tag as the independently verified trust root. The current D-209 notice overlay has a useful exact-byte precedent in verify-fixture-admission.py:937-956: it permits one named notice change at the specified path and rejects unrelated or duplicate changes. Its self-test covers an accepted exact status update and rejects a path change, altered value, unrelated edit, and duplicate anchor (lines 1368-1384).
+
+**Tagged byte comparison** (verify-workflow-policy-coverage.py:2436-2444):
+
+~~~python
+trusted_fixture = root / "tests/scripts/verify-fixture-admission.py"
+fixture_source = git_text(root, recovery_source,
+                          "tests/scripts/verify-fixture-admission.py")
+if trusted_fixture.read_bytes() != fixture_source:
+    reject("release recovery fixture checker differs from the tagged trusted snapshot")
+~~~
+
+**One-path, one-anchor overlay pattern** (verify-fixture-admission.py:947-956):
+
+~~~python
+if current_index == pinned_index:
+    return True
+if (index_path != "THIRD_PARTY_NOTICES.md"
+        or pinned_index.count(NOTICE_ACID2_STATUS_BEFORE) != 1):
+    return False
+return current_index == pinned_index.replace(
+    NOTICE_ACID2_STATUS_BEFORE, NOTICE_ACID2_STATUS_AFTER, 1)
+~~~
+
+The existing workflow-policy production check is intentionally a full byte comparison; the admission checker has separate notice semantics. Treat those as distinct layers. Plan an exact, independently checked overlay over the unchanged tag bytes, with a valid positive and causal mutations; do not refresh the tagged digest, remove the comparison, or duplicate/weaken production rights logic. If the overlay cannot be separated while preserving the trust root, the D-212 plan requires stopping for owner resolution. Preserve the existing workflow_policy_coverage_controls identity (tests/cmake/ci-lanes.cmake:144-148).
+
+### 6. Planning-hygiene self-test runtime
+
+**Affected surfaces:** tests/scripts/verify-planning-hygiene.py and tests/cmake/hygiene.cmake.
+**Classification:** planning checker / batch; CTest configuration / batch.
+
+**Analog:** The self-test counts controls through one helper and checks expected specific error codes, with both passing and rejected plan fixtures (verify-planning-hygiene.py:1957-1985). Its gap-assessment controls create a temporary Git repository and commit disposable fixtures (lines 2487-2513, 2995-3013). That is the closest runtime shape for the archive-reader controls, and also the first place to inspect for redundant Git processes or repeated snapshot work if the same self-test remains slow.
+
+**Existing control-count contract** (verify-planning-hygiene.py:1957-1967):
+
+~~~python
+def expect(label: str, errors: list[str], code: str | None) -> None:
+    if code is None:
+        if errors:
+            raise SystemExit("... should pass ...")
+    elif code not in codes(errors):
+        raise SystemExit("... did not report ...")
     controls += 1
-```
+~~~
 
-Retain one canonical passing report and semantic mutations whose required refusal identifies the broken claim. Test the production CLI against committed fixtures in a disposable repository, not live working-tree files. Keep the Phase 22-specific `v04-reconciliation` meaning intact; implement the Phase 24 contract as an additive Phase 24 check/path instead of changing the existing report stage's subject.
-
----
-
-### `tests/cmake/hygiene.cmake` (CTest configuration)
-
-**Analog:** Existing planning-hygiene registrations in `tests/cmake/hygiene.cmake`, included by `tests/cmake/areas.cmake` lines 8-10. Both files are git-tracked.
-
-**Wrapper and registration pattern** (`hygiene.cmake`, lines 28-43, 71-85):
-
-```cmake
-function(gbb_add_hygiene_test name code regex timeout script)
-  set(command "${Python3_EXECUTABLE}" -I "${script}" ${ARGN})
-  list(JOIN command "$<SEMICOLON>" joined)
-  add_test(NAME ${name}
-    COMMAND ${CMAKE_COMMAND}
-      "-DGBB_CMD=${joined}"
-      -DGBB_EXPECT_CODE=${code}
-      "-DGBB_EXPECT_REGEX=${regex}"
-      "-DGBB_WORKDIR=${PROJECT_SOURCE_DIR}"
-      ${GBB_HYGIENE_EXTRA_ARGS}
-      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-  set_tests_properties(${name} PROPERTIES TIMEOUT ${timeout} LABELS planning)
-endfunction()
-
-gbb_add_hygiene_test(plan_cap 0 "plan-cap pass phases=[0-9]+ plans=[0-9]+" 30
-  "${GBB_PLANNING_HYGIENE_CHECKER}" --check plan-cap
-  --rev "${GBB_HYGIENE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
-
-gbb_add_hygiene_test(planning_hygiene_controls 0 "planning-hygiene self-test pass controls=[0-9]+" 30
-  "${GBB_PLANNING_HYGIENE_CHECKER}" --self-test
-  --rev "${GBB_HYGIENE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
-```
-
-Keep the two authorized CTest identities exactly `plan_cap` and `planning_hygiene_controls`, and retain their current 30-second timeout and planning label. No new CTest identity or broad suite is in scope. The wrapper checks an exact exit code and output regex, and can enforce a parsed minimum control count; use it only if the existing self-test output contract changes. Avoid adding redundant live checks that increase the existing self-test runtime.
+tests/cmake/hygiene.cmake:73-85 registers plan_cap and planning_hygiene_controls with a 30-second timeout; plan_cap is declared first and should be run as the cheap preflight when execution is later authorized. The self-test requires at least 125 controls. D-212 records one macOS timeout under parallel load and a Linux failure that occurred earlier at the missing archived requirements. Diagnose failure order and measured stage cost before considering any timeout change. Keep the existing CTest name, 125-control floor, and control coverage; do not raise the 30-second timeout by assumption.
 
 ## Shared Patterns
 
-### Immutable report boundaries
+### Immutable identities and separate trust domains
 
-**Sources:** `tests/scripts/verify-planning-hygiene.py` lines 256-294, 880-950, 1103-1117; `22-VERIFICATION.md` lines 50-57, 95-99.  
-**Apply to:** Phase 24 evidence validation and all comparisons with original requirement or historical report state.
+Use full commit IDs and Git object reads for point-in-time facts. Resolve active fixture-pin commits and ancestry in the subject repository; keep the legacy baseline object store independent. Read historical v0.4 facts from the archived v0.4 records while retaining the active Phase 24 root route. Keep the v0.4.0 tag as the checker trust root and make any notice overlay a separate exact delta.
 
-Read the full target commit and baseline commit from Git objects. Never use a branch, tag, dirty checkout, or runtime `HEAD` as the report's source of facts. Keep record-source commit and comparison baseline distinct, and reject any historical Phase 20/21 report byte change.
+### Fail-closed validation with causal controls
 
-### Exact refusal class and controls
+The repository's Python scripts use standard-library imports, explicit path/revision validation, and narrow error types such as Reject, ForkError, and LintError. Self-tests pair valid cases with mutations that assert the intended error code, rather than accepting any failure. Preserve that structure and add no dependency or CTest identity.
 
-**Sources:** `tests/scripts/verify-planning-hygiene.py` lines 880-922 and 1627-1637, 1855-1886.  
-**Apply to:** Phase 24 report checker and its self-test.
+### Keep excluded inputs outside execution rows
 
-Pair the canonical valid report with causal mutants for a completed requirement, changed original owner, changed historical/stale disposition, or closed milestone. Require the specific error family, not merely a nonzero exit. Keep the change small enough for the existing 30-second `planning_hygiene_controls` ceiling.
-
-### CTest identity and output contract
-
-**Source:** `tests/cmake/hygiene.cmake` lines 28-43, 71-85; `tests/cmake/areas.cmake` lines 8-10.  
-**Apply to:** Only the existing `plan_cap` and `planning_hygiene_controls` checks.
-
-CTest is invoked through `tests/expect_exit.cmake`; the CMake fragment binds the checker to the full configure-time source revision and asserts exit code/output. Preserve both names and the timeout. Do not add release inventory entries or any other CTest.
-
-## Phase 24 Fences
-
-- Produce one additive point-in-time evidence map. Keep all eight original requirement definitions, owners, tracker statuses, audit freshness, historical report results, and remaining gates distinct.
-- Preserve FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 as Pending under their original owners; a Phase 24 checker pass cannot satisfy them.
-- Keep Phase 20/21 reports and source identities unchanged. Phase 24 checks do not refresh their full verification criteria or satisfy the D-103 exact-final-head suite gate.
-- Record allowed source-page identity/access outcomes as observations only. No rights determination, fixture/source payload acquisition, build/run/admission, or third candidate search.
-- Keep the milestone audit `gaps_found`; no requirement acceptance, release change, lifecycle retry, milestone completion, or archival.
-- Run only `plan_cap` and `planning_hygiene_controls` as the plan's focused CTests; this mapping pass ran no tests.
+The state-fork census expands only active manifest rows, and its CTest fixture graph gates census/mutant controls on matrix setup. Model the new diagnostic manifests as exact, reasoned exclusions that never enter row expansion. Existing dense-input acceptance and state-fork matrix checks are execution-bearing; D-212 permits no such local invocation during planning.
 
 ## No Analog Found
 
-None for the three candidate files. The evidence/report and immutable checker patterns are already present.
+Existing primitives are close but no current code implements these exact combinations:
+
+| D-212 seam | Missing exact precedent |
+|------------|------------------------|
+| Archived planning readers | The planning-hygiene archive fallback requires a completed milestone and no active phase route; there is no precedent for archived v0.4 facts alongside the active Phase 24 root roadmap. |
+| Tag plus D-209 overlay | The workflow-policy checker compares the whole current checker to tag bytes; the narrow notice overlay exists in admission policy but is not yet an independently separated overlay on that checker trust comparison. |
+| Diagnostic state-fork exclusions | The current state-fork exclusion is for tests/acid2/manifest.json; it does not encode the exact fixtures/acid2 and fixtures/gbmicrotest manifest identities and non-execution reasons. |
+| Historical path exception | The current allowlist pins file-wide counts, not exact immutable line/content for the two v04-closeout.json values. |
+
+These are design gaps for the sole D-212 plan, not permission to broaden the source/trust/fixture boundaries.
 
 ## Metadata
 
-**Analog search scope:** `.planning/phases/GB-22-composition-and-microtest-evidence/`, `.planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/`, `tests/scripts/`, and `tests/cmake/`.  
-**Tracked-source check:** Every analog named above was confirmed by `git ls-files`; no ignored runtime mirrors are referenced.  
-**Pattern extraction date:** 2026-11-16
+**Analog search scope:** tests/scripts, tests/data, tests/cmake, the relevant tests/CMakeLists.txt registrations, and the archived v0.4 requirement/roadmap inputs.
+**Tracked-source gate:** Every named code/test analog was verified by git ls-files; no ignored runtime or capability mirror path is cited.
+**Pattern extraction date:** 2026-11-17

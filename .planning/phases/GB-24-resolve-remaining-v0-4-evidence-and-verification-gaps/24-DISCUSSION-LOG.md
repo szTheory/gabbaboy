@@ -149,6 +149,46 @@ The owner directed a full fan-out across the relevant product, rights/security, 
 
 **Next route:** `$gsd-plan-phase 24` to replan the same `24-01-PLAN.md`; then execute only the D-211 correction task. The current recovery checkout remains active until the protected merge is reconciled to clean `main`.
 
+## D-212 post-matrix integrated gap scope (2026-11-17)
+
+The owner selected the integrated recovery scope after the one D-211 protected matrix attempt exposed blockers outside Task 9. This selection authorizes scoping/planning only; no implementation, push, review, second matrix, or merge is authorized here. PR #154 remains open and frozen at `96d502d`; run `44189691301` has hard required-job failures, including the CMake-floor job, while Windows is still running its required test-inventory step. Related package-preview run `44189691412` is waiting for successful matching CI. The candidate will remain unchanged until the original attempt concludes.
+
+### Fan-out synthesis
+
+| Lens | Finding | Adopted constraint |
+|---|---|---|
+| QA / test harness | The dense-input mutant source copy has no `.git`; the separate object store contains only the fixed baseline, while fixture admission must resolve pin commits and ancestry. | Repair only the harness Git context; keep admission pin and ancestry checks strict; prove the temporary context before CMake configure. |
+| Planning / product | Evidence readers still require root requirements and roadmap data although D-209 keeps v0.4 closed and stores its detailed records in the v0.4 archive. | Keep D-209 authoritative; resolve exact archived records without restoring an active root tracker or promoting requirements. |
+| Emulator validation | State-fork inventory demands all manifests, but adding Acid2 and gbmicrotest as ordinary cases would execute prohibited/unapproved diagnostic ROMs. | Track the two diagnostic manifests as explicit non-executed exclusions with exact identities/reasons; do not replay Acid2, `div_inc_timing_a`, or any of the 512 excluded gbmicrotest cases. |
+| Security / provenance | The workflow-policy self-test detects that the current fixture checker differs from the v0.4.0 tagged trusted snapshot. | Preserve the tagged trust root; do not waive or refresh its pin. If the overlay cannot be separated while preserving this boundary, stop and return the issue. |
+| CI / operations | A single planning-hygiene self-test timed out under a parallel macOS job; dependent state-fork tests were skipped after the manifest mismatch. | Diagnose time and failure ordering; do not blindly raise the timeout. Treat dependent skips as consequences, not additional root causes. |
+| Architecture / dependency policy | Existing Python/CMake/CTest seams cover the recovery; no new runtime dependency is warranted. | Reuse the sole plan and existing test identities where possible; no new dependency, fixture, or broad local suite. |
+
+**Chosen boundary:** Plan one integrated gap round in Phase 24's existing plan. If execution is later authorized, use cheap consistency checks before focused existing CTests, then at most one fresh exact-head review and one new protected PR matrix after the original run ends. Any focused failure, unresolved review finding, undiagnosed timeout, or failed/missing/skipped/stale required context stops without another fix/review/matrix. Keep the current recovery worktree until successful protected reconciliation to clean `main`; v0.5 remains unstarted. The next command is `$gsd-plan-phase 24`.
+
 ## 2026-11-17 — D-209 owner closeout decision
 
 The owner chose to close v0.4 with remaining gaps recorded, rather than keep the milestone open for FIXT-01. The original tracker now completes RIGHTS-01, DIAG-01, and DIAG-02 for the exact admitted diagnostic scope; FIXT-01 remains Pending. The Acid2 cross-model comparison stays failed (19,840/19,840 differing pixels) and was not replayed. Phase 24 Task 7 and D-103's exact-final-head suite remain incomplete; stale verification is disclosed. Recommend `$gsd-new-milestone` for v0.5 DMG PPU Timing.
+
+## D-213 — Post-T10 recovery gameplan (2026-11-18)
+
+The owner asked for a full review of three areas and directed the agent to follow the synthesized recommendations. Independent advisor reviews covered the linter contract, immutable candidate boundary, and recovery scope. The current checkout and failed T10 edits remain untouched by implementation; this record updates planning context only.
+
+| Area | Options considered | Recommendation | Adversarial check |
+|---|---|---|---|
+| Path linter | Raise the per-file count to 30; suppress the target file; structurally classify the finite safe occurrences | Keep the general lexical scanner. Replace only the target file's count-only pin with a standard-library structural/context contract for immutable Git reads and disposable self-test fixtures. Keep unknown and live filesystem reads rejected. | A same-count substitution from an approved fixture to a live `open`/`Path.read_*` use must fail. Also reject a new unclassified occurrence, a changed historical path, and a changed immutable revision. |
+| Candidate boundary | Read the current dirty worktree; fold the roadmap into the T10 code commit; create a planning-boundary commit first | Allow a local, unpushed documentation-only commit with the active Phase 24 root route and coherent plan/state/handoff, then require the implementation commit to descend from it. Stage only approved `.planning/` files and prove no T10 source edits were swept in. | `git show <rev>:<path>` reads the committed object. Verify the root route, sole-plan pointer, archived v0.4 inputs, and ancestry at exact commits before configure or long tests. |
+| Recovery after T10 | Resume T11/T12; abandon; or replan the integrated recovery | Keep the failed T10–T12 attempt spent. Replan the sole plan for the six D-212 blockers plus the stale count and route prerequisite. In a later authorized round, allow local diagnose/fix/retest cycles until scoped checks pass; retain one final exact-head review and one protected matrix. | A new trust/correctness issue outside scope, unresolved final review finding, or missing/failed required CI context stops. Do not promote requirements, run Task 7, replay excluded ROMs, or start milestone closure. |
+| CI/CD efficiency | Reduce required tests; add unmeasured caches/concurrency; shift cheap gates before long work and record observed waits | Preserve the full matrix. Preflight changed contracts locally before pushing. Record measured job/step timing and keep a separate follow-up for safe early failure of dependent preview waiters. | Keep SHA/run/attempt identity, debounce/rerun handling, artifact binding, all required contexts, and the repository's ban on `workflow_run`. |
+
+The source records establish that T10 saw 30 path spellings against a pin of 1: 28 were in the existing candidate and two were added by T10; the two additions were removed without a rerun. The exact candidate lacks the dirty root Phase 24 route. The former D-211 protected runs are now conclusively complete: CI lasted about 70 minutes; Linux's 1,943-test stream lasted about 37 minutes and reported 44 failures; three preview consumers each waited about 70 minutes, then skipped package work after the upstream run failed. The wait behavior is measured evidence, not authority to weaken branch protection or required checks.
+
+**Policy references:** The standing [CI/CD efficiency policy](../../context/WORKFLOW.md#cicd-efficiency) requires measured timings and cheap checks before long suites. Git's [`<rev>:<path>` syntax](https://git-scm.com/docs/gitrevisions) reads a path from a committed object. The proposed structural check can use Python's standard-library [AST module](https://docs.python.org/3/library/ast.html), but it must test actual use sites and cannot treat parsing alone as proof of safe behavior.
+
+**Scope and next route:** Discussion and replanning only; no tests, code edits, commits, review, push, new CI, merge, phase verification, or milestone close. Reuse the existing plan with `$gsd-plan-phase 24 --skip-research`. After plan verification, the owner decides separately whether to authorize execution with `$gsd-execute-phase 24`.
+
+## D-214 — Execution authorization (2026-11-18)
+
+After reviewing the D-213 plan and its independent plan-check result, the owner explicitly authorized the new T10–T12 execution. This authorizes one local, unpushed planning-boundary commit from the exact plan whitelist, in-scope local diagnosis/fix/retest convergence without an arbitrary numeric cap, then at most one exact-head review and one protected PR matrix after all local checks pass. The prior D-212 T10 attempt remains stopped. D-209 statuses and gaps, Task 7 deferral, Acid2 and excluded-ROM limits, D-103, the broad-suite stop, and worktree boundary remain unchanged. Merge, Phase 24 verification, milestone audit/archive, v0.5, and cleanup are not part of this execution authorization.
+
+**Route:** The agent runs `$gsd-execute-phase 24`, starting with the explicit-whitelist local planning-boundary commit and full-tree preflight. No D-214 source check or CI run had started when this authorization record was written.

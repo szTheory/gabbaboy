@@ -2,29 +2,29 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: D-211 Task 9 plan amendment and independent plan check complete; execute only Task 9 next
-last_updated: "2026-11-17T22:08:43.000Z"
-state_head: 2236bd9c4d21c5667d8acb54d8ffd6c0f8203ecf
+stopped_at: D-214 authorizes Phase 24 T10-T12; create the local planning-boundary commit before T10
+last_updated: "2026-11-18T14:28:06.263Z"
+state_head: 96d502d4733ac54aa8bf7fbfd7813065143771dc
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 33
   completed_plans: 32
 milestone_name: Evidence Floor
-last_activity: 2026-11-17
-current_phase: 24
+last_activity: 2026-11-18
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: Phase 24 Plan 24-01 Task 9 D-211 correction; Task 7 remains deferred
+current_phase: 24
+current_plan: Phase 24 Plan 24-01 D-214-authorized D-213 recovery; planning-boundary commit precedes T10
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone stage:** v0.4 — Evidence Floor remains administratively closed with accepted gaps under D-209. D-210 Task 8 implementation and focused checks passed at candidate `054f2d0d80f4e15c70d43408c026280b93ec6b08`; its review identified a protected-CI/ROM scope conflict and a warning about false negative-control accounting. D-211 authorizes one same-plan correction, one fresh exact-candidate review, and one protected PR matrix. The amendment adds only Task 9; its independent plan check passed with no blockers or warnings. The matrix may execute only already-admitted game/fixture ROM cases in its existing tests; Acid2 remains excluded. No Task 9 code, PR, or matrix has started.
+**Milestone stage:** v0.4 — Evidence Floor remains administratively closed with accepted gaps under D-209. D-211 Task 9 remains at candidate `96d502d4733ac54aa8bf7fbfd7813065143771dc`; its protected matrix `44189691301` and package-preview `44189691412` conclusively failed at that candidate. The old D-212 T10–T12 attempt remains stopped. D-213 replanned the same sole Phase 24 plan and passed an independent plan check; D-214 now authorizes the fresh T10–T12 execution within that plan.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
-**Phase state:** Phase 24 Task 7 and its plan summary remain incomplete; Task 8 implementation and eight focused CTests pass, but the sole review found one Critical scope blocker and one Warning. Phase 20, 21, and 23.1 verification is stale. No PR or protected matrix was started. These remain disclosed gaps, not passes.
-**Next route:** `$gsd-execute-phase 24`, dispatching only `24-01-T9-overlay-control-accounting` with an explicit active-task filter. Do not use the default full-plan task dispatch: Task 8's review gate remains unresolved and Task 7 remains deferred. Keep the current recovery checkout until exact-head review, the one protected matrix, and merge/reconciliation are complete. After a clean `main` handoff, start v0.5 DMG PPU Timing with `$gsd-new-milestone`. Both automatic-advance flags remain false.
+**Phase state:** Phase 24 remains incomplete; Task 7 remains deferred, and Phase 20/21/23.1 verification remains stale. The stopped T10 attempt's syntax and path-checker self-test passed, but its required path report failed at 30 hits against a pin of 1; two T10 literals were later removed without rerun. The three checker files remain modified and unstaged. T11/T12 did not run under the old attempt. D-214 authorizes a fresh round with scoped diagnosis/fix/retest convergence; its final fresh review and new protected matrix are each limited to one, after all local gates pass. The plan review passed; execution is beginning with the local planning-boundary commit. No T10–T12 source check or CI has run under D-214 yet.
+**Next route:** The D-214-authorized `$gsd-execute-phase 24` is underway. First commit only the plan's exact `.planning/` whitelist locally, without pushing; verify its full-tree route/archive/source-exclusion preflight before T10. Then execute T10 → T11 → T12, converging on the scoped local checks before the one review and one protected matrix. Do not resume the failed D-212 attempt, push before local convergence, or use this authority for merge/phase/milestone closure. Keep the current recovery checkout and frozen candidate `96d502d4733ac54aa8bf7fbfd7813065143771dc`. FIXT-01 remains Pending, the Acid2 mismatch remains failed and unreplayed, and diagnostic exclusions remain unchanged. After later successful protected reconciliation, the new milestone route remains `$gsd-new-milestone` for v0.5 DMG PPU Timing. Both automatic-advance flags remain false.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -52,17 +52,17 @@ Two items had already been acknowledged by an earlier closeout; the audit record
 
 FIXT-01 remains Pending: neither Potion Panic nor µCity has a complete source/build/ROM/header/mode/runtime chain. Do not introduce a third game candidate under the v0.4 requirement. Do not replay the Acid2 comparison or claim its cause. The v0.4.0 tag/assets and published claims remain unchanged. No hardware, perception, mode-3 timing, general compatibility, Linux player, Steam Deck, or live Playstead claim is established by this closeout.
 
-The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 verification is stale; Phase 24 Task 7 is incomplete. These remain gaps, not passes. D-211 permits the existing required matrix's already-admitted game/fixture ROM cases, but no additional or local ROM run; Acid2 remains excluded. One fresh review and one matrix are the full renewed budget, with no retry on a blocker or failure. No Acid2 replay, release/tag/asset change, broad local suite, or worktree cleanup. Both automatic-advance flags remain false.
+The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 verification is stale; Phase 24 Task 7 is incomplete. These remain gaps, not passes. D-211's review and matrix are spent, and its failed matrix is preserved without rerun. D-214 authorizes only the D-213 T10–T12 recovery, its local planning-boundary commit, scoped local convergence, one fresh exact-head review and one protected matrix. A final review finding or failed/missing required CI context stops without another cycle. No Acid2 replay, excluded gbmicrotest replay, candidate expansion, release/tag/asset change, broad local suite, worktree cleanup, merge, phase verification or milestone archive. Both automatic-advance flags remain false.
 
 ## Owner Handoff
 
-Completed stage: **Phase 24 D-211 Task 9 planning and independent plan check**. Task 8 implementation and its original focused checks remain complete, but its review gate found a blocker; no PR or protected matrix has started. Continue in this recovery checkout with `$gsd-execute-phase 24`, explicitly filtering executor dispatch to Task 9 only (`24-01-T9-overlay-control-accounting`) and marking only T1–T6 as previously complete. Do not replay Task 8 or execute Task 7. Do not switch/remove the worktree until reviewed changes are merged and reconciled to clean `main`. Keep FIXT-01 and the accepted gaps unchanged.
+Current stage: **D-214-authorized Phase 24 execution is starting at the planning-boundary prerequisite**. D-213 plan structure and independent plan check passed. The old T10 attempt remains stopped; the three dirty checker files and failure evidence are preserved. The next operation is the explicit-whitelist, local unpushed planning-boundary commit, followed by full-tree preflight and T10. No T10–T12 work has run under D-214 yet. Preserve the current worktree, candidate, and D-209 dispositions.
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
-- Phase 23.1 complete; owner chose to keep v0.4 open after the refreshed `gaps_found` audit and authorized one Phase 24 rescope under D-205. The single Phase 24 plan passed independent review. No requirement gaps were accepted and no milestone archival is authorized. Next: `$gsd-execute-phase 24`; fixture/rights actions and all other preserved limits remain outside scope.
+- Historical pre-D-209 route: after the refreshed `gaps_found` audit, the owner chose to keep v0.4 open and authorized one Phase 24 rescope under D-205. The earlier plan passed independent review, but that execution route is superseded by D-212. No requirement gaps were accepted and no milestone archival is authorized.
 - Phase 23.1 inserted after Phase 23: Close v0.4 requirement and verification gaps (URGENT)
 - Phase 23.1 Task 5 and the sole D-196 review completed; two Critical checker issues remain open. Owner acts next with `$gsd-discuss-phase 23.1` to define bounded recovery, then `$gsd-autonomous --from 23.1` after scope authorization. The milestone remains open; finish on a clean `main` after approved reconciliation.
 - Phase 23.1 recovery-scoped: D-198 records one Task 6 and one independent review for CR-01/CR-02; next route is $gsd-autonomous --from 23.1.
@@ -105,12 +105,14 @@ Completed stage: **Phase 24 D-211 Task 9 planning and independent plan check**. 
 - [Phase 23.1]: Phase 23.1 verification remains a historical 18/18 result and stale after Phase 24 changed the shared checker; no new recovery scope is authorized. — Phase 24 passed its own focused checks and verification under D-205. Refreshing Phase 23.1 would conflate its former fifth-phase criterion with the approved six-phase cap. Keep the four requirements Pending, v0.4 open, and D-103 unfulfilled.
 - [v0.4 closeout]: D-209 closes the milestone with accepted gaps. RIGHTS-01, DIAG-01, and DIAG-02 are complete for the exact admitted diagnostics; FIXT-01 remains Pending. Phase 24 Task 7, stale verification, and D-103 remain disclosed. The next command is `$gsd-new-milestone` for v0.5 DMG PPU Timing.
 - [Phase 24]: D-211 authorizes one same-plan correction, one exact-candidate review, and one protected matrix for already-admitted game/fixture ROM cases; Acid2 remains excluded. — This is the bounded response to D-210 review findings. Any blocker or required-context failure stops without retry; Task 7 and v0.4 dispositions remain unchanged.
+- [Phase 24]: D-213 replans the same sole recovery plan after the D-212 T10 stop. Planning passed an independent check; execution remains unapproved. A later authorized local round may iterate scoped diagnoses/fixes/retests until focused gates pass, then spend at most one fresh review and one protected matrix. The exact D-209 gaps, Acid2 failure/exclusion, Task 7 deferral and other boundaries remain.
+- [Phase 24]: D-214 authorizes the fresh D-213 T10–T12 execution, local unpushed planning-boundary commit, scoped local convergence, one fresh exact-head review and one protected matrix. The old T10 attempt stays stopped; all D-209 limits and exclusions remain. Merge, phase verification, milestone closure and v0.5 are not authorized here.
 
 ## Session
 
-**Last session:** 2026-11-17T22:08:43.000Z
-**Stopped at:** D-211 Task 9 plan amendment and independent plan check complete; execute only Task 9 next
+**Last session:** 2026-11-18T14:24:24.000Z
+**Stopped at:** D-214 authorized Phase 24 execution; local planning-boundary commit and preflight come before T10
 **Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md
 
 ### Blockers
-D-211 permits one same-plan correction, one fresh independent review, and one protected matrix whose existing admitted game/fixture ROM tests may run; Acid2 remains excluded. Owner approval is recorded. The Task 9 amendment passed its independent check. No correction code, PR, or matrix has started. Next actor: the agent invokes `$gsd-execute-phase 24` with an explicit executor filter for Task 9 only; do not run the default full-plan task sequence, Task 8, or Task 7. Any blocker or failed/missing context ends the scope without retry. Reconcile through protected merge before switching to clean `main` and starting v0.5.
+D-211 matrix `44189691301` and package-preview `44189691412` failed at candidate `96d502d4733ac54aa8bf7fbfd7813065143771dc`. The D-212 T10 attempt stopped when the path report found 30 hits against a pin of 1; its edits remain modified and unstaged. D-213 replanned the sole Phase 24 plan and passed independent review. D-214 authorizes a fresh T10–T12 execution; the next operation is the local, unpushed planning-boundary commit from the exact whitelist. Verify the full committed route/archive/source exclusion before T10. Keep the old attempt stopped, preserve all dirty changes and do not push, review or start CI before local convergence.
