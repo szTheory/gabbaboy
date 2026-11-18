@@ -254,6 +254,8 @@ def validate_candidate_git_context(subject: Path, source_revision: str) -> list[
     actual_git_dir = Path(absolute_git_dir.stdout.strip()).resolve()
     require(actual_git_dir == expected_git_dir,
             f"candidate-git-dir-mismatch: expected={expected_git_dir} actual={actual_git_dir}")
+    candidate = git(subject, "cat-file", "-e", f"{source_revision}^{{commit}}")
+    require(candidate.returncode == 0, f"candidate-object-unavailable: {source_revision}")
     worktree = git(subject, "rev-parse", "--show-toplevel")
     require(worktree.returncode == 0,
             f"candidate-worktree-unavailable: {worktree.stdout.strip()}")
@@ -266,8 +268,6 @@ def validate_candidate_git_context(subject: Path, source_revision: str) -> list[
     actual_head = head.stdout.strip()
     require(actual_head == source_revision,
             f"candidate-head-mismatch: expected={source_revision} actual={actual_head}")
-    candidate = git(subject, "cat-file", "-e", f"{source_revision}^{{commit}}")
-    require(candidate.returncode == 0, f"candidate-object-unavailable: {source_revision}")
     pins = active_admission_pins(subject, source_revision)
     for path, pin in pins:
         present = git(subject, "cat-file", "-e", f"{pin}^{{commit}}")
