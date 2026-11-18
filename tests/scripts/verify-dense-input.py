@@ -28,6 +28,7 @@ MUTANT_REPLACEMENT = (
 )
 BASELINE_COMMIT = "7cc6495e64f3645caa120e7458f754585b788985"
 FULL_COMMIT = re.compile(r"^[0-9a-f]{40}$")
+FULL_COMMIT_BYTES = re.compile(rb"[0-9a-f]{40}")
 
 
 def require(condition: bool, message: str) -> None:
@@ -38,6 +39,26 @@ def require(condition: bool, message: str) -> None:
 def run(command: list[str], *, cwd: Path, timeout: int = 300) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, cwd=cwd, text=True, stdout=subprocess.PIPE,
                           stderr=subprocess.STDOUT, timeout=timeout, check=False)
+
+
+def _git_environment() -> dict[str, str]:
+    """Give disposable Git commands a small, predictable environment."""
+    env = {key: value for key, value in os.environ.items()
+           if key in {"PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP"}}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull,
+               GIT_CONFIG_NOSYSTEM="1", GIT_TERMINAL_PROMPT="0")
+    return env
+
+
+def git_bytes(repo: Path, *args: str, input_bytes: bytes | None = None,
+              timeout: int = 60) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(["git", "-C", str(repo), *args], cwd=repo, input=input_bytes,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+                          env=_git_environment(), timeout=timeout)
+
+
+def _git_detail(result: subprocess.CompletedProcess[bytes]) -> str:
+    return (result.stdout + result.stderr).decode("utf-8", "replace").strip()
 
 
 def expect_run(command: list[str], *, cwd: Path, status: int, reason: str | None = None) -> str:
@@ -97,9 +118,10 @@ def dense_fixture(directory: Path, repo_root: Path = ROOT) -> tuple[Path, Path]:
 
 
 def copy_tracked_source(destination: Path) -> None:
-    listed = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True,
-                            stdout=subprocess.PIPE).stdout.split(b"\0")
-    for raw_path in listed:
+    listed = git_bytes(ROOT, "ls-files", "-z")
+    require(listed.returncode == 0, f"cannot enumerate tracked source: {_git_detail(listed)}")
+    tracked = listed.stdout.split(b"\0")
+    for raw_path in tracked:
         if not raw_path:
             continue
         relative = Path(os.fsdecode(raw_path))
@@ -121,20 +143,83 @@ def copy_tracked_source(destination: Path) -> None:
 
 def create_baseline_object_store(destination: Path) -> None:
     destination.mkdir()
-    initialized = run(["git", "init", "--bare", str(destination)], cwd=ROOT)
+    initialized = git(ROOT, "init", "--bare", str(destination))
     require(initialized.returncode == 0, f"baseline object store init failed:\n{initialized.stdout}")
-    fetched = run(["git", "--git-dir", str(destination), "fetch", "--no-tags",
-                  str(ROOT), BASELINE_COMMIT], cwd=ROOT)
+    fetched = git(ROOT, "--git-dir", str(destination), "fetch", "--no-tags", str(ROOT), BASELINE_COMMIT)
     require(fetched.returncode == 0, f"fixed baseline object copy failed:\n{fetched.stdout}")
-    verified = run(["git", "--git-dir", str(destination), "cat-file", "-e",
-                    f"{BASELINE_COMMIT}^{{commit}}"], cwd=ROOT)
+    verified = git(ROOT, "--git-dir", str(destination), "cat-file", "-e", f"{BASELINE_COMMIT}^{{commit}}")
     require(verified.returncode == 0, "copied baseline object did not verify at its full commit identity")
 
 
 def git(repo: Path, *args: str, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["git", "-C", str(repo), *args], cwd=repo, text=True,
-                          input=input_text, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                          check=False)
+    raw = git_bytes(repo, *args, input_bytes=input_text.encode("utf-8") if input_text is not None else None)
+    return subprocess.CompletedProcess(["git", "-C", str(repo), *args], raw.returncode,
+                                       (raw.stdout + raw.stderr).decode("utf-8", "replace"), "")
+
+
+def git_blob(repo: Path, revision: str, path: str) -> bytes:
+    result = git_bytes(repo, "show", f"{revision}:{path}")
+    require(result.returncode == 0,
+            f"cannot read immutable admission pin {path}: {_git_detail(result)}")
+    return result.stdout
+
+
+def parse_admission_pin(raw: bytes, path: str) -> str:
+    if len(raw) == 40:
+        value = raw
+    elif len(raw) == 41 and raw.endswith(b"\n"):
+        value = raw[:-1]
+    elif len(raw) == 42 and raw.endswith(b"\r\n"):
+        value = raw[:-2]
+    else:
+        raise RuntimeError(f"admission-pin-invalid: {path}")
+    if FULL_COMMIT_BYTES.fullmatch(value) is None:
+        raise RuntimeError(f"admission-pin-invalid: {path}")
+    return value.decode("ascii")
+
+
+def admission_pin_controls() -> int:
+    body = b"a" * 40
+    positives = (body, body + b"\n", body + b"\r\n")
+    for raw in positives:
+        require(parse_admission_pin(raw, "control") == body.decode("ascii"),
+                "valid raw admission-pin form was rejected")
+    invalid = (body + b"\r", body + b"\r\n\n", body + b"\n\r\n", body + b" ",
+               body.upper(), b"g" + body[1:], body[:-1], body + b"0", b"\xff" + body[1:])
+    for raw in invalid:
+        try:
+            parse_admission_pin(raw, "control")
+        except RuntimeError as error:
+            require("admission-pin-invalid" in str(error),
+                    f"malformed raw admission pin refused for the wrong cause: {error}")
+        else:
+            raise RuntimeError(f"malformed raw admission pin was accepted: {raw!r}")
+
+    # Commit one malformed blob and send it through the same tree enumeration and
+    # object reader as a real candidate. This proves text-mode newline conversion
+    # cannot turn a bare-CR pin into an accepted LF pin.
+    with tempfile.TemporaryDirectory(prefix="dense-bare-cr-pin-") as name:
+        repo = Path(name)
+        pin_path = repo / "fixtures/probe/admission.commit"
+        pin_path.parent.mkdir(parents=True)
+        (repo / "fixtures/probe/manifest.json").write_bytes(b"{}\n")
+        pin_path.write_bytes(body + b"\r")
+        require(git(repo, "init", "-q").returncode == 0, "bare-CR pin repository init failed")
+        added = git(repo, "add", "fixtures/probe/manifest.json", "fixtures/probe/admission.commit")
+        require(added.returncode == 0, f"bare-CR pin staging failed: {added.stdout.strip()}")
+        committed = git(repo, "-c", "user.name=Fixture Control", "-c",
+                        "user.email=fixture-control@example.invalid", "commit", "-qm", "bare-CR pin")
+        require(committed.returncode == 0, f"bare-CR pin commit failed: {committed.stdout.strip()}")
+        revision = git(repo, "rev-parse", "--verify", "HEAD^{commit}")
+        require(revision.returncode == 0, f"bare-CR pin commit identity unavailable: {revision.stdout.strip()}")
+        try:
+            active_admission_pins(repo, revision.stdout.strip())
+        except RuntimeError as error:
+            require("admission-pin-invalid" in str(error),
+                    f"committed bare-CR pin refused for the wrong cause: {error}")
+        else:
+            raise RuntimeError("committed bare-CR admission pin was accepted")
+    return len(positives) + len(invalid) + 1
 
 
 def active_admission_pins(source: Path, source_revision: str) -> list[tuple[str, str]]:
@@ -143,9 +228,9 @@ def active_admission_pins(source: Path, source_revision: str) -> list[tuple[str,
     available = git(source, "cat-file", "-e", f"{source_revision}^{{commit}}")
     require(available.returncode == 0,
             f"candidate-object-unavailable: {source_revision}")
-    tree = git(source, "ls-tree", "-r", "--name-only", source_revision, "--", "fixtures")
-    require(tree.returncode == 0, f"cannot enumerate candidate fixture tree: {tree.stdout.strip()}")
-    paths = set(tree.stdout.splitlines())
+    tree = git_bytes(source, "ls-tree", "-rz", "--name-only", source_revision, "--", "fixtures")
+    require(tree.returncode == 0, f"cannot enumerate candidate fixture tree: {_git_detail(tree)}")
+    paths = {os.fsdecode(path) for path in tree.stdout.split(b"\0") if path}
     manifests = {path for path in paths if re.fullmatch(r"fixtures/[^/]+/manifest\.json", path)}
     pins = sorted(path for path in paths if re.fullmatch(r"fixtures/[^/]+/admission\.commit", path))
     require(pins, "candidate has no active fixture admission pins")
@@ -155,26 +240,34 @@ def active_admission_pins(source: Path, source_revision: str) -> list[tuple[str,
                 f"admission pin has no sibling manifest: {pin_path}")
     result: list[tuple[str, str]] = []
     for pin_path in pins:
-        pin = git(source, "show", f"{source_revision}:{pin_path}")
-        require(pin.returncode == 0, f"cannot read immutable admission pin {pin_path}: {pin.stdout.strip()}")
-        value = pin.stdout
-        require(FULL_COMMIT.fullmatch(value.rstrip("\r\n")) is not None and
-                value in {value.rstrip("\r\n"), value.rstrip("\r\n") + "\n", value.rstrip("\r\n") + "\r\n"},
-                f"admission pin is not exactly one full identity: {pin_path}")
-        result.append((pin_path, value.rstrip("\r\n")))
+        result.append((pin_path, parse_admission_pin(git_blob(source, source_revision, pin_path), pin_path)))
     return result
 
 
 def validate_candidate_git_context(subject: Path, source_revision: str) -> list[tuple[str, str]]:
     require(FULL_COMMIT.fullmatch(source_revision) is not None,
             "candidate revision is not one full lowercase identity")
-    candidate = git(subject, "cat-file", "-e", f"{source_revision}^{{commit}}")
-    require(candidate.returncode == 0, f"candidate-object-unavailable: {source_revision}")
+    absolute_git_dir = git(subject, "rev-parse", "--absolute-git-dir")
+    require(absolute_git_dir.returncode == 0,
+            f"candidate-git-dir-unavailable: {absolute_git_dir.stdout.strip()}")
+    expected_git_dir = (subject / ".git").resolve()
+    actual_git_dir = Path(absolute_git_dir.stdout.strip()).resolve()
+    require(actual_git_dir == expected_git_dir,
+            f"candidate-git-dir-mismatch: expected={expected_git_dir} actual={actual_git_dir}")
+    worktree = git(subject, "rev-parse", "--show-toplevel")
+    require(worktree.returncode == 0,
+            f"candidate-worktree-unavailable: {worktree.stdout.strip()}")
+    expected_worktree = subject.resolve()
+    actual_worktree = Path(worktree.stdout.strip()).resolve()
+    require(actual_worktree == expected_worktree,
+            f"candidate-worktree-mismatch: expected={expected_worktree} actual={actual_worktree}")
     head = git(subject, "rev-parse", "--verify", "HEAD^{commit}")
     require(head.returncode == 0, f"candidate-head-unavailable: {head.stdout.strip()}")
     actual_head = head.stdout.strip()
     require(actual_head == source_revision,
             f"candidate-head-mismatch: expected={source_revision} actual={actual_head}")
+    candidate = git(subject, "cat-file", "-e", f"{source_revision}^{{commit}}")
+    require(candidate.returncode == 0, f"candidate-object-unavailable: {source_revision}")
     pins = active_admission_pins(subject, source_revision)
     for path, pin in pins:
         present = git(subject, "cat-file", "-e", f"{pin}^{{commit}}")
@@ -204,12 +297,81 @@ def install_candidate_git_context(subject: Path, source_revision: str) -> list[t
 
 def candidate_git_context_controls(source_revision: str) -> int:
     pins = active_admission_pins(ROOT, source_revision)
+    pin_controls = admission_pin_controls()
     with tempfile.TemporaryDirectory(prefix="dense-git-context-", dir=ROOT) as temp_name:
         temp = Path(temp_name)
         candidate = temp / "candidate"
         candidate.mkdir()
         installed = install_candidate_git_context(candidate, source_revision)
         require(installed == pins, "candidate subject changed the enumerated admission pin set")
+
+        decoy = temp / "decoy"
+        decoy.mkdir()
+        (decoy / "sentinel.txt").write_text("unchanged decoy repository\n", encoding="utf-8", newline="\n")
+        require(git(decoy, "init", "-q").returncode == 0, "decoy repository init failed")
+        require(git(decoy, "add", "sentinel.txt").returncode == 0, "decoy sentinel staging failed")
+        decoy_commit = git(decoy, "-c", "user.name=Fixture Control", "-c",
+                           "user.email=fixture-control@example.invalid", "commit", "-qm", "decoy sentinel")
+        require(decoy_commit.returncode == 0, f"decoy commit failed: {decoy_commit.stdout.strip()}")
+        decoy_head = git(decoy, "rev-parse", "--verify", "HEAD^{commit}").stdout.strip()
+        decoy_refs = git(decoy, "for-each-ref", "--format=%(refname) %(objectname)").stdout
+        decoy_index = hashlib.sha256((decoy / ".git/index").read_bytes()).hexdigest()
+        hostile_values = {
+            "GIT_DIR": str(decoy / ".git"),
+            "GIT_WORK_TREE": str(decoy),
+            "GIT_COMMON_DIR": str(decoy / ".git"),
+            "GIT_INDEX_FILE": str(decoy / ".git/index"),
+            "GIT_OBJECT_DIRECTORY": str(decoy / ".git/objects"),
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(decoy / ".git/objects"),
+            "GIT_CONFIG_GLOBAL": str(decoy / "hostile-global-config"),
+            "GIT_CONFIG_SYSTEM": str(decoy / "hostile-system-config"),
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.bare",
+            "GIT_CONFIG_VALUE_0": "true",
+            "GIT_NAMESPACE": "redirected",
+            "GIT_PREFIX": "redirected/",
+        }
+        (decoy / "hostile-global-config").write_text("[core]\n\tbare = true\n", encoding="utf-8")
+        (decoy / "hostile-system-config").write_text("[core]\n\tbare = true\n", encoding="utf-8")
+        previous_values = {key: os.environ.get(key) for key in hostile_values}
+        previously_present = {key for key in hostile_values if key in os.environ}
+        try:
+            os.environ.update(hostile_values)
+            hostile_candidate = temp / "hostile-candidate"
+            hostile_candidate.mkdir()
+            hostile_pins = install_candidate_git_context(hostile_candidate, source_revision)
+            require(hostile_pins == pins, "hostile environment changed the selected admission pins")
+            require(git(decoy, "rev-parse", "--verify", "HEAD^{commit}").stdout.strip() == decoy_head,
+                    "sanitized candidate Git operations changed the decoy HEAD")
+            require(git(decoy, "for-each-ref", "--format=%(refname) %(objectname)").stdout == decoy_refs,
+                    "sanitized candidate Git operations changed decoy refs")
+            require(hashlib.sha256((decoy / ".git/index").read_bytes()).hexdigest() == decoy_index,
+                    "sanitized candidate Git operations changed the decoy index")
+
+            safe_environment = _git_environment
+            try:
+                globals()["_git_environment"] = lambda: os.environ.copy()
+                try:
+                    validate_candidate_git_context(candidate, source_revision)
+                except RuntimeError as error:
+                    require("candidate-git-dir-mismatch" in str(error),
+                            f"unsanitized Git control refused for the wrong cause: {error}")
+                else:
+                    raise RuntimeError("unsanitized Git environment redirection was accepted")
+            finally:
+                globals()["_git_environment"] = safe_environment
+        finally:
+            for key in hostile_values:
+                if key in previously_present:
+                    os.environ[key] = previous_values[key] or ""
+                else:
+                    os.environ.pop(key, None)
+        require(git(decoy, "rev-parse", "--verify", "HEAD^{commit}").stdout.strip() == decoy_head,
+                "hostile-environment controls changed the decoy HEAD")
+        require(git(decoy, "for-each-ref", "--format=%(refname) %(objectname)").stdout == decoy_refs,
+                "hostile-environment controls changed decoy refs")
+        require(hashlib.sha256((decoy / ".git/index").read_bytes()).hexdigest() == decoy_index,
+                "hostile-environment controls changed the decoy index")
 
         missing = temp / "missing-object"
         missing.mkdir()
@@ -287,7 +449,7 @@ def candidate_git_context_controls(source_revision: str) -> int:
                     f"unrelated ancestry control refused for wrong cause: {error}")
         else:
             raise RuntimeError("unrelated admission ancestry control was accepted")
-    return len(pins) + 4
+    return len(pins) + 4 + pin_controls + 2
 
 
 def check_repository(subject: Path, evidence: Path | None, expected: str) -> None:
@@ -391,25 +553,25 @@ def main() -> int:
             check_repository(mutant_root, None, "REJECT baseline-object-unavailable:")
             empty_evidence = Path(mutant_name) / "empty-baseline.git"
             empty_evidence.mkdir()
-            initialized = run(["git", "init", "--bare", str(empty_evidence)], cwd=ROOT)
+            initialized = git(ROOT, "init", "--bare", str(empty_evidence))
             require(initialized.returncode == 0, f"empty baseline store init failed:\n{initialized.stdout}")
             check_repository(mutant_root, empty_evidence, "REJECT baseline-object-unavailable:")
             wrong_evidence = Path(mutant_name) / "wrong-baseline.git"
             unrelated_source = Path(mutant_name) / "unrelated-source"
             wrong_evidence.mkdir()
             unrelated_source.mkdir()
-            initialized = run(["git", "init", "--bare", str(wrong_evidence)], cwd=ROOT)
+            initialized = git(ROOT, "init", "--bare", str(wrong_evidence))
             require(initialized.returncode == 0, f"wrong baseline store init failed:\n{initialized.stdout}")
-            initialized = run(["git", "init", str(unrelated_source)], cwd=ROOT)
+            initialized = git(ROOT, "init", str(unrelated_source))
             require(initialized.returncode == 0, f"unrelated source repository init failed:\n{initialized.stdout}")
-            unrelated_commit = run(["git", "-C", str(unrelated_source), "-c", "user.name=Fixture Control",
-                                    "-c", "user.email=fixture-control@example.invalid", "commit", "--allow-empty",
-                                    "-m", "unrelated baseline identity"], cwd=ROOT)
+            unrelated_commit = git(unrelated_source, "-c", "user.name=Fixture Control",
+                                   "-c", "user.email=fixture-control@example.invalid", "commit", "--allow-empty",
+                                   "-m", "unrelated baseline identity")
             require(unrelated_commit.returncode == 0, f"unrelated identity creation failed:\n{unrelated_commit.stdout}")
-            unrelated_identity = run(["git", "-C", str(unrelated_source), "rev-parse", "HEAD"], cwd=ROOT)
+            unrelated_identity = git(unrelated_source, "rev-parse", "HEAD")
             require(unrelated_identity.returncode == 0, f"unrelated identity lookup failed:\n{unrelated_identity.stdout}")
-            fetched_wrong = run(["git", "--git-dir", str(wrong_evidence), "fetch", "--no-tags",
-                                 str(unrelated_source), unrelated_identity.stdout.strip()], cwd=ROOT)
+            fetched_wrong = git(wrong_evidence, "fetch", "--no-tags",
+                                str(unrelated_source), unrelated_identity.stdout.strip())
             require(fetched_wrong.returncode == 0, f"wrong identity object copy failed:\n{fetched_wrong.stdout}")
             check_repository(mutant_root, wrong_evidence, "REJECT baseline-object-unavailable:")
             pins = install_candidate_git_context(mutant_root, source_revision)

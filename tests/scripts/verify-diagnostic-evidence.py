@@ -25,6 +25,9 @@ MAX_SOURCE_ARCHIVE_BYTES = 128 * 1024 * 1024
 # This Phase 22 merge contains both the historical blocked assessment and the
 # point-in-time requirements boundary consumed by this checker.
 BASELINE = "ca2f0be6b38e7dd22e0eb3296b9a21cceed1a765"
+PHASE22_BOUNDARY_REVISION = "4ac46e7406329efbd4fb6ac0dc39c86c14156691"
+HISTORICAL_REQUIREMENT_REVISIONS = frozenset({BASELINE, PHASE22_BOUNDARY_REVISION})
+APPROVED_BOUNDARY_REVISIONS = frozenset({PHASE22_BOUNDARY_REVISION})
 # D-168/D-172 changed only the archive checker's self-test harness. Keep the
 # historical boundary intact and permit exactly its independently reviewed bytes.
 ARCHIVE_HARNESS_PATH = "tests/scripts/verify-v02-source-archive.py"
@@ -274,19 +277,22 @@ def tree_entries(root: pathlib.Path, revision: str) -> dict[str, tuple[str, int,
     return result
 
 
-def selected_snapshot_paths(root: pathlib.Path, revision: str) -> tuple[str, ...]:
-    entries = tree_entries(root, revision)
+def _current_snapshot_paths(entries: dict[str, tuple[str, int, str]]) -> tuple[str, ...]:
     has_requirements_archive = V04_ARCHIVED_REQUIREMENTS in entries
     has_roadmap_archive = V04_ARCHIVED_ROADMAP in entries
     if has_requirements_archive != has_roadmap_archive:
         raise Reject("source-archive-pair-invalid")
-    if has_requirements_archive:
-        if V04_ROOT_REQUIREMENTS in entries:
-            raise Reject("active-root-requirements-restored")
-        shared = tuple(path for path in REQUIRED if path != V04_ROOT_REQUIREMENTS)
-        return (*shared, V04_ARCHIVED_REQUIREMENTS, V04_ARCHIVED_ROADMAP,
-                V04_ROOT_ROADMAP, V04_RECOVERY_PLAN)
-    return REQUIRED
+    if not has_requirements_archive:
+        raise Reject("source-archive-pair-required")
+    if V04_ROOT_REQUIREMENTS in entries:
+        raise Reject("active-root-requirements-restored")
+    shared = tuple(path for path in REQUIRED if path != V04_ROOT_REQUIREMENTS)
+    return (*shared, V04_ARCHIVED_REQUIREMENTS, V04_ARCHIVED_ROADMAP,
+            V04_ROOT_ROADMAP, V04_RECOVERY_PLAN)
+
+
+def selected_snapshot_paths(root: pathlib.Path, revision: str) -> tuple[str, ...]:
+    return _current_snapshot_paths(tree_entries(root, revision))
 
 
 def load_snapshot(root: pathlib.Path, revision: str,
@@ -628,8 +634,6 @@ def validate_recovery_contract(snapshot: dict[str, bytes], plan_paths: list[str]
 
 
 def validate_recovery_route(snapshot: dict[str, bytes], root: pathlib.Path, revision: str) -> None:
-    if V04_ARCHIVED_REQUIREMENTS not in snapshot and V04_ARCHIVED_ROADMAP not in snapshot:
-        return
     phase_dir = V04_RECOVERY_PLAN.rsplit("/", 1)[0] + "/"
     plan_paths = sorted(
         path for path in tree_entries(root, revision)
@@ -641,17 +645,30 @@ def validate_recovery_route(snapshot: dict[str, bytes], root: pathlib.Path, revi
 
 def validate_requirements(snapshot: dict[str, bytes], root: pathlib.Path) -> None:
     archive_flags = (V04_ARCHIVED_REQUIREMENTS in snapshot, V04_ARCHIVED_ROADMAP in snapshot)
-    if any(archive_flags):
-        if not all(archive_flags):
-            raise Reject("source-archive-pair-invalid")
-        if V04_ROOT_REQUIREMENTS in snapshot:
-            raise Reject("active-root-requirements-restored")
-        for path in (V04_ARCHIVED_REQUIREMENTS, V04_ARCHIVED_ROADMAP):
-            expected = immutable_regular_blob(root, V04_D209_ARCHIVE_REV, path)
-            if snapshot[path] != expected:
-                raise Reject(f"archived-source-mismatch:{path}")
-        archived_requirement_facts(snapshot[V04_ARCHIVED_REQUIREMENTS])
-        return
+    if archive_flags != (True, True):
+        raise Reject("source-archive-pair-invalid" if any(archive_flags) else "source-archive-pair-required")
+    if V04_ROOT_REQUIREMENTS in snapshot:
+        raise Reject("active-root-requirements-restored")
+    for path in (V04_ARCHIVED_REQUIREMENTS, V04_ARCHIVED_ROADMAP):
+        expected = immutable_regular_blob(root, V04_D209_ARCHIVE_REV, path)
+        if snapshot[path] != expected:
+            raise Reject(f"archived-source-mismatch:{path}")
+    archived_requirement_facts(snapshot[V04_ARCHIVED_REQUIREMENTS])
+
+
+def validate_historical_requirements(snapshot: dict[str, bytes], root: pathlib.Path,
+                                     revision: str, *, test_fixture_revision: str | None = None) -> None:
+    approved = HISTORICAL_REQUIREMENT_REVISIONS
+    if test_fixture_revision is not None:
+        if not HEX40.fullmatch(test_fixture_revision) or revision != test_fixture_revision:
+            raise Reject("historical-requirements-test-revision-invalid")
+        approved = approved | {test_fixture_revision}
+    if not HEX40.fullmatch(revision) or revision not in approved:
+        raise Reject("historical-requirements-revision-unapproved")
+    if V04_ARCHIVED_REQUIREMENTS in snapshot or V04_ARCHIVED_ROADMAP in snapshot:
+        raise Reject("historical-requirements-mode-invalid")
+    if V04_ROOT_REQUIREMENTS not in snapshot:
+        raise Reject("historical-requirements-missing")
     current = decode(snapshot, ".planning/REQUIREMENTS.md")
     old = git(root, "show", f"{BASELINE}:.planning/REQUIREMENTS.md",
               limit=MAX_BYTES).decode("utf-8", "strict")
@@ -662,6 +679,11 @@ def validate_requirements(snapshot: dict[str, bytes], root: pathlib.Path) -> Non
     if current_trace != {"DIAG-01": "Phase 22|Pending", "DIAG-02": "Phase 22|Pending",
                          "RIGHTS-01": "Phase 20|Pending"}:
         raise Reject("requirement-disposition-changed")
+
+
+def validate_boundary_revision(revision: str) -> None:
+    if not HEX40.fullmatch(revision) or revision not in APPROVED_BOUNDARY_REVISIONS:
+        raise Reject("boundary-revision-unapproved")
 
 
 def validate_test_text(snapshot: dict[str, bytes]) -> None:
@@ -1131,7 +1153,7 @@ def load_boundary(root: pathlib.Path, revision: str) -> dict[str, bytes]:
     return load_snapshot(root, revision, BOUNDARY_PATHS)
 
 
-def minimal_boundary() -> dict[str, bytes]:
+def minimal_boundary(requirements: bytes | None = None) -> dict[str, bytes]:
     return {
         ".planning/STATE.md": (
             "Phase 22 is complete. DIAG-01 and DIAG-02 remain Pending; RIGHTS-01 remains Pending.\n"
@@ -1143,7 +1165,7 @@ def minimal_boundary() -> dict[str, bytes]:
             "### Phase 22: Synthetic Composition and Diagnostic Gate Assessment\nStatus: Complete\n"
             "### Phase 23: Qualified v0.4.0 Release\nStatus: Unstarted\n"
         ).encode(),
-        ".planning/REQUIREMENTS.md": (
+        ".planning/REQUIREMENTS.md": requirements or (
             "- [ ] **DIAG-01**: Original diagnostic requirement.\n"
             "- [ ] **DIAG-02**: Original diagnostic requirement.\n"
             "- [ ] **RIGHTS-01**: Original rights requirement.\n"
@@ -1176,19 +1198,27 @@ def boundary_history_control() -> None:
         git(repo, "init", "-q")
         git(repo, "config", "user.name", "GabbaBoy Synthetic Boundary")
         git(repo, "config", "user.email", "boundary@example.invalid")
-        for path, raw in minimal_boundary().items():
+        baseline_requirements = git(ROOT, "show", f"{BASELINE}:{V04_ROOT_REQUIREMENTS}", limit=MAX_BYTES)
+        for path, raw in minimal_boundary(baseline_requirements).items():
             target = repo.joinpath(*path.split("/"))
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(raw)
         git(repo, "add", ".")
         git(repo, "commit", "-qm", "synthetic historical boundary")
         boundary = resolve_revision(repo, "HEAD")
-        if validate_boundary(load_boundary(repo, boundary))["phase23"] != "unstarted":
+        boundary_snapshot = load_boundary(repo, boundary)
+        if validate_boundary(boundary_snapshot)["phase23"] != "unstarted":
             raise Reject("self-test-historical-boundary-invalid")
+        validate_historical_requirements(boundary_snapshot, ROOT, boundary,
+                                         test_fixture_revision=boundary)
         state = repo / ".planning/STATE.md"
         state.write_text("Phase 23 is complete.\n", encoding="utf-8")
         git(repo, "add", ".planning/STATE.md")
         git(repo, "commit", "-qm", "synthetic later route")
+        later = resolve_revision(repo, "HEAD")
+        expect_reject(lambda: validate_historical_requirements(
+            load_boundary(repo, later), ROOT, later, test_fixture_revision=boundary),
+            "historical-requirements-revision-unapproved", "synthetic-later-revision")
         expect_reject(lambda: validate_boundary(load_boundary(repo, resolve_revision(repo, "HEAD"))),
                       "boundary-phase22-not-complete", "later-head-route")
         if validate_boundary(load_boundary(repo, boundary))["phase23"] != "unstarted":
@@ -1387,6 +1417,28 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
         missing_archive.pop(V04_ARCHIVED_REQUIREMENTS)
         expect_reject(lambda: validate_requirements(missing_archive, repo),
                       "source-archive-pair-invalid", "missing-archive-source")
+        paired_archive_removal = dict(snapshot)
+        paired_archive_removal.pop(V04_ARCHIVED_REQUIREMENTS)
+        paired_archive_removal.pop(V04_ARCHIVED_ROADMAP)
+        paired_archive_removal[V04_ROOT_REQUIREMENTS] = git(
+            repo, "show", f"{BASELINE}:{V04_ROOT_REQUIREMENTS}", limit=MAX_BYTES)
+        expect_reject(lambda: validate_requirements(paired_archive_removal, repo),
+                      "source-archive-pair-required", "paired-archive-removal-with-restored-tracker")
+        current_entries = tree_entries(repo, revision)
+        baseline_entries = tree_entries(repo, BASELINE)
+        paired_entries = dict(current_entries)
+        paired_entries.pop(V04_ARCHIVED_REQUIREMENTS)
+        paired_entries.pop(V04_ARCHIVED_ROADMAP)
+        paired_entries[V04_ROOT_REQUIREMENTS] = baseline_entries[V04_ROOT_REQUIREMENTS]
+        expect_reject(lambda: _current_snapshot_paths(paired_entries),
+                      "source-archive-pair-required", "current-selector-paired-archive-removal")
+        route_without_archives = dict(snapshot)
+        route_without_archives.pop(V04_ARCHIVED_REQUIREMENTS)
+        route_without_archives.pop(V04_ARCHIVED_ROADMAP)
+        route_without_archives[V04_ROOT_ROADMAP] = route_without_archives[V04_ROOT_ROADMAP].replace(
+            b"D-209", b"D-208", 1)
+        expect_reject(lambda: validate_recovery_route(route_without_archives, repo, revision),
+                      "recovery-route-content-invalid", "route-validated-without-archive-pair")
         for label, old, new, reason in (
             ("altered-archived-criterion", b"shared game-acceptance runner",
              b"changed game-acceptance runner", f"archived-source-mismatch:{V04_ARCHIVED_REQUIREMENTS}"),
@@ -1417,9 +1469,14 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
             snapshot, [*plan_paths, V04_RECOVERY_PLAN.replace("24-01", "24-02")]),
             "recovery-plan-set-invalid", "extra-recovery-plan")
     historical_requirement = load_snapshot(repo, BASELINE, (V04_ROOT_REQUIREMENTS,))
+    validate_historical_requirements(historical_requirement, repo, BASELINE)
+    expect_reject(lambda: validate_requirements(historical_requirement, repo),
+                  "source-archive-pair-required", "current-mode-rejects-historical-tracker")
+    expect_reject(lambda: validate_historical_requirements(historical_requirement, repo, "f" * 40),
+                  "historical-requirements-revision-unapproved", "unapproved-historical-revision")
     historical_requirement[V04_ROOT_REQUIREMENTS] = historical_requirement[V04_ROOT_REQUIREMENTS].replace(
         b"**DIAG-01**", b"**DIAG-01 completed**", 1)
-    expect_reject(lambda: validate_requirements(historical_requirement, repo),
+    expect_reject(lambda: validate_historical_requirements(historical_requirement, repo, BASELINE),
                   "requirement-definition-changed", "historical-requirement-completion")
     cmake = dict(snapshot)
     cmake["tests/CMakeLists.txt"] = re.sub(
@@ -1604,9 +1661,13 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     expect_reject(lambda: validate_boundary(value), "boundary-requirement-disposition-invalid",
                   "boundary-requirement-completion")
     requirement = load_snapshot(repo, BASELINE, (V04_ROOT_REQUIREMENTS,))
+    validate_historical_requirements(requirement, repo, BASELINE)
+    validate_boundary_revision(PHASE22_BOUNDARY_REVISION)
+    expect_reject(lambda: validate_boundary_revision(BASELINE),
+                  "boundary-revision-unapproved", "unapproved-boundary-revision")
     requirement[V04_ROOT_REQUIREMENTS] = requirement[V04_ROOT_REQUIREMENTS].replace(
         b"**DIAG-01**", b"**DIAG-01 changed**", 1)
-    expect_reject(lambda: validate_requirements(requirement, pathlib.Path.cwd()),
+    expect_reject(lambda: validate_historical_requirements(requirement, pathlib.Path.cwd(), BASELINE),
                   "requirement-definition-changed", "boundary-requirement-definition")
     value = dict(boundary)
     value[".planning/config.json"] = value[".planning/config.json"].replace(
@@ -1698,10 +1759,11 @@ def main(argv: list[str] | None = None) -> int:
                 raise Reject("boundary-requires-source-and-boundary-revisions")
             root = args.repo_root.resolve(strict=True)
             resolve_revision(root, args.source_revision)
+            validate_boundary_revision(args.boundary_revision)
             boundary = resolve_revision(root, args.boundary_revision)
             boundary_snapshot = load_boundary(root, boundary)
             validate_boundary(boundary_snapshot)
-            validate_requirements(boundary_snapshot, root)
+            validate_historical_requirements(boundary_snapshot, root, boundary)
             print(f"diagnostic boundary pass source={boundary} phase22=complete phase23=unstarted "
                   "next=/gsd-discuss-phase-23 auto_advance=false")
             return 0
