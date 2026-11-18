@@ -239,15 +239,10 @@ def immutable_blob(repo: Path, revision: str, path: str) -> bytes:
         raise SystemExit(f"plan-cap-v04-archive: invalid tree entry for {path} at {revision}")
     if fields[0] not in ("100644", "100755") or fields[1] != "blob":
         raise SystemExit(f"plan-cap-v04-archive: non-regular source refused: {path}")
-    # This reader already keeps immutable committed planning snapshots. Reuse
-    # that snapshot for repeated archive reads after checking the exact tree mode.
-    snapshot, error = commit_snapshot(repo, revision)
-    if snapshot is None:
-        raise SystemExit(f"plan-cap-v04-archive: cannot read {path} at {revision}: {error}")
-    content = snapshot.get(path)
-    if content is None:
+    content = git_run(repo, "show", f"{revision}:{path}")
+    if content.returncode != 0:
         raise SystemExit(f"plan-cap-v04-archive: cannot read regular file {path} at {revision}")
-    return content
+    return content.stdout
 
 
 def validate_v04_archive_and_recovery(repo: Path, revision: str,
@@ -308,8 +303,21 @@ def read_rev(repo: Path, rev: str) -> tuple[str, PlanTree, str | None]:
         raise SystemExit(f"plan-cap-rev: {rev} is not a commit in {repo}")
     roadmap_path = ".planning/ROADMAP.md"
     phases_path = PHASES_AT_REV
-    roadmap = git_run(repo, "show", f"{rev}:{roadmap_path}")
-    if roadmap.returncode != 0:
+
+    # The existing immutable snapshot cache avoids one Git subprocess for each
+    # planning blob read. Keep git-show as the fallback for paths the archive
+    # does not represent (including symlinks), preserving its byte/refusal
+    # behavior while the tree inventory below remains authoritative.
+    snapshot, _ = commit_snapshot(repo, rev)
+
+    def read_revision_file(path: str) -> bytes | None:
+        if snapshot is not None and path in snapshot:
+            return snapshot[path]
+        shown = git_run(repo, "show", f"{rev}:{path}")
+        return shown.stdout if shown.returncode == 0 else None
+
+    roadmap_raw = read_revision_file(roadmap_path)
+    if roadmap_raw is None:
         raise SystemExit(f"plan-cap-rev: {roadmap_path} cannot be read at {rev}")
     listing = git_run(repo, "ls-tree", "-r", "--name-only", "-z", rev, "--", phases_path)
     if listing.returncode != 0:
@@ -324,14 +332,14 @@ def read_rev(repo: Path, rev: str) -> tuple[str, PlanTree, str | None]:
     if has_archived_requirements != has_archived_roadmap:
         raise SystemExit("plan-cap-v04-archive: archived requirements and roadmap must exist together")
     if has_archived_requirements:
-        root_text = roadmap.stdout.decode("utf-8", errors="strict")
+        root_text = roadmap_raw.decode("utf-8", errors="strict")
         archived_text = validate_v04_archive_and_recovery(repo, rev, root_text, active_paths)
-        roadmap = subprocess.CompletedProcess([], 0, archived_text.encode("utf-8"), b"")
+        roadmap_raw = archived_text.encode("utf-8")
     placeholder = (PHASES_AT_REV + "/.gitkeep").encode("utf-8")
-    if phase_details(roadmap.stdout.decode("utf-8")) is None and active_paths in ([], [placeholder]):
-        state = git_run(repo, "show", f"{rev}:.planning/STATE.md")
+    if phase_details(roadmap_raw.decode("utf-8")) is None and active_paths in ([], [placeholder]):
+        state_raw = read_revision_file(".planning/STATE.md")
         requirements = git_run(repo, "ls-tree", "--name-only", rev, "--", ".planning/REQUIREMENTS.md")
-        state_text = state.stdout.decode("utf-8", errors="strict") if state.returncode == 0 else ""
+        state_text = state_raw.decode("utf-8", errors="strict") if state_raw is not None else ""
         frontmatter = GAP_FRONTMATTER.match(state_text)
         fields = frontmatter.group(1) if frontmatter else ""
         versions = re.findall(r"^milestone: (v[0-9]+\.[0-9]+)$", fields, re.MULTILINE)
@@ -340,8 +348,8 @@ def read_rev(repo: Path, rev: str) -> tuple[str, PlanTree, str | None]:
             base = f".planning/milestones/{versions[0]}"
             roadmap_path = base + "-ROADMAP.md"
             phases_path = base + "-phases"
-            roadmap = git_run(repo, "show", f"{rev}:{roadmap_path}")
-            if roadmap.returncode != 0:
+            roadmap_raw = read_revision_file(roadmap_path)
+            if roadmap_raw is None:
                 raise SystemExit(f"plan-cap-rev: archived roadmap {roadmap_path} cannot be read at {rev}")
             listing = git_run(repo, "ls-tree", "-r", "--name-only", "-z", rev, "--", phases_path)
             if listing.returncode != 0:
@@ -356,14 +364,14 @@ def read_rev(repo: Path, rev: str) -> tuple[str, PlanTree, str | None]:
         files = tree.setdefault(directory, {})
         if PLAN_FILE.match(name):
             def reader(path: str = "/".join(parts)) -> str:
-                shown = git_run(repo, "show", f"{rev}:{path}")
-                if shown.returncode != 0:
+                content = read_revision_file(path)
+                if content is None:
                     raise SystemExit(f"plan-cap-rev: {path} cannot be read at {rev}")
-                return shown.stdout.decode("utf-8", errors="replace")
+                return content.decode("utf-8", errors="replace")
             files[name] = reader
-    decisions = git_run(repo, "show", f"{rev}:.planning/context/DECISIONS.md")
-    decision_text = decisions.stdout.decode("utf-8", errors="strict") if decisions.returncode == 0 else None
-    return roadmap.stdout.decode("utf-8"), tree, decision_text
+    decisions = read_revision_file(".planning/context/DECISIONS.md")
+    decision_text = decisions.decode("utf-8", errors="strict") if decisions is not None else None
+    return roadmap_raw.decode("utf-8"), tree, decision_text
 
 
 V04_IMPLEMENTATION_HEAD = "ca2f0be6b38e7dd22e0eb3296b9a21cceed1a765"
