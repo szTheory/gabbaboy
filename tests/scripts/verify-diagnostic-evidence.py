@@ -1224,7 +1224,7 @@ def boundary_history_control(source_root: pathlib.Path) -> None:
         later = resolve_revision(repo, "HEAD")
         expect_reject(lambda: validate_historical_requirements(
             load_boundary(repo, later), source_root, later, test_fixture_revision=boundary),
-            "historical-requirements-revision-unapproved", "synthetic-later-revision")
+            "historical-requirements-test-revision-invalid", "synthetic-later-revision")
         expect_reject(lambda: validate_boundary(load_boundary(repo, resolve_revision(repo, "HEAD"))),
                       "boundary-phase22-not-complete", "later-head-route")
         if validate_boundary(load_boundary(repo, boundary))["phase23"] != "unstarted":
