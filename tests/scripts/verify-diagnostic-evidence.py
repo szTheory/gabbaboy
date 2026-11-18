@@ -71,6 +71,7 @@ REQUIRED = (
     "tests/CMakeLists.txt", "tests/expected-tests.txt", *PRESERVED,
 )
 V04_D209_ARCHIVE_REV = "96d502d4733ac54aa8bf7fbfd7813065143771dc"
+V04_D209_NOTICE_INDEX_SHA256 = "38820b1dbf48d099438ccc5381d5d75d3b03ea18433e5ea46b7cbd744c1d0011"
 V04_ARCHIVED_REQUIREMENTS = ".planning/milestones/v0.4-REQUIREMENTS.md"
 V04_ARCHIVED_ROADMAP = ".planning/milestones/v0.4-ROADMAP.md"
 V04_ROOT_REQUIREMENTS = ".planning/REQUIREMENTS.md"
@@ -1018,11 +1019,23 @@ def reviewed_notice_index(root: pathlib.Path) -> bytes:
     return raw
 
 
+def d209_notice_index(root: pathlib.Path) -> bytes:
+    try:
+        raw = git(root, "show", f"{V04_D209_ARCHIVE_REV}:THIRD_PARTY_NOTICES.md", limit=MAX_BYTES)
+    except Reject:
+        raise Reject("source-package-d209-notice-index-unavailable") from None
+    if sha256(raw) != V04_D209_NOTICE_INDEX_SHA256:
+        raise Reject("source-package-d209-notice-index-digest-mismatch")
+    return raw
+
+
 def validate_preserved_path(path: str, raw: bytes | None, root: pathlib.Path) -> None:
     baseline = git(root, "show", f"{BASELINE}:{path}", limit=MAX_BYTES)
     if raw == baseline:
         return
     if path == "THIRD_PARTY_NOTICES.md" and raw == reviewed_notice_index(root):
+        return
+    if path == "THIRD_PARTY_NOTICES.md" and raw == d209_notice_index(root):
         return
     if path == ARCHIVE_HARNESS_PATH and raw == reviewed_archive_harness(root):
         return
@@ -1540,6 +1553,14 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     expect_reject(lambda: validate_preserved(notice_index_mutated, repo),
                   "source-package-boundary-changed:THIRD_PARTY_NOTICES.md",
                   "mutated-reviewed-notice-index")
+    d209_notice_reviewed = dict(notice_path_reviewed)
+    d209_notice_reviewed["THIRD_PARTY_NOTICES.md"] = d209_notice_index(repo)
+    validate_preserved(d209_notice_reviewed, repo)
+    d209_notice_mutated = dict(d209_notice_reviewed)
+    d209_notice_mutated["THIRD_PARTY_NOTICES.md"] += b"\nmutated\n"
+    expect_reject(lambda: validate_preserved(d209_notice_mutated, repo),
+                  "source-package-boundary-changed:THIRD_PARTY_NOTICES.md",
+                  "mutated-d209-notice-index")
     notice_path_mutated = dict(notice_path_reviewed)
     notice_path_mutated[ARCHIVE_HARNESS_PATH] += b"\nmutated\n"
     expect_reject(lambda: validate_preserved(notice_path_mutated, repo),
