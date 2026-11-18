@@ -239,10 +239,15 @@ def immutable_blob(repo: Path, revision: str, path: str) -> bytes:
         raise SystemExit(f"plan-cap-v04-archive: invalid tree entry for {path} at {revision}")
     if fields[0] not in ("100644", "100755") or fields[1] != "blob":
         raise SystemExit(f"plan-cap-v04-archive: non-regular source refused: {path}")
-    shown = git_run(repo, "show", f"{revision}:{path}")
-    if shown.returncode != 0:
-        raise SystemExit(f"plan-cap-v04-archive: cannot read {path} at {revision}")
-    return shown.stdout
+    # This reader already keeps immutable committed planning snapshots. Reuse
+    # that snapshot for repeated archive reads after checking the exact tree mode.
+    snapshot, error = commit_snapshot(repo, revision)
+    if snapshot is None:
+        raise SystemExit(f"plan-cap-v04-archive: cannot read {path} at {revision}: {error}")
+    content = snapshot.get(path)
+    if content is None:
+        raise SystemExit(f"plan-cap-v04-archive: cannot read regular file {path} at {revision}")
+    return content
 
 
 def validate_v04_archive_and_recovery(repo: Path, revision: str,
