@@ -1,18 +1,24 @@
 # Phase 24: Resolve remaining v0.4 evidence and verification gaps - Context
 
-**Gathered:** 2026-11-16; updated after the T10 stop and D-213 discussion on 2026-11-18
-**Status:** D-211 Task 9 remains at candidate `96d502d4733ac54aa8bf7fbfd7813065143771dc`; its protected matrix and package-preview run have both concluded with failure. The old D-212 T10–T12 attempt stopped at the path-linter count check and remains stopped. D-213 replanned the same existing Phase 24 plan, and D-214 now authorizes a fresh integrated T10–T12 execution under that plan's local boundary, review, and CI limits. Task 7 and FIXT-01 remain deferred.
+**Gathered:** 2026-11-18; updated after the D-215 discussion
+**Status:** D-214's local T10–T12 gates passed at candidate `feb195f5e50eb4669b5bdb8b62e50459ec84121d` (tree `a28ca6b6644e90bde15b7ecc5c6e10bc94e7e0a6`). Its one fresh exact-head review found four blockers and two warnings. The owner selected a same-plan correction proposal covering all six findings, a Phase 24-only exception to the spent review/gap caps, up to two post-correction review-fix passes, one full protected PR matrix after a clean review, and conditional merge after all required checks pass. This is discussion/planning direction only; execution still requires separate authorization. Task 7, Phase 24 verification, milestone audit/archive, and v0.5 remain out of scope.
 
 <domain>
 ## Phase Boundary
 
-Produce one additive, commit-pinned assessment of current v0.4 evidence and the stale Phase 20/21 verification boundary. Map every original v0.4 requirement to its owner, original acceptance criteria, current evidence, verification freshness, and exact remaining gate. Preserve the Phase 20/21 verification reports as historical records and keep FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 Pending under their original owners. Use only focused, existing checks that fit the approved scope; any result is point-in-time evidence and does not refresh the full Phase 20/21 verification or satisfy the D-103 final-head suite gate.
+Produce one additive, commit-pinned assessment of current v0.4 evidence and the stale Phase 20/21 verification boundary. Map every original v0.4 requirement to its owner, original acceptance criteria, current evidence, verification freshness, and exact remaining gate. Preserve the Phase 20/21 verification reports as historical records and preserve D-209's current requirement dispositions, including FIXT-01 Pending. Use only focused, existing checks that fit the approved scope; any result is point-in-time evidence and does not refresh the full Phase 20/21 verification or satisfy the D-103 final-head suite gate.
 
-The phase may complete its own assessed deliverable while the four requirements remain Pending and v0.4 remains open. Its completion must not be represented as requirement satisfaction or milestone completion. Research is limited to first-party metadata for the already named candidates and diagnostic upstreams. No third candidate search, fixture/source payload acquisition, build/run/admission, rights determination, broad suite, lifecycle retry, release change, tag/asset operation, or milestone archival is included.
+The phase may complete its own assessed deliverable while FIXT-01 remains Pending and v0.4 remains open; the other seven original v0.4 requirements are complete under D-209. Phase completion must not be represented as satisfying FIXT-01 or completing the milestone. Research is limited to first-party metadata for the already named candidates and diagnostic upstreams. No third candidate search, fixture/source payload acquisition, build/run/admission, rights determination, broad suite, lifecycle retry, release change, tag/asset operation, or milestone archival is included.
 
 After the fresh review found Critical CR-01, the owner directed us to follow the bounded recovery recommendation. Address only the BOM-prefixed plan-classification bypass within the existing 24-01 plan: normalize exactly one leading UTF-8 BOM before checking the canonical frontmatter fence, fail closed on a second consecutive BOM, and add production-CLI controls for the Phase 24 D-205 guard. The bypassing gap plan must fail for the specific D-205 gap-plan reason; its otherwise identical ordinary-plan twin must pass. Use one same-plan correction task, one clean independent review of its exact committed candidate, and only the existing plan_cap and planning_hygiene_controls CTests after cheap direct checks. The configured focused regression hook must pass before Phase 24 verification can resume. Any Critical/correctness/security finding or new blocker in the fresh review stops the phase before verification.
 
-This recovery adds no plan, dependency, or CTest identity and does not reset any earlier review, test-suite, lifecycle, release, fixture, rights, or milestone limit. Keep the actual 40-plan ceiling, preserve the 30-second CTest timeout and 125-control floor, and retain every requirement as Pending under its original owner. Do not run the broad suite, third lifecycle retest, phase verifier before recovery gates pass, milestone close, archival, or cleanup while blocked.
+This recovery adds no plan, dependency, or CTest identity and does not reset any earlier test-suite, lifecycle, release, fixture, rights, or milestone limit. Keep the actual 40-plan ceiling, preserve the 30-second CTest timeout and 125-control floor, and retain D-209's current requirement dispositions under their original owners. Do not run the broad suite, third lifecycle retest, phase verifier before recovery gates pass, milestone close, archival, or cleanup while blocked.
+
+D-214 completed its local recovery gates at `feb195f5e50eb4669b5bdb8b62e50459ec84121d` (tree `a28ca6b6644e90bde15b7ecc5c6e10bc94e7e0a6`). The fresh exact-head review at that candidate found three path-contract bypasses, an archive-pair fallback that skips current-route validation, and two candidate-Git validation weaknesses. The owner selected one integrated same-plan correction for all six findings. This new scope is planning-only until the updated plan is checked and execution is separately authorized.
+
+The findings are specifically: CR-01, decoded/escaped string values can name protected paths without a lexical spelling; CR-02, a protected path passed through a local helper parameter is not tracked to its reader; CR-03, a path syntactically rooted at a temporary directory can add components that escape that root; CR-04, removing both archived v0.4 files selects legacy validation and skips current-route checks; WR-01, text-mode Git output can normalize a bare CR in an admission pin; WR-02, inherited `GIT_DIR`, `GIT_WORK_TREE`, and related variables can redirect temporary-repository commands. The full review artifact is `/private/tmp/24-D214-REVIEW.md` in the current environment.
+
+The correction proposal is limited to those six findings and their direct positive/negative controls. It requests a Phase 24-only exception to the already-spent normal review-fix/gap limits, without changing global caps; allows up to two post-correction review-fix passes and uncapped in-scope local diagnosis/retests; allows one full protected PR matrix only after a clean review; and permits merging the exact reviewed head only if every required protected context passes. If a review is unavailable, remains blocked after the two passes, or finds a new out-of-scope issue, or if any required matrix context fails/is skipped/is stale/is missing, stop. Use existing PR #154 and merge only the exact reviewed/tested head through branch protection after all required checks pass. Task 7, requirement changes, phase verification, milestone audit/archive, D-103, excluded-ROM replay, release changes, and worktree cleanup remain separate or prohibited boundaries.
 </domain>
 
 <decisions>
@@ -27,7 +33,7 @@ This recovery adds no plan, dependency, or CTest identity and does not reset any
 - **D-04:** Treat upstream-page access failures as access failures, not evidence that a source or permission is absent. A later rights determination or fixture action requires separate explicit authorization.
 
 ### Phase exit with gaps
-- **D-05:** Phase 24 can pass when its additive evidence map and automated controls are complete, even if the four original requirements remain Pending and Phase 20/21 remain marked stale. Keep the milestone audit at `gaps_found`; do not accept gaps, close v0.4, or imply that phase completion satisfies the original requirements.
+- **D-05:** Phase 24 can pass when its additive evidence map and automated controls are complete while FIXT-01 remains Pending and Phase 20/21 remain marked stale. Seven of eight original v0.4 requirements are complete under D-209. Keep the milestone audit at `gaps_found`; do not accept gaps, close v0.4, or imply that phase completion satisfies FIXT-01.
 - **D-06:** Preserve the 40-plan total ceiling. The roadmap currently has 39 plan files, so Phase 24 has one plan available; no plan, review, gap, test-suite, lifecycle, release, fixture, or rights budget is reset by this rescope.
 
 ### Bounded recovery for Critical CR-01
@@ -48,6 +54,21 @@ This recovery adds no plan, dependency, or CTest identity and does not reset any
 
 The owner explicitly authorized the fresh D-213 execution: make the plan's local, unpushed `.planning/`-only boundary commit; execute T10, T11, and T12; iterate in-scope local diagnosis, fixes, and relevant retests until scoped checks pass; then obtain at most one fresh exact-head independent review and run at most one protected PR matrix. This authority does not resume the stopped D-212 attempt. The plan's exact whitelist, task scope, no-broad-suite/no-replay boundaries, and final review/matrix stop conditions remain binding. Phase verification, milestone audit/archive, merge, v0.5, and worktree cleanup are not included.
 
+### D-215 — Recovery scope after the D-214 exact-head review (2026-11-18)
+
+The owner selected one same-plan correction proposal for all four blockers and both warnings in the fresh D-214 review. This requires a Phase 24-only exception to the already-spent normal two-review-fix/one-gap limits; the global caps remain unchanged. Permit up to two post-correction review-fix passes for these six findings and direct corrections. In-scope local diagnosis, fixes, and relevant retests may converge without an arbitrary attempt count. New out-of-scope trust/correctness findings stop for owner discussion.
+
+After local checks converge, run one initial fresh exact-head independent review. If it identifies only scoped findings/direct corrections, allow up to two post-correction fix-and-re-review passes; each corrected candidate must pass relevant local checks and receive a fresh review. Local diagnosis/retesting does not spend this review allowance. Stop on a new out-of-scope trust/correctness issue, unavailable review, or any finding unresolved after those two passes. Run one full protected PR matrix only after a clean final review, preserving every existing required context and branch-protection rule. Any failed, skipped, stale, or missing required matrix context stops without another matrix. If the exact reviewed and matrix-tested head passes every required context, the owner authorizes conditional merge through the protected PR and reconciliation to `main`; do not alter the candidate after final review or matrix qualification.
+
+This discussion authorizes planning only; a separate owner authorization is required before executing the updated plan. Keep D-209's accepted gaps, original requirement owners/statuses, FIXT-01 Pending, Task 7 deferral, failed unreplayed Acid2 comparison, excluded gbmicrotest cases, published v0.4.0 bytes, D-103 stop, no broad local suite, and no worktree cleanup. Phase 24 verification, milestone audit/archive, and v0.5 remain separate.
+
+### D-215 implementation recommendations from the review synthesis
+
+- Keep the repository-wide lexical path scan and harden only its structural contract for the planning-hygiene checker. Use the Python standard-library AST to inspect decoded literal values, fold only safe literal forms, and follow protected paths through local helper parameters/calls. Prove lexical component containment for the complete derived path beneath the verified temporary root; reject absolute components, parent traversal, unproven dynamic components and root rebinding. Runtime filesystem symlink resolution is outside this finite static-analysis seam: claim no symlink containment and add no symlink test or platform dependency. If execution reveals an actual symlink-based read escape in the target seam, stop as a new out-of-scope trust/correctness issue. Do not execute inspected source or add a dependency.
+- For current candidate validation, require both archived v0.4 blobs and the active Phase 24 route; do not infer historical mode from both archive files being absent. Keep historical validation behind an explicit, full-revision boundary selector.
+- Read admission pins as raw Git blob bytes and accept only exactly 40 lowercase hexadecimal ASCII bytes, optionally followed by LF or CRLF; also accept the exact 40 bytes with no terminator. Reject bare CR, whitespace, extra bytes, uppercase, and non-ASCII. Sanitize repository-redirection `GIT_*` variables for temporary-repository operations and assert the selected Git directory and candidate HEAD.
+- Add causal negative controls for escaped/concatenated paths, helper-argument flow, temporary-root escape, paired archive removal, malformed pin terminators, and Git environment redirection; retain positive controls for the approved immutable reads, historical boundary, exact archive pair, and valid pin forms. Reuse existing self-test/CTest identities and run cheap checks before longer gates.
+
 ### the agent's Discretion
 - Select the existing focused CTest targets that match the files and claims touched by the one plan; keep the existing test identities and CMake/Python standard-library patterns.
 - Use machine-checkable positive and negative controls for the Phase 24 report so false requirement completion, ownership changes, or milestone closure are rejected.
@@ -63,10 +84,10 @@ The owner explicitly authorized the fresh D-213 execution: make the plan's local
 
 ### Milestone scope and authority
 - `.planning/ROADMAP.md` — Phase 24, prior phase boundaries, execution limits, plan totals, and requirement ownership.
-- `.planning/REQUIREMENTS.md` — Original v0.4 requirement definitions and current tracker dispositions; do not infer completion from no-go outcomes.
+- `.planning/milestones/v0.4-REQUIREMENTS.md` — Archived original v0.4 requirement definitions and current tracker dispositions; there is no active root requirements tracker.
 - `.planning/PROJECT.md` — Product scope, current limits, and milestone status.
 - `.planning/STATE.md` — Current owner handoff and preserved verification/lifecycle limits.
-- `.planning/context/DECISIONS.md` — D-103, D-193 through D-205; D-205 authorizes only this one rescope and does not renew the other limits.
+- `.planning/context/DECISIONS.md` — D-103, D-193 through D-215; read the latest Phase 24 scope decisions alongside historical limits.
 - `.planning/context/WORKFLOW.md#cicd-efficiency` — standing policy for measured CI/CD timing, cheap-before-expensive checks, and preserving required coverage.
 - `.planning/v0.4-MILESTONE-AUDIT.md` — Current requirement, phase freshness, integration, and flow assessment.
 
@@ -81,9 +102,14 @@ The owner explicitly authorized the fresh D-213 execution: make the plan's local
 - [Current continuation handoff](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md) — Owner handoff, bounded recovery proposal, and stops to preserve.
 - [24-SECURITY.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-SECURITY.md) — T-24-04 and its open status before the recovery.
 - [24-01-PLAN.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md) and [24-VALIDATION.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md) — Existing one-plan scope and the two authorized focused CTests.
+- [24-CLOSEOUT.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md) — D-214 local candidate, focused checks, and preserved failed-run evidence; the fresh review report is summarized in D-215 above.
 
 ### Existing checkers and wiring
 - [Plan checker](tests/scripts/verify-planning-hygiene.py) — Plan frontmatter classifier, immutable plan-cap CLI, and current production-CLI self-test seam for the BOM regression.
+- `tests/scripts/verify-no-phase-paths.py` — Existing lexical Phase-path scanner and new structural/context policy for path literals and readers.
+- `tests/scripts/verify-diagnostic-evidence.py` — Immutable evidence snapshot selection, archived requirements/roadmap checks, and active recovery-route validation.
+- `tests/scripts/verify-dense-input.py` — Candidate Git-object, admission-pin, and temporary-subject controls.
+- `tests/scripts/verify-planning-hygiene.py` — Existing sanitized Git environment helper to reuse for temporary repositories.
 - `tests/CMakeLists.txt` — Existing CTest inventory and phase evidence integration.
 - `tests/cmake/game-evidence.cmake` — Existing focused CGB progress, candidate, and scene-report checks.
 - `tests/cmake/hygiene.cmake` — Existing planning-hygiene controls and immutable-source checks.
@@ -94,6 +120,11 @@ The owner explicitly authorized the fresh D-213 execution: make the plan's local
 - `tests/scripts/verify-diagnostic-admission.py` — Metadata-only diagnostic gate and refusal controls.
 - `tests/scripts/verify-scene-report.py` — Scene-intake/promotion contract checks.
 - `tests/scripts/verify-summary-coverage.py` and `tests/scripts/verify-uat-closure.py` — Existing automated planning/UAT closure patterns.
+
+### Primary-language and Git behavior references for D-215
+- [Python AST](https://docs.python.org/3/library/ast.html) and [Python lexical analysis](https://docs.python.org/3/reference/lexical_analysis.html) — AST constants represent decoded literal values; escapes and adjacent string literals affect runtime values.
+- [Python pathlib](https://docs.python.org/3/library/pathlib.html) — Path containment and resolution semantics; lexical parent operations alone do not prove filesystem containment.
+- [Git documentation](https://git-scm.com/docs/git) — `GIT_DIR`, `GIT_WORK_TREE`, and related environment variables can redirect repository discovery and operations.
 
 ### First-party source metadata
 - [Potion Panic creator page](https://deved.itch.io/potion-panic) — Shows the creator's source link and page-level code/asset license labels. These labels are recorded only as page metadata, not as a rights determination.
@@ -121,6 +152,7 @@ The owner explicitly authorized the fresh D-213 execution: make the plan's local
 - Planning/evidence checks pin immutable commits or exact source identities and carry causal negative controls with valid positives.
 - Existing contracts use Python's standard library and CMake/CTest; keep the dependency tree flat and test identities stable.
 - Focused control passes and historical phase verification are distinct evidence types; do not merge their status labels.
+- The D-214 review targets `tests/scripts/verify-no-phase-paths.py`, `verify-diagnostic-evidence.py`, and `verify-dense-input.py`; preserve the existing CTest seams while making their path, archive, and Git-context contracts fail closed.
 
 ### Guard parsing and validation
 - The existing is_gap_plan and check_plan_tree path in tests/scripts/verify-planning-hygiene.py feeds both committed-tree plan_cap and D-205 production-CLI controls; keep the recovery on this path.
@@ -128,7 +160,7 @@ The owner explicitly authorized the fresh D-213 execution: make the plan's local
 - Existing planning_hygiene_controls runs disposable immutable production-CLI fixtures; the paired assertion must require the exact plan-cap-d205-phase24-gap error so an unrelated refusal cannot satisfy the regression.
 
 ### Integration Points
-- The additive Phase 24 evidence record must reconcile `.planning/REQUIREMENTS.md`, `.planning/ROADMAP.md`, `.planning/STATE.md`, `.planning/PROJECT.md`, and `.planning/v0.4-MILESTONE-AUDIT.md` without changing the original requirement owners or accepted release claims.
+- The additive Phase 24 evidence record must reconcile the archived `.planning/milestones/v0.4-REQUIREMENTS.md`, `.planning/ROADMAP.md`, `.planning/STATE.md`, `.planning/PROJECT.md`, and `.planning/v0.4-MILESTONE-AUDIT.md` without changing the original requirement owners or accepted release claims.
 - Existing CTest targets and `tests/expected-tests.txt` provide the test and release-inventory boundaries. No broad suite or release lifecycle rerun is in scope.
 </code_context>
 
@@ -141,6 +173,8 @@ The owner explicitly authorized the fresh D-213 execution: make the plan's local
 - Preserve the bounded original candidate set. Do not try a third game, fetch fixture bytes, or claim a license prohibition.
 - A successful Phase 24 result means the additive assessment and its controls pass. It does not satisfy FIXT-01, RIGHTS-01, DIAG-01, or DIAG-02, refresh the complete Phase 20/21 phase gates, or close v0.4.
 - For the BOM regression, use two otherwise identical BOM-prefixed Phase 24 plans that differ only in the gap_closure boolean; require the gap plan's specific refusal and the ordinary plan's acceptance. Python's official [UTF-8-SIG codec documentation](https://docs.python.org/3.13/library/codecs.html#encodings.utf_8_sig) confirms that BOM handling applies at the start of the byte stream; keep the project's accepted one-BOM policy explicit in the local classifier.
+- For the D-214 findings, treat the reported candidate as historical review input, not a clean baseline. The next implementation candidate must descend from it and retain a direct negative for each of CR-01–CR-04 and WR-01–WR-02.
+- Keep the full protected matrix. Record actual job/step durations, queue/dependency waits, and timeout headroom in Phase 24 evidence; do not change required coverage or workflow triggers in this correction.
 </specifics>
 
 <deferred>
@@ -149,12 +183,13 @@ The owner explicitly authorized the fresh D-213 execution: make the plan's local
 - Candidate-specific rights determination, fixture/source payload acquisition, build/run/admission, and any new candidate require separate explicit owner authorization.
 - The D-103 exact-final-head broad suite and milestone archival remain separate owner-controlled gates.
 - Other frontmatter prefixes or YAML spellings are outside this BOM-specific recovery; if the authorized independent review identifies a distinct plan-cap bypass or blocker, preserve the stop and return it to the owner rather than extending this correction cycle.
+- The D-211 package-preview waiter redesign remains a separate measured follow-up. This recovery records the next run's efficiency evidence but does not change cross-workflow triggers or reduce required contexts.
 </deferred>
 
 ---
 
 *Phase: 24-Resolve remaining v0.4 evidence and verification gaps*
-*Context gathered: 2026-11-16*
+*Context gathered: 2026-11-18*
 
 ## D-206 Closeout Addendum (owner-authorized)
 

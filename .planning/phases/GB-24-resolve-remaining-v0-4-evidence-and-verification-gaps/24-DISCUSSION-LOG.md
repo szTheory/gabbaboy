@@ -3,9 +3,9 @@
 > **Audit trail only.** Do not use as input to planning, research, or execution agents.
 > Decisions are captured in `24-CONTEXT.md` — this log preserves the alternatives considered.
 
-**Date:** 2026-11-17
+**Date:** 2026-11-17; updated 2026-11-18
 **Phase:** 24-Resolve remaining v0.4 evidence and verification gaps
-**Areas discussed:** Additive verification evidence, Read-only candidate research, Phase exit with gaps, BOM normalization and plan-cap regression, post-T6 Acid2 mismatch, literal RIGHTS-01/DIAG-01/DIAG-02 reconciliation, FIXT-01 execution boundary, D-211 protected CI boundary and fresh recovery
+**Areas discussed:** Additive verification evidence, Read-only candidate research, Phase exit with gaps, BOM normalization and plan-cap regression, post-T6 Acid2 mismatch, literal RIGHTS-01/DIAG-01/DIAG-02 reconciliation, FIXT-01 execution boundary, D-211 protected CI boundary, D-213 integrated recovery, and D-215 post-review correction scope, review limits, CI efficiency, and conditional merge
 
 ---
 
@@ -192,3 +192,60 @@ The source records establish that T10 saw 30 path spellings against a pin of 1: 
 After reviewing the D-213 plan and its independent plan-check result, the owner explicitly authorized the new T10–T12 execution. This authorizes one local, unpushed planning-boundary commit from the exact plan whitelist, in-scope local diagnosis/fix/retest convergence without an arbitrary numeric cap, then at most one exact-head review and one protected PR matrix after all local checks pass. The prior D-212 T10 attempt remains stopped. D-209 statuses and gaps, Task 7 deferral, Acid2 and excluded-ROM limits, D-103, the broad-suite stop, and worktree boundary remain unchanged. Merge, Phase 24 verification, milestone audit/archive, v0.5, and cleanup are not part of this execution authorization.
 
 **Route:** The agent runs `$gsd-execute-phase 24`, starting with the explicit-whitelist local planning-boundary commit and full-tree preflight. No D-214 source check or CI run had started when this authorization record was written.
+
+## D-215 recovery scope and review authority (2026-11-18)
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| All six findings | Correct CR-01–CR-04 and WR-01–WR-02 together in the existing Phase 24 plan. | ✓ |
+| Four blockers only | Leave the two Git-context warnings unaddressed. | |
+| Different scope | Owner-defined alternative. | |
+
+**User's choice:** All six findings.
+**Notes:** The candidate reviewed was `feb195f5e50eb4669b5bdb8b62e50459ec84121d`, tree `a28ca6b6644e90bde15b7ecc5c6e10bc94e7e0a6`. The review found three path-contract bypasses, a paired-archive fallback that skips current-route validation, raw pin parsing weakness, and inherited Git environment redirection.
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Request a narrow phase-local exception | Reuse the sole plan for these six findings; change no global caps and add no plan. | ✓ |
+| Preserve the stop | Make no further recovery proposal. | |
+| Different boundary | Owner-defined alternative. | |
+
+**User's choice:** Request the narrow exception; this discussion authorizes planning only, not execution.
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Up to two scoped review-fix passes | Local diagnosis/retest is uncapped; if review finds scoped issues, use the second pass; stop on out-of-scope issues or unresolved findings after two. | ✓ |
+| One pass, then stop | One fix/review pass for the six findings. | |
+| Different bound | Owner-defined alternative. | |
+
+**User's choice:** Up to two passes.
+
+## D-215 protected qualification and merge boundary
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| One full protected PR matrix after a clean review | Preserve every required context; stop on failed, skipped, stale, or missing contexts. | ✓ |
+| Stop before CI | Do not run the new matrix. | |
+| Different boundary | Owner-defined alternative. | |
+
+**User's choice:** One full protected matrix after a clean final review.
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Conditional merge | Merge/reconcile the exact reviewed and matrix-tested head through branch protection if all required checks pass. | ✓ |
+| Stop after matrix | Keep merge as a separate owner decision. | |
+| Different boundary | Owner-defined alternative. | |
+
+**User's choice:** Conditional merge to `main`; phase verification, Task 7, milestone audit/archive, D-103, and v0.5 remain separate.
+
+## CI efficiency and required coverage
+
+**Owner direction carried forward:** Measure actual CI job/step times, queue/dependency waits, and timeout headroom. Run cheap checks before long gates. Preserve the complete required matrix and branch protection. Record run-specific findings in Phase 24 evidence and keep package-waiter workflow redesign separate from this checker recovery. The standing policy is `.planning/context/WORKFLOW.md#cicd-efficiency`.
+
+## Cross-role synthesis
+
+- **Security and static analysis:** Decode AST literal values, track protected paths through local helper arguments, and reject dynamic or parent/absolute path forms that cannot be proven beneath the temporary root.
+- **Evidence integrity:** Require the archive pair and active route for current candidates; permit historical checks only at an explicit full-revision boundary.
+- **Git reliability:** Validate pin blobs as raw bytes containing exactly 40 lowercase hex ASCII bytes, optionally followed by LF or CRLF (or with no terminator); reject bare CR and any extra/invalid bytes. Sanitize repository-redirection environment variables and assert the temporary subject repository identity.
+- **QA and CI operations:** Add causal positive and negative controls in existing CTest/self-test seams, run cheap checks first, preserve full matrix membership, and inspect measured run timing rather than changing coverage by guesswork.
+- **Dependency policy:** Reuse Python standard-library AST/path tools and Git; add no package or CTest identity.

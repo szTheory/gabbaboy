@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: D-214 Phase 24 T10-T12 local gates passed; final exact-candidate review and protected matrix remain
-last_updated: "2026-11-18T16:38:10Z"
-state_head: 002922c9eb36757386cb1dde1226462ab09ae161
+stopped_at: Phase 24 D-215 plan checked; awaiting separate execution authorization
+last_updated: "2026-11-18T18:58:41.611Z"
+state_head: feb195f5e50eb4669b5bdb8b62e50459ec84121d
 progress:
   total_phases: 6
   completed_phases: 5
@@ -12,19 +12,19 @@ progress:
   completed_plans: 32
 milestone_name: Evidence Floor
 last_activity: 2026-11-18
-current_phase_name: Resolve remaining v0.4 evidence and verification gaps
+current_plan: Phase 24 Plan 24-01 D-215 checked; awaiting separate execution authorization
 current_phase: 24
-current_plan: Phase 24 Plan 24-01 D-214 T10-T12 local gates passed; exact-candidate review and protected matrix remain
+current_phase_name: Resolve remaining v0.4 evidence and verification gaps
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone stage:** v0.4 — Evidence Floor remains administratively closed with accepted gaps under D-209. D-211 Task 9 remains at candidate `96d502d4733ac54aa8bf7fbfd7813065143771dc`; its protected matrix `44189691301` and package-preview `44189691412` conclusively failed at that candidate. The old D-212 T10–T12 attempt remains stopped. D-213 replanned the same sole Phase 24 plan and passed an independent plan check; D-214 now authorizes the fresh T10–T12 execution within that plan.
+**Milestone stage:** v0.4 — Evidence Floor remains administratively closed with accepted gaps under D-209. Phase 24 is replanned under D-215 after review of candidate feb195f5e50eb4669b5bdb8b62e50459ec84121d found four blockers and two warnings. Discussion and planning only; execution requires separate owner authorization. Preserve the failed D-211 matrix/package-preview and D-214 review; no retry, push, or matrix has followed.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
-**Phase state:** Phase 24 remains incomplete; Task 7 remains deferred, and Phase 20/21/23.1 verification remains stale. The D-214 T10–T12 local gates passed at implementation candidate `002922c9eb36757386cb1dde1226462ab09ae161` (tree `9cdffbc177d3134cdd9943701b79f06f9197d8c0`), descending from the local D-213 planning boundary `0ada03f7bfb898242435450df2153b7f9144ccdd`; frozen base remains `96d502d4733ac54aa8bf7fbfd7813065143771dc`. The preserved D-212 stop remains historical; its three checker edits have been integrated and committed, and its failure evidence remains recorded. The final closeout/state/handoff update creates a docs-only descendant, which is being reconfigured and rechecked at its exact full candidate before review. No canonical summary, UAT closure, phase verification, milestone audit/archive, review, matrix, merge, or CI has run under D-214. FIXT-01 remains Pending and the Acid2 mismatch remains failed and unreplayed.
-**Next route:** The current stage is Phase 24 Plan 24-01 Tasks 10–12 with all scoped local gates passed. The executor is recording the final evidence and handoff, then will reconfigure and rerun the selected local gates against the resulting exact full candidate. The orchestrator acts next with one fresh review of that candidate, followed by one protected matrix; no merge or phase/milestone closure follows from this authority. Keep this recovery checkout, the local boundary, frozen base, original D-209 dispositions, and all diagnostic exclusions unchanged. The next milestone remains v0.5 DMG PPU Timing only after a separate successful protected reconciliation and milestone handoff. Both automatic-advance flags remain false.
+**Phase state:** Phase 24 is incomplete; Task 7 remains deferred, and Phase 20/21/23.1 verification remains stale. D-214 candidate feb195f5e50eb4669b5bdb8b62e50459ec84121d passed local gates but its exact-head review found four blockers and two warnings; no push, matrix, merge, or phase verification followed. D-215 replanned the sole plan for all six findings and passed an independent plan check. No D-215 source changes or execution checks have run. FIXT-01 remains Pending; the Acid2 mismatch remains failed and unreplayed.
+**Next route:** Discussion and replanning are complete; the independent D-215 plan check passed. The owner acts next: separately authorize `$gsd-execute-phase 24` to begin the three active tasks in the sole plan. Until then, do not change source, run implementation checks, push, review, or start CI. If later gates qualify, only the identical reviewed and fully green protected head may merge through PR #154; phase verification and v0.4 closure remain separate. Keep this recovery worktree and both automatic-advance flags false.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -52,11 +52,11 @@ Two items had already been acknowledged by an earlier closeout; the audit record
 
 FIXT-01 remains Pending: neither Potion Panic nor µCity has a complete source/build/ROM/header/mode/runtime chain. Do not introduce a third game candidate under the v0.4 requirement. Do not replay the Acid2 comparison or claim its cause. The v0.4.0 tag/assets and published claims remain unchanged. No hardware, perception, mode-3 timing, general compatibility, Linux player, Steam Deck, or live Playstead claim is established by this closeout.
 
-The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 verification is stale; Phase 24 Task 7 is incomplete. These remain gaps, not passes. D-211's review and matrix are spent, and its failed matrix is preserved without rerun. D-214 authorizes only the D-213 T10–T12 recovery, its local planning-boundary commit, scoped local convergence, one fresh exact-head review and one protected matrix. A final review finding or failed/missing required CI context stops without another cycle. No Acid2 replay, excluded gbmicrotest replay, candidate expansion, release/tag/asset change, broad local suite, worktree cleanup, merge, phase verification or milestone archive. Both automatic-advance flags remain false.
+The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 verification is stale; Phase 24 Task 7 is incomplete. These remain gaps, not passes. D-211's failed matrix and D-214's four blockers/two warnings remain preserved. D-215 authorizes discussion and replanning only; execution requires separate owner authorization. Under that scope, local checks may converge, one fresh exact-head review may be followed by up to two scoped correction/re-review passes, then one full protected matrix may run after a clean review; any failed, missing, skipped, stale, or unresolved required result stops without another matrix. Conditional merge is limited to the identical reviewed and fully qualified head through branch protection. No Acid2 replay, excluded gbmicrotest replay, candidate expansion, release/tag/asset change, broad local suite, worktree cleanup, phase verification, or milestone archive. Both automatic-advance flags remain false.
 
 ## Owner Handoff
 
-Current stage: **Phase 24 Plan 24-01 Tasks 10–12 and their local gates are complete under D-214**. Implementation candidate `002922c9eb36757386cb1dde1226462ab09ae161` (tree `9cdffbc177d3134cdd9943701b79f06f9197d8c0`) passed the selected CTests and the two candidate-bound T11 checks. The executor is committing truthful closeout/state/continuation evidence and will rebind/recheck the final exact candidate; it will then hand that SHA and tree identity to the orchestrator. The orchestrator acts next with one fresh review and one protected matrix, in that order. No merge, phase verification, Task 7, UAT closure, milestone audit/archive, or release action is part of this handoff. Keep the D-209 requirement and milestone statuses unchanged, preserve the failed D-211/D-212 records, and retain the current checkout.
+Current stage: **Phase 24 D-215 discussion and replanning are complete; the sole 24-01 plan passed an independent check.** The reviewed D-214 candidate `feb195f5e50eb4669b5bdb8b62e50459ec84121d` passed local gates, but its fresh exact-head review found four blockers and two warnings; no push or matrix followed. No D-215 source changes or execution checks have started. The owner acts next by separately authorizing `$gsd-execute-phase 24`. If authorized, the executor runs only active T10–T12 in sequence under the checked D-215 plan. Preserve D-209 dispositions and the D-211/D-214 failures. Keep the current checkout until qualified work is reconciled through a protected merge; Task 7, phase verification, UAT closure, milestone audit/archive, and v0.5 remain separate.
 
 ## Accumulated Context
 
@@ -110,9 +110,9 @@ Current stage: **Phase 24 Plan 24-01 Tasks 10–12 and their local gates are com
 
 ## Session
 
-**Last session:** 2026-11-18T16:38:10Z
-**Stopped at:** D-214 Phase 24 T10–T12 local gates passed; final evidence commit and exact-candidate recheck precede review
+**Last session:** 2026-11-18T18:54:54.441Z
+**Stopped at:** Phase 24 D-215 plan checked; awaiting separate execution authorization
 **Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md
 
 ### Blockers
-D-211 matrix `44189691301` and package-preview `44189691412` failed at frozen candidate `96d502d4733ac54aa8bf7fbfd7813065143771dc`; preserve those failures. The D-212 T10 path-report stop remains historical and its three edits were integrated under the fresh D-214 scope. D-214 T10–T12 local checks have passed at implementation candidate `002922c9eb36757386cb1dde1226462ab09ae161`; the final planning-evidence descendant must pass its exact-candidate local recheck. Afterward the orchestrator performs the one fresh review and one protected matrix. No phase closure, merge, or milestone archive is authorized here.
+D-211 matrix `44189691301` and package-preview `44189691412` failed at frozen candidate `96d502d4733ac54aa8bf7fbfd7813065143771dc`; preserve those failures. The stopped D-212 attempt remains historical, and its edits were integrated during D-214. D-214 local checks passed at `feb195f5e50eb4669b5bdb8b62e50459ec84121d`, but the fresh review found four blockers and two warnings; no matrix or push followed. D-215's plan check passed, but implementation has not started and requires separate owner authorization. No phase closure, phase verification, or milestone archive is authorized here.

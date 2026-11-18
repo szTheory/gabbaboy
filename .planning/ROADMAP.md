@@ -9,13 +9,13 @@
 
 ## Next
 
-No new milestone is active. Phase 24 remains a recovery of the D-209 v0.4 closeout candidate; it does not reopen v0.4 or change the archived requirement statuses. The D-213 plan passed independent review and D-214 authorizes its T10–T12 recovery scope. Execution starts with the local, unpushed planning-boundary commit. After protected reconciliation and separate closure decisions, the recommended next milestone is v0.5 DMG PPU Timing, beginning with exact admission of a small, rights-clear DMG oracle set.
+No new milestone is active. Phase 24 remains a recovery of the D-209 v0.4 closeout candidate; it does not reopen v0.4 or change the archived requirement statuses. D-214 local gates passed, but its independent review found four blockers and two warnings, so no push or matrix followed. D-215 replans the sole existing plan for all six findings, with a phase-local review exception, one full protected matrix after a clean review, and conditional protected merge. Execution requires separate owner authorization after the plan check. After protected reconciliation and separate closure decisions, the recommended next milestone is v0.5 DMG PPU Timing, beginning with exact admission of a small, rights-clear DMG oracle set.
 
 ## Recovery Phase
 
 ### Phase 24: Resolve remaining v0.4 evidence and verification gaps
 
-**Status:** The sole D-213 recovery plan passed an independent plan check; D-214 now authorizes T10–T12, scoped local convergence, one fresh exact-head review and one protected PR matrix. Execution is beginning with the local planning-boundary commit and its full-tree preflight. v0.4 remains administratively closed with accepted gaps under D-209; archived requirements and original owners/statuses remain authoritative. The original D-211 matrix and package-preview runs ended failed at candidate `96d502d` and remain unchanged.
+**Status:** D-215 planning for the six findings from the D-214 exact-candidate review; execution is not authorized. Reuse the sole plan and T10–T12 task identities. D-214 local passes and failed review remain historical evidence; no D-214 push or matrix followed. v0.4 remains administratively closed with accepted gaps under D-209; archived requirements and original owners/statuses remain authoritative. The original D-211 matrix and package-preview runs ended failed at candidate `96d502d` and remain unchanged.
 **Goal:** Plan one integrated recovery round for the D-211 CI blockers, the stale Phase 24 path-linter count, and the active-route immutable-candidate gap, preserving v0.4 evidence and trust boundaries.
 **Requirements:** []
 **Requirement boundary:** This recovery does not reassign requirements or change their statuses; the archived v0.4 tracker remains authoritative.
@@ -27,6 +27,6 @@ No new milestone is active. Phase 24 remains a recovery of the D-209 v0.4 closeo
   3. State-fork inventory accounts for diagnostic manifests as explicit non-executed exclusions; Acid2, the prior `div_inc_timing_a` case, and the 512 excluded gbmicrotest cases are not rerun.
   4. Historical phase-path checking retains live-phase-reader detection, and the v0.4.0 tagged fixture-admission trust root is not refreshed, waived, or weakened.
   5. Planning-hygiene timeout causes are diagnosed before any budget change; no broad local suite, new dependency, or new CTest identity is added.
-  6. Under D-214, in-scope local diagnosis/fix/retest converges until cheap and focused checks pass; then at most one fresh exact-head review and one new protected PR matrix. Any final-review finding or failed, missing, skipped, or stale required CI context stops without another review/matrix cycle.
+  6. After separate D-215 execution authorization, in-scope local diagnosis/fix/retest converges until cheap and focused checks pass. One fresh independent review may be followed by up to two scoped fix-and-re-review passes; a new out-of-scope issue or finding still unresolved after those passes stops. Only a clean final review permits one full protected PR matrix. Failed, missing, skipped or stale required contexts stop without a matrix retry; a fully qualified identical head may merge through existing protection. Phase/milestone closure remains separate.
 **Plans:**
-- [ ] 24-01-PLAN.md — Integrated D-213 recovery scope; D-214-authorized execution begins with the planning-boundary commit.
+- [ ] 24-01-PLAN.md — D-215 six-finding correction, focused regressions, scoped review exception, one full protected matrix and conditional merge; separate execution authorization required.

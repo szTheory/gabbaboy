@@ -4,59 +4,59 @@ slug: "resolve-remaining-v0-4-evidence-and-verification-gaps"
 status: draft
 nyquist_compliant: false
 wave_0_complete: false
-created: "2026-11-17"
+created: "2026-11-18"
 ---
 
 # Phase 24 — Validation Strategy
 
-> D-213 planning contract, now authorized for execution by D-214. The revised plan passed independent static plan review; implementation checks have not run yet. The D-209 v0.4 closeout and archived requirement dispositions remain unchanged.
+> Updated from the D-215 validation architecture. Planning only; implementation and hosted qualification remain separately gated.
 
 ## Test Infrastructure
 
 | Property | Value |
-|----------|-------|
-| **Framework** | Existing Python standard-library checks and CMake/CTest |
-| **Config file** | `CMakePresets.json`, `tests/cmake/hygiene.cmake`, and existing lane registrations |
-| **Quick run command** | `python3 -I -c 'import ast,pathlib; paths=("tests/scripts/verify-dense-input.py","tests/scripts/verify-diagnostic-evidence.py","tests/scripts/verify-planning-hygiene.py","tests/scripts/verify-state-forks.py","tests/scripts/verify-no-phase-paths.py","tests/scripts/verify-workflow-policy-coverage.py"); [ast.parse(pathlib.Path(p).read_text(encoding="utf-8"), filename=p) for p in paths]'` — run after the D-214-authorized planning-boundary preflight; this checks syntax and file presence, not behavior. |
-| **Focused CTest command** | After cheap checks and the immutable candidate preflight, inspect exact existing CTest names/commands with `--show-only=json-v1`; run only the plan's focused controls, with `plan_cap` first and `planning_hygiene_controls` last. |
-| **Full suite command** | Not in this recovery scope. D-103 remains a separate milestone gate. |
-| **Estimated runtime** | Not remeasured in planning. Preserve the 30-second hygiene timeout unless measured stage/load evidence supports a narrow same-coverage change. |
+|---|---|
+| Framework | Existing Python standard library and CMake/CTest |
+| Config | Existing CMake presets and CTest registrations |
+| Quick run | Syntax-only AST parse of the six affected Python checkers; useful after execution is authorized, but not behavioral proof |
+| Focused run | Inspect exact registrations with `ctest --show-only=json-v1`; run existing controls only |
+| Full suite | Excluded; D-103 remains a separate milestone gate |
+| Runtime | Not remeasured during planning; preserve the 30-second hygiene timeout unless later measured evidence supports a same-coverage adjustment |
 
 ## Per-Task Verification Map
 
-| Task ID | Plan | Wave | Contract | Threat Ref | Secure Behavior | Test Type | Automated Command / Boundary | File Exists | Status |
-|---------|------|------|----------|------------|-----------------|-----------|-----------------------------|-------------|--------|
-| 24-01-T10-archive-path-contracts | 01 | 1 | Exact D-209 archive facts coexist with the committed current Phase 24 route; the path linter distinguishes finite immutable/self-test uses from live readers and separately allows exactly two historical JSON provenance values. | T-24-13 | Keep the general scan and must-scan controls; reject unclassified literals, same-count live-reader substitutions, changed immutable inputs and extra historical-path uses. | integration/control | Existing `phase22_evidence_controls`, `no_phase_paths_controls`, `no_phase_paths`, and `planning_hygiene_controls`; run only after cheap path and boundary checks establish no ROM execution. | Existing | ⬜ pending |
-| 24-01-T11-manifest-git-context | 01 | 1 | The candidate Git object resolves full active fixture pins/ancestry, while the immutable state-fork inventory is the exact active/excluded union and never expands diagnostic ROMs. | T-24-14 | Keep production admission fail-closed; exclude Acid2, the prior `div_inc_timing_a` case and all 512 other gbmicrotest cases. | integration/control | Non-executing Git-context and inventory controls first; fixture-bearing dense-input/state-fork behavior only inside the separately authorized protected PR matrix. | Existing harness and matrix lane | ⬜ pending |
-| 24-01-T12-trust-timeout-qualification | 01 | 1 | The v0.4.0 tagged checker remains independently verified, only the exact D-209 notice delta is modeled, and the hygiene timeout is diagnosed before any budget change. | T-24-15 | Reject unrelated checker/rights drift; retain all unique cases, current CTest identities and the 125-control floor. | integration/control | Existing `plan_cap`, `phase22_evidence_controls`, `phase22_evidence_contract`, `no_phase_paths_controls`, `no_phase_paths`, `workflow_policy_coverage_controls`, and `planning_hygiene_controls`, selected exactly as the final plan prescribes. | Existing | ⬜ pending |
+| Task ID | Plan | Contract | Existing control seam | Evidence and status |
+|---|---|---|---|---|
+| 24-01-T10-archive-path-contracts | 01 | CR-01–CR-03 are rejected for decoded/concatenated literals, local helper-parameter flow and static component/root escapes (absolute, parent traversal, unproven dynamic components or root rebinding); the broad lexical scan and exact historical JSON exception remain intact. | `no_phase_paths_controls`, `no_phase_paths`, `planning_hygiene_controls` | Add causal positives/negatives for lexical component containment in the existing self-test; pending execution. No runtime symlink containment claim/test. |
+| 24-01-T11-manifest-git-context | 01 | CR-04 requires the archive pair and active Phase 24 route for current candidates; WR-01 validates exact raw pin bytes; WR-02 prevents inherited Git redirection from changing the temporary repository. | `phase22_evidence_controls`, `phase22_evidence_contract`, existing dense-input Git-context controls | Preserve full-revision historical mode and avoid fixture-bearing local execution; pending execution. |
+| 24-01-T12-trust-timeout-qualification | 01 | The existing trust overlay, candidate ancestry, timeout diagnosis, and integrated focused coverage remain qualified without changing requirement or release status. | `plan_cap`, `workflow_policy_coverage_controls`, `planning_hygiene_controls`, plus the relevant controls above | Keep current test identities, 125-control floor, and 30-second bound unless measured evidence justifies a narrow equivalent adjustment; pending execution. |
 
-The task identifiers match the sole Phase 24 plan. These are conditional implementation checks, not results. No product test, configure/build, CTest, CI, or ROM execution ran during planning.
+The Phase 24 roadmap has no assigned requirement IDs. These checks validate the phase's evidence contract and do not promote any original v0.4 requirement. D-209 remains authoritative: seven of eight requirements are complete, FIXT-01 is Pending.
 
-## Sampling Rate
+## Sampling Rate and Order
 
-- **Planning:** static plan structure, frontmatter, verify-command path/failure-direction probes, and independent plan review only.
-- **Before implementation tests:** D-214 authorizes one local unpushed documentation-only boundary commit from the plan's exact whitelist; inspect its full diff, then check route/archive identity and implementation ancestry before configure or longer work.
-- **Local convergence:** run cheap syntax, identity, path and non-executing inventory controls first. When an in-scope check fails, preserve its cause, diagnose it, fix within T10–T12, and rerun the relevant controls until they pass. There is no numeric retry allowance for this scoped local loop. Stop for owner discussion if the cause is outside scope or cannot be safely resolved within it.
-- **Focused CTest:** configure only after the immutable preflight. Inspect show-only JSON, then run `plan_cap`, the necessary existing focused contract controls, and `planning_hygiene_controls` last. Preserve the existing coverage, 30-second bound unless measured evidence proves a narrow same-coverage adjustment necessary, and 125-control floor. Do not run the broad suite.
-- **Remote qualification:** after local convergence, verify the original D-211 runs remain terminal, freeze the exact final candidate, obtain at most one independent review, then spend at most one protected PR matrix. A review finding or any failed/missing/skipped/stale required context stops further qualification without new owner scope. Keep all required jobs and branch protection.
-- **CI efficiency:** collect measured durations and critical-path waits at the CI/release boundary. The three long exact-head preview waits are a separate follow-up; do not reduce required coverage, add unmeasured caching/concurrency, or change triggers to `workflow_run`. Apply `.planning/context/WORKFLOW.md#cicd-efficiency`.
-- **Excluded:** broad local suite; Acid2 replay; prior `div_inc_timing_a` replay; any excluded gbmicrotest case; local fixture-bearing matrix; new fixtures/dependencies/CTest identities; Task 7; Phase 24 or milestone verification/archive; requirement/status changes; release changes; merge or worktree cleanup.
+- Before each focused test, run cheap syntax, candidate identity, immutable route/archive, and direct causal checks for the changed seam.
+- Before CTest, verify the full candidate and ancestry from committed objects, reject unexpected source changes, and inspect the exact configured test commands using `--show-only=json-v1`.
+- Run the plan-cap check first, relevant existing focused controls next, and `planning_hygiene_controls` last. Keep fixture-bearing local execution excluded; only existing admitted fixture/game cases inside the approved protected matrix may run.
+- Freeze the exact candidate SHA/tree and run one initial fresh independent exact-head review. If scoped findings/direct corrections remain, allow up to two post-correction fix-and-re-review passes, with affected local checks and a fresh review for each corrected candidate. Local diagnosis/retesting is uncapped within scope. Stop on any new out-of-scope trust/correctness issue, unavailable review or finding unresolved after those two passes. One full protected PR matrix may run only after a clean final review; any failed, skipped, stale or missing required context stops with no matrix retry.
+- The CR-03 check proves lexical component containment in the finite source AST seam. Runtime filesystem symlink resolution is out of scope; add no symlink test/platform dependency and claim no symlink containment. An actual symlink-based read escape revealed in that seam stops execution as a new out-of-scope trust/correctness issue. Existing archive-blob symlink refusal controls remain part of the separate current/archive contract.
+- If the exact reviewed and matrix-tested head passes every required context, merge and reconcile that same head through the existing protected PR. Phase 24 verification, Task 7, milestone audit/archive, and v0.5 remain separate.
+- For CI efficiency, record run/revision identity, job and step durations, queue and dependency waits, timeout headroom, and whether package steps ran or were skipped. Use the data to recommend only safe improvements; preserve all required checks and branch protection. Do not add speculative caching/concurrency or change workflow triggers. Keep package-waiter redesign separate.
+- Do not run the broad suite, Acid2 replay, prior `div_inc_timing_a` replay, excluded gbmicrotest cases, Task 7, Phase 24 verification, milestone audit/archive, or v0.5 work under this plan.
 
 ## Wave 0 Requirements
 
-- Existing Python, CMake, CTest, Git snapshot, and protected-PR seams are sufficient; no dependency is added.
-- Keep one existing Phase 24 plan and at most 40 v0.4 plans; no phase or test identity is added.
-- The D-214-authorized planning-boundary commit is local and unpushed, includes only the reviewed planning whitelist, and excludes the three dirty T10 source scripts, `state.json`, `milestone.lock`, and unrelated changes.
-- Confirm all path/archive/route assertions against committed objects; working-tree text cannot substitute for immutable evidence.
+- Existing standard-library checks, CMake/CTest registrations, Git object reads, and the protected PR workflow are sufficient; add no dependency, test identity, phase, or plan.
+- Preserve the one-plan limit and the exact D-215 scope. Keep execution unapproved until the updated plan passes its independent plan check and receives separate owner authorization.
 
 ## Manual-Only Verifications
 
-None for this planning deliverable. Do not add manual UAT to satisfy a template. Exact-head review and protected CI are later independent gates under D-214, only after local convergence.
+None for this planning deliverable. Exact-head review and protected CI are automated qualification gates; no manual UAT is added.
 
 ## Validation Sign-Off
 
-- [x] The sole plan has three ordered tasks and each verification command states a failure condition.
-- [x] Static frontmatter/plan-structure validation and the independent plan check passed.
-- [x] The plan preserves D-209 requirement statuses, ownership, accepted gaps, and the Acid2 failure/exclusion.
-- [x] Local in-scope convergence is distinct from the one-review/one-matrix final qualification limit.
-- [ ] Implementation controls and focused CTests are pending; the D-214-authorized review and protected matrix remain gated on their successful local convergence.
+- [x] D-215's six finding contracts and existing control seams are mapped.
+- [x] Cheap checks precede focused tests; full required hosted coverage is preserved.
+- [x] Requirement, release, and milestone boundaries remain explicit.
+- [ ] Updated plan and independent plan review pass.
+- [ ] Authorized implementation controls and focused CTests pass.
+- [ ] Clean exact-head review and one complete protected matrix pass.
