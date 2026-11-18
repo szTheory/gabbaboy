@@ -1197,13 +1197,14 @@ def expect_reject(fn, reason: str, label: str) -> None:
     raise Reject(f"control-accepted-mutant:{label}")
 
 
-def boundary_history_control() -> None:
+def boundary_history_control(source_root: pathlib.Path) -> None:
     with tempfile.TemporaryDirectory(prefix="gbb-boundary-control-") as name:
         repo = pathlib.Path(name)
         git(repo, "init", "-q")
         git(repo, "config", "user.name", "GabbaBoy Synthetic Boundary")
         git(repo, "config", "user.email", "boundary@example.invalid")
-        baseline_requirements = git(ROOT, "show", f"{BASELINE}:{V04_ROOT_REQUIREMENTS}", limit=MAX_BYTES)
+        baseline_requirements = git(
+            source_root, "show", f"{BASELINE}:{V04_ROOT_REQUIREMENTS}", limit=MAX_BYTES)
         for path, raw in minimal_boundary(baseline_requirements).items():
             target = repo.joinpath(*path.split("/"))
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -1214,7 +1215,7 @@ def boundary_history_control() -> None:
         boundary_snapshot = load_boundary(repo, boundary)
         if validate_boundary(boundary_snapshot)["phase23"] != "unstarted":
             raise Reject("self-test-historical-boundary-invalid")
-        validate_historical_requirements(boundary_snapshot, ROOT, boundary,
+        validate_historical_requirements(boundary_snapshot, source_root, boundary,
                                          test_fixture_revision=boundary)
         state = repo / ".planning/STATE.md"
         state.write_text("Phase 23 is complete.\n", encoding="utf-8")
@@ -1222,7 +1223,7 @@ def boundary_history_control() -> None:
         git(repo, "commit", "-qm", "synthetic later route")
         later = resolve_revision(repo, "HEAD")
         expect_reject(lambda: validate_historical_requirements(
-            load_boundary(repo, later), ROOT, later, test_fixture_revision=boundary),
+            load_boundary(repo, later), source_root, later, test_fixture_revision=boundary),
             "historical-requirements-revision-unapproved", "synthetic-later-revision")
         expect_reject(lambda: validate_boundary(load_boundary(repo, resolve_revision(repo, "HEAD"))),
                       "boundary-phase22-not-complete", "later-head-route")
@@ -1688,7 +1689,7 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     value[".planning/config.json"] = value[".planning/config.json"].replace(
         b'"_auto_chain_active":false', b'"_auto_chain_active":true')
     expect_reject(lambda: validate_boundary(value), "boundary-auto-advance-enabled", "auto-flag")
-    boundary_history_control()
+    boundary_history_control(repo)
     source_archive_configure_control(repo, revision)
     print("diagnostic evidence controls pass positives=1 rejected_controls=passed boundary=immutable "
           "source_archive=passed")
