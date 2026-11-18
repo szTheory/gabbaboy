@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
@@ -98,6 +99,30 @@ def load_spec(rev: str, repo: Path) -> tuple[dict, bytes]:
     return spec, raw
 
 
+def immutable_fixture_manifests(rev: str, repo: Path) -> set[str]:
+    """Enumerate fixture manifests without Git's quoted or line-based path format."""
+    tree = subprocess.run(
+        ["git", "ls-tree", "-rz", "--name-only", rev, "--", "fixtures"],
+        cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+    )
+    if tree.returncode:
+        detail = tree.stderr.decode("utf-8", errors="replace").strip()
+        raise ForkError(f"cannot enumerate immutable fixture tree: {detail}")
+
+    manifests: set[str] = set()
+    for path_bytes in tree.stdout.split(b"\0"):
+        if not path_bytes or not path_bytes.endswith(b"/manifest.json"):
+            continue
+        try:
+            manifests.add(path_bytes.decode("utf-8", errors="strict"))
+        except UnicodeDecodeError as exc:
+            raise ForkError(
+                "immutable fixture manifest path is not valid UTF-8: "
+                f"{path_bytes.hex()}"
+            ) from exc
+    return manifests
+
+
 def validate_manifest_census(rev: str, repo: Path, spec: dict) -> list[dict]:
     active = spec.get("fixture_manifests")
     excluded = spec.get("excluded")
@@ -131,13 +156,7 @@ def validate_manifest_census(rev: str, repo: Path, spec: dict) -> list[dict]:
     rights = excluded_by_path[RIGHTS_EXCLUSION_PATH]
     if rights.get("reason") != RIGHTS_EXCLUSION_REASON:
         raise ForkError("optional Acid2 rights-gated exclusion reason changed")
-    tree = subprocess.run(["git", "ls-tree", "-r", "--name-only", rev, "--", "fixtures"],
-                          cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          text=True, check=False)
-    if tree.returncode:
-        raise ForkError(f"cannot enumerate immutable fixture tree: {tree.stderr.strip()}")
-    paths = set(tree.stdout.splitlines())
-    actual_manifests = {path for path in paths if path.endswith("/manifest.json")}
+    actual_manifests = immutable_fixture_manifests(rev, repo)
     diagnostic_paths = set(DIAGNOSTIC_EXCLUSIONS)
     expected_active = actual_manifests - diagnostic_paths
     if actual_manifests != set(active_paths) | diagnostic_paths or set(active_paths) != expected_active:
@@ -810,7 +829,124 @@ def inventory_controls(rev: str, repo: Path, spec: dict) -> tuple[int, int]:
     reject("diagnostic manifest activation", activated,
            "diagnostic fixture manifest cannot be active")
     controls += 1
+    controls += synthetic_path_controls(rev, repo, spec)
     return len(positive), controls
+
+
+def synthetic_path_controls(rev: str, repo: Path, spec: dict) -> int:
+    """Exercise raw Git path framing against a disposable manifest tree."""
+    with tempfile.TemporaryDirectory(prefix="state-fork-paths-") as temp_dir:
+        synthetic_repo = Path(temp_dir)
+        git_env = os.environ.copy()
+        for key in tuple(git_env):
+            if key.startswith("GIT_"):
+                del git_env[key]
+        git_env.update({
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_TERMINAL_PROMPT": "0",
+        })
+
+        def git(*args: str, input_bytes: bytes | None = None) -> bytes:
+            result = subprocess.run(
+                ["git", *args], cwd=synthetic_repo, env=git_env,
+                input=input_bytes, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                check=False,
+            )
+            if result.returncode:
+                detail = result.stderr.decode("utf-8", errors="replace").strip()
+                raise ForkError(f"synthetic inventory Git command failed: {detail}")
+            return result.stdout
+
+        git("init", "-q")
+        git("config", "core.hooksPath", os.devnull)
+        git("config", "user.name", "state-fork-inventory-control")
+        git("config", "user.email", "state-fork-inventory-control@example.invalid")
+        git_env.update({
+            "GIT_AUTHOR_NAME": "state-fork-inventory-control",
+            "GIT_AUTHOR_EMAIL": "state-fork-inventory-control@example.invalid",
+            "GIT_COMMITTER_NAME": "state-fork-inventory-control",
+            "GIT_COMMITTER_EMAIL": "state-fork-inventory-control@example.invalid",
+        })
+
+        source_manifests = [item["path"] for item in spec["fixture_manifests"]]
+        source_manifests.extend(DIAGNOSTIC_EXCLUSIONS)
+        for path in source_manifests:
+            destination = synthetic_repo.joinpath(*PurePosixPath(path).parts)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(git_blob(rev, path, repo))
+
+        def commit_tree(label: str) -> str:
+            git("add", "--all", "--", ".")
+            git("-c", "core.hooksPath=" + os.devnull, "commit", "--quiet", "-m", label)
+            return git("rev-parse", "HEAD").decode("ascii").strip()
+
+        base_rev = commit_tree("base manifest inventory")
+        validate_manifest_census(base_rev, synthetic_repo, spec)
+
+        harmless_path = "fixtures/odd\nname/readme.txt"
+        harmless = synthetic_repo.joinpath(*PurePosixPath(harmless_path).parts)
+        harmless.parent.mkdir(parents=True, exist_ok=True)
+        harmless.write_bytes(b"not a manifest\n")
+        harmless_rev = commit_tree("newline non-manifest path")
+        validate_manifest_census(harmless_rev, synthetic_repo, spec)
+
+        newline_manifest = "fixtures/odd\nsuite/manifest.json"
+        manifest = synthetic_repo.joinpath(*PurePosixPath(newline_manifest).parts)
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_bytes(b"{}\n")
+        newline_rev = commit_tree("newline manifest path")
+        try:
+            validate_manifest_census(newline_rev, synthetic_repo, spec)
+        except ForkError as exc:
+            if ("fixture manifest union differs from immutable tree" not in str(exc) or
+                    repr(newline_manifest) not in str(exc)):
+                raise ForkError(
+                    f"newline manifest census control failed for wrong reason: {exc}"
+                ) from exc
+        else:
+            raise ForkError("newline-bearing manifest was omitted from exact census")
+
+        invalid_name = b"invalid-\xff"
+        invalid_manifest_bytes = b"fixtures/" + invalid_name + b"/manifest.json"
+        blob = git("hash-object", "-w", "--stdin", input_bytes=b"{}\n").strip()
+        nested_tree = git(
+            "mktree", "-z",
+            input_bytes=b"100644 blob " + blob + b"\tmanifest.json\0",
+        ).strip()
+        fixtures_entry = next(
+            entry for entry in git("ls-tree", "-z", newline_rev).split(b"\0")
+            if entry.endswith(b"\tfixtures")
+        )
+        _mode, _kind, fixtures_tree = fixtures_entry.split(b"\t", 1)[0].split(b" ")
+        fixture_entries = [entry for entry in git("ls-tree", "-z", fixtures_tree.decode("ascii")).split(b"\0") if entry]
+        fixture_entries.append(b"040000 tree " + nested_tree + b"\t" + invalid_name)
+        new_fixtures_tree = git("mktree", "-z", input_bytes=b"\0".join(fixture_entries) + b"\0").strip()
+        root_entries = []
+        for entry in git("ls-tree", "-z", newline_rev).split(b"\0"):
+            if not entry:
+                continue
+            if entry.endswith(b"\tfixtures"):
+                root_entries.append(b"040000 tree " + new_fixtures_tree + b"\tfixtures")
+            else:
+                root_entries.append(entry)
+        new_root_tree = git("mktree", "-z", input_bytes=b"\0".join(root_entries) + b"\0").strip()
+        invalid_rev = git(
+            "commit-tree", new_root_tree.decode("ascii"), "-p", newline_rev,
+            "-m", "invalid UTF-8 manifest path",
+        ).decode("ascii").strip()
+        try:
+            validate_manifest_census(invalid_rev, synthetic_repo, spec)
+        except ForkError as exc:
+            if ("immutable fixture manifest path is not valid UTF-8" not in str(exc) or
+                    invalid_manifest_bytes.hex() not in str(exc)):
+                raise ForkError(
+                    f"invalid UTF-8 manifest path failed for wrong reason: {exc}"
+                ) from exc
+        else:
+            raise ForkError("invalid UTF-8 manifest path was not rejected deterministically")
+
+    return 4
 
 
 def self_test(report: dict, spec: dict, source: str, rev: str, repo: Path) -> None:

@@ -155,14 +155,33 @@ def cmake_path_literal(path: str | pathlib.Path) -> str:
     return os.fspath(path).replace("\\", "/").replace('"', '\\"')
 
 
+def git_environment() -> dict[str, str]:
+    """Build a small Git-only environment with repository/config redirection removed."""
+    allowed = (
+        "PATH", "TMPDIR", "TMP", "TEMP", "SYSTEMROOT", "SystemRoot", "WINDIR",
+        "PATHEXT", "COMSPEC",
+    )
+    environment = {key: os.environ[key] for key in allowed if key in os.environ}
+    environment.update({
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_SYSTEM": os.devnull,
+        "GIT_TERMINAL_PROMPT": "0",
+        "LC_ALL": "C",
+    })
+    return environment
+
+
 def run(argv: list[str], root: pathlib.Path, *, timeout: int = 30,
         operation: str = "child-process",
-        limit: int = MAX_OUTPUT) -> tuple[int, bytes, bytes]:
+        limit: int = MAX_OUTPUT,
+        env: dict[str, str] | None = None) -> tuple[int, bytes, bytes]:
     if not argv or any("\x00" in arg for arg in argv):
         raise Reject("subprocess-arguments-invalid")
     try:
         process = subprocess.Popen(argv, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+                                   env=env if env is not None else
+                                   {**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     except OSError as error:
         raise Reject(f"subprocess-start-failed:{error.__class__.__name__}") from None
     outputs = [bytearray(), bytearray()]
@@ -224,7 +243,7 @@ def run(argv: list[str], root: pathlib.Path, *, timeout: int = 30,
 
 
 def git(root: pathlib.Path, *args: str, limit: int = MAX_OUTPUT) -> bytes:
-    code, out, err = run(["git", *args], root, limit=limit)
+    code, out, err = run(["git", *args], root, limit=limit, env=git_environment())
     if code:
         detail = err.decode("utf-8", "replace")[-350:].strip()
         raise Reject(f"git-failed:{args[0]}:{detail}")
@@ -930,7 +949,7 @@ def write_bounded_git_archive(root: pathlib.Path, revision: str, destination: pa
         process = subprocess.Popen(
             ["git", "archive", "--format=tar", revision], cwd=root,
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+            env=git_environment())
     except OSError as error:
         raise Reject(f"source-archive-start-failed:{error.__class__.__name__}") from None
     written = [0]
@@ -1199,36 +1218,88 @@ def expect_reject(fn, reason: str, label: str) -> None:
 
 def boundary_history_control(source_root: pathlib.Path) -> None:
     with tempfile.TemporaryDirectory(prefix="gbb-boundary-control-") as name:
-        repo = pathlib.Path(name)
+        root = pathlib.Path(name)
+        repo = root / "candidate"
+        decoy = root / "decoy"
+        repo.mkdir()
+        decoy.mkdir()
         git(repo, "init", "-q")
-        git(repo, "config", "user.name", "GabbaBoy Synthetic Boundary")
-        git(repo, "config", "user.email", "boundary@example.invalid")
-        baseline_requirements = git(
-            source_root, "show", f"{BASELINE}:{V04_ROOT_REQUIREMENTS}", limit=MAX_BYTES)
-        for path, raw in minimal_boundary(baseline_requirements).items():
-            target = repo.joinpath(*path.split("/"))
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(raw)
-        git(repo, "add", ".")
-        git(repo, "commit", "-qm", "synthetic historical boundary")
-        boundary = resolve_revision(repo, "HEAD")
-        boundary_snapshot = load_boundary(repo, boundary)
-        if validate_boundary(boundary_snapshot)["phase23"] != "unstarted":
-            raise Reject("self-test-historical-boundary-invalid")
-        validate_historical_requirements(boundary_snapshot, source_root, boundary,
-                                         test_fixture_revision=boundary)
-        state = repo / ".planning/STATE.md"
-        state.write_text("Phase 23 is complete.\n", encoding="utf-8")
-        git(repo, "add", ".planning/STATE.md")
-        git(repo, "commit", "-qm", "synthetic later route")
-        later = resolve_revision(repo, "HEAD")
-        expect_reject(lambda: validate_historical_requirements(
-            load_boundary(repo, later), source_root, later, test_fixture_revision=boundary),
-            "historical-requirements-test-revision-invalid", "synthetic-later-revision")
-        expect_reject(lambda: validate_boundary(load_boundary(repo, resolve_revision(repo, "HEAD"))),
-                      "boundary-phase22-not-complete", "later-head-route")
-        if validate_boundary(load_boundary(repo, boundary))["phase23"] != "unstarted":
-            raise Reject("self-test-historical-boundary-rejected")
+        git(decoy, "init", "-q")
+        git(decoy, "config", "user.name", "GabbaBoy Synthetic Decoy")
+        git(decoy, "config", "user.email", "decoy@example.invalid")
+        (decoy / "decoy.txt").write_text("decoy repository must remain unchanged\n", encoding="utf-8")
+        git(decoy, "add", "decoy.txt")
+        git(decoy, "commit", "-qm", "synthetic decoy")
+
+        def decoy_state() -> tuple[bytes, bytes, bytes]:
+            git_dir = pathlib.Path(git(decoy, "rev-parse", "--absolute-git-dir").decode(
+                "utf-8", "strict").strip())
+            refs = git(decoy, "for-each-ref", "--format=%(refname) %(objectname)")
+            status = git(decoy, "status", "--porcelain=v1", "-z")
+            try:
+                index = (git_dir / "index").read_bytes()
+            except OSError as error:
+                raise Reject(f"self-test-decoy-index-unreadable:{error.__class__.__name__}") from None
+            return refs, status, index
+
+        original_decoy_state = decoy_state()
+        hostile = {
+            "GIT_DIR": str((decoy / ".git").resolve()),
+            "GIT_WORK_TREE": str(repo.resolve()),
+        }
+        prior_environment = {key: os.environ.get(key) for key in hostile}
+        try:
+            os.environ.update(hostile)
+            # This identity check happens before config/add/commit writes. If Git
+            # inherits either hostile selector, it reports the decoy Git-dir.
+            actual_git_dir = pathlib.Path(git(repo, "rev-parse", "--absolute-git-dir").decode(
+                "utf-8", "strict").strip()).resolve()
+            actual_worktree = pathlib.Path(git(repo, "rev-parse", "--show-toplevel").decode(
+                "utf-8", "strict").strip()).resolve()
+            if actual_git_dir != (repo / ".git").resolve() or actual_worktree != repo.resolve():
+                raise Reject("self-test-hostile-git-context-redirected")
+
+            git(repo, "config", "user.name", "GabbaBoy Synthetic Boundary")
+            git(repo, "config", "user.email", "boundary@example.invalid")
+            baseline_requirements = git(
+                source_root, "show", f"{BASELINE}:{V04_ROOT_REQUIREMENTS}", limit=MAX_BYTES)
+            for path, raw in minimal_boundary(baseline_requirements).items():
+                target = repo.joinpath(*path.split("/"))
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(raw)
+            git(repo, "add", ".")
+            git(repo, "commit", "-qm", "synthetic historical boundary")
+            boundary = resolve_revision(repo, "HEAD")
+            if decoy_state() != original_decoy_state:
+                raise Reject("self-test-hostile-git-context-mutated-decoy")
+            boundary_snapshot = load_boundary(repo, boundary)
+            if validate_boundary(boundary_snapshot)["phase23"] != "unstarted":
+                raise Reject("self-test-historical-boundary-invalid")
+            validate_historical_requirements(boundary_snapshot, source_root, boundary,
+                                             test_fixture_revision=boundary)
+            state = repo / ".planning/STATE.md"
+            state.write_text("Phase 23 is complete.\n", encoding="utf-8")
+            git(repo, "add", ".planning/STATE.md")
+            git(repo, "commit", "-qm", "synthetic later route")
+            later = resolve_revision(repo, "HEAD")
+            if later == boundary or git(repo, "rev-parse", "--verify", "HEAD^").decode(
+                    "ascii", "strict").strip() != boundary:
+                raise Reject("self-test-candidate-head-transition-invalid")
+            if decoy_state() != original_decoy_state:
+                raise Reject("self-test-hostile-git-context-mutated-decoy")
+            expect_reject(lambda: validate_historical_requirements(
+                load_boundary(repo, later), source_root, later, test_fixture_revision=boundary),
+                "historical-requirements-test-revision-invalid", "synthetic-later-revision")
+            expect_reject(lambda: validate_boundary(load_boundary(repo, resolve_revision(repo, "HEAD"))),
+                          "boundary-phase22-not-complete", "later-head-route")
+            if validate_boundary(load_boundary(repo, boundary))["phase23"] != "unstarted":
+                raise Reject("self-test-historical-boundary-rejected")
+        finally:
+            for key, value in prior_environment.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
 
 
 def validate_inventory_shape(record: dict[str, Any]) -> None:

@@ -284,6 +284,13 @@ def _literal_string(node: ast.AST, names: dict[str, str] | None = None, depth: i
         return node.value
     if isinstance(node, ast.Name):
         return names.get(node.id)
+    if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "chr"
+            and len(node.args) == 1 and not node.keywords):
+        argument = node.args[0]
+        if (isinstance(argument, ast.Constant) and type(argument.value) is int
+                and 0 <= argument.value <= 0x10FFFF):
+            return chr(argument.value)
+        return None
     if isinstance(node, ast.JoinedStr):
         parts = []
         for item in node.values:
@@ -476,11 +483,72 @@ def _merge_path_facts(*facts: _PathFact) -> _PathFact:
                                       all(item.callable_target is facts[0].callable_target for item in facts) else None))
 
 
+def _approved_git_object_adapters(tree: ast.Module) -> set[ast.AST]:
+    """Return only the exact reviewed Git subprocess adapter, rejecting body changes."""
+    candidates = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                  and node.name == "git_run"]
+    if len(candidates) != 1 or not isinstance(candidates[0], ast.FunctionDef):
+        raise LintError("REJECT planning-path-git-adapter: expected one top-level synchronous git_run")
+
+    expected = ast.parse("""def _expected_git_run(repo, *args):
+    env = {k: v for k, v in os.environ.items() if k in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull)
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, check=False, env=env, timeout=60)
+""").body[0]
+    actual = candidates[0]
+    def argument_shape(arguments: ast.arguments) -> tuple[object, ...]:
+        return (
+            tuple(item.arg for item in arguments.posonlyargs),
+            tuple(item.arg for item in arguments.args),
+            arguments.vararg.arg if arguments.vararg is not None else None,
+            tuple(item.arg for item in arguments.kwonlyargs),
+            tuple(ast.dump(item, include_attributes=False) if item is not None else None
+                  for item in arguments.kw_defaults),
+            arguments.kwarg.arg if arguments.kwarg is not None else None,
+            tuple(ast.dump(item, include_attributes=False) for item in arguments.defaults),
+        )
+    if (actual.decorator_list or argument_shape(actual.args) != argument_shape(expected.args)
+            or ast.dump(ast.Module(body=actual.body, type_ignores=[]), include_attributes=False) !=
+            ast.dump(ast.Module(body=expected.body, type_ignores=[]), include_attributes=False)):
+        raise LintError("REJECT planning-path-git-adapter: approved immutable Git adapter wrapper or body changed")
+    return {actual}
+
+
+def _has_chr_binding(tree: ast.Module) -> bool:
+    """Treat a source-local chr binding as unknown rather than assuming the built-in."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == "chr" and isinstance(node.ctx, ast.Store):
+            return True
+        if isinstance(node, ast.arg) and node.arg == "chr":
+            return True
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == "chr":
+            return True
+        if isinstance(node, ast.alias) and (node.asname == "chr" or
+                                            (node.asname is None and node.name.split(".", 1)[0] == "chr")):
+            return True
+        if isinstance(node, ast.ExceptHandler) and node.name == "chr":
+            return True
+        if isinstance(node, (ast.Global, ast.Nonlocal)) and "chr" in node.names:
+            return True
+    return False
+
+
 def _validate_decoded_path_flow(source: str, tree: ast.Module,
                                 roots_by_function: dict[str, set[str]]) -> None:
     """Check decoded values and bounded helper calls without importing or executing source."""
+    trusted_git_adapters = _approved_git_object_adapters(tree)
     parents = _parents(tree)
     functions = [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    chr_shadowed = _has_chr_binding(tree)
+    for reader in ast.walk(tree):
+        if not isinstance(reader, ast.Call):
+            continue
+        target = _reader_target(reader)
+        if target is not None and any(
+                isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "chr"
+                for item in ast.walk(target)):
+            if chr_shadowed:
+                raise LintError("REJECT live-phase-path-reader: chr is shadowed in an unresolved reader path")
     scope_by_node: dict[ast.AST, ast.AST | None] = {}
     nodes_by_scope: dict[ast.AST | None, list[ast.AST]] = {None: []}
     for node in ast.walk(tree):
@@ -715,6 +783,14 @@ def _validate_decoded_path_flow(source: str, tree: ast.Module,
     def needs_decoded_flow() -> bool:
         protected_names = {name for name, fact in module_env.items() if fact.protected}
         for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            target = _reader_target(node)
+            if target is not None and any(
+                    isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == "chr"
+                    for item in ast.walk(target)):
+                return True
+        for node in ast.walk(tree):
             if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
                 continue
             if _protected_path_text(node.value):
@@ -819,7 +895,7 @@ def _validate_decoded_path_flow(source: str, tree: ast.Module,
                 elif any(carries(actual, tainted) for actual in [*node.args, *(item.value for item in node.keywords)]):
                     name = (node.func.id if isinstance(node.func, ast.Name) else
                             node.func.attr if isinstance(node.func, ast.Attribute) else "dynamic")
-                    if name not in harmless_value_calls and name not in harmless_value_methods and name != "git_run":
+                    if name not in harmless_value_calls and name not in harmless_value_methods:
                         return True
             return False
 
@@ -871,7 +947,7 @@ def _validate_decoded_path_flow(source: str, tree: ast.Module,
                 if function is None:
                     name = (node.func.id if isinstance(node.func, ast.Name) else
                             node.func.attr if isinstance(node.func, ast.Attribute) else "dynamic")
-                    if ambiguous or name not in harmless_value_calls | harmless_value_methods | {"git_run"}:
+                    if ambiguous or name not in harmless_value_calls | harmless_value_methods:
                         return True
                 else:
                     bound, binding_ambiguous = bind_call(node, function)
@@ -963,6 +1039,12 @@ def _validate_decoded_path_flow(source: str, tree: ast.Module,
                 return fact_from_text(literal)
             return base
         if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id == "chr":
+                literal = _literal_string(
+                    node, {name: fact.text for name, fact in env.items() if fact.text is not None} | module_strings)
+                if literal is not None:
+                    return fact_from_text(literal)
+                return _PathFact(protected=True)
             reader_target = _reader_target(node)
             if reader_target is not None:
                 target_fact = eval_expr(reader_target, env, scope, depth + 1, visiting)
@@ -1014,9 +1096,9 @@ def _validate_decoded_path_flow(source: str, tree: ast.Module,
             actual_facts = [eval_expr(item, env, scope, depth + 1, visiting) for item in node.args]
             actual_facts += [eval_expr(item.value, env, scope, depth + 1, visiting) for item in node.keywords]
             if function is not None:
-                # git_run is the reviewed immutable Git-object adapter. Its path arguments are
-                # revision/tree operands, not filesystem readers; preserve this narrow seam.
-                if function.name == "git_run":
+                # Only the structurally verified immutable Git-object adapter is allowed to
+                # receive a protected path as a Git revision/tree operand.
+                if function in trusted_git_adapters:
                     return _merge_path_facts(*actual_facts)
                 closure_has_path = any(name in function_used_names.get(function, set())
                                        and (item.protected or item.temporary_origin)
@@ -1279,6 +1361,11 @@ def _validate_decoded_path_flow(source: str, tree: ast.Module,
             symbolic_root_builder = not dynamic_return_component
         relevant = (function.name in roots_by_function
                     or symbolic_root_builder
+                    or any(isinstance(node, ast.Call) and _reader_target(node) is not None
+                           and any(isinstance(child, ast.Call) and isinstance(child.func, ast.Name)
+                                   and child.func.id == "chr"
+                                   for child in ast.walk(_reader_target(node)))
+                           for node in body_nodes)
                     or any((folded := _literal_path_string(node,
                                                            literal_names_by_scope.get(function, {}))) is not None
                            and _protected_path_text(folded) for node in body_nodes)
@@ -1525,6 +1612,13 @@ def self_test_planning_hygiene_path_contract() -> int:
     source = source_path.read_text(encoding="utf-8")
     controls = 0
 
+    need(_literal_string(ast.parse("chr(46)", mode="eval").body) == "."
+         and all(_literal_string(ast.parse(expression, mode="eval").body) is None for expression in (
+             "chr(True)", "chr(46, 47)", "chr(-1)", "chr(0x110000)", "chr(codepoint)",
+             "chr(46, placeholder=0)")),
+         "chr literal folding accepted an invalid or nonliteral form")
+    controls += 1
+
     binding_line = next(line for line in source.splitlines() if line.startswith("PHASES_AT_REV = "))
     path_token = binding_line.partition("=")[2].strip()
     finite_fixture = (
@@ -1621,6 +1715,24 @@ def injected_contained_fixture_reader():
     controls += 1
 
     reader_mutations = (
+        ("chr-built escaped path reader",
+         r'''
+def injected_chr_reader():
+    return Path(chr(46) + "planning/phases/private.md").read_text(encoding="utf-8")
+'''),
+        ("unresolved chr path reader",
+         r'''
+def injected_unresolved_chr_reader(codepoint):
+    return Path(chr(codepoint) + "planning/phases/private.md").read_text(encoding="utf-8")
+'''),
+        ("shadowed chr path reader",
+         r'''
+def chr(codepoint):
+    return "."
+
+def injected_shadowed_chr_reader():
+    return Path(chr(46) + "planning/phases/private.md").read_text(encoding="utf-8")
+'''),
         ("escaped decoded path reader",
          r'''
 def injected_escaped_reader():
@@ -1794,6 +1906,20 @@ def injected_rebound_root_reader():
         else:
             reason = "REJECT live-phase-path-reader"
         expect_flow_rejected(label, source + addition, reason, same_count=True)
+
+    git_run_line = ('    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, '
+                     'check=False, env=env, timeout=60)')
+    need(git_run_line in source, "git_run adapter mutation did not find its approved body")
+    git_run_mutant = source.replace(git_run_line,
+                                    "    (repo / args[-1]).iterdir()\n" + git_run_line, 1)
+    expect_flow_rejected("git_run body traversal mutation", git_run_mutant,
+                         "REJECT planning-path-git-adapter", same_count=True)
+    git_run_definition = "def git_run(repo: Path, *args: str) -> subprocess.CompletedProcess[bytes]:"
+    need(git_run_definition in source, "git_run decorator mutation did not find its approved definition")
+    git_run_decorator_mutant = source.replace(git_run_definition,
+                                              "@injected_wrapper\n" + git_run_definition, 1)
+    expect_flow_rejected("git_run wrapper mutation", git_run_decorator_mutant,
+                         "REJECT planning-path-git-adapter", same_count=True)
 
     module_reader = source + r'''
 def injected_module_reader(path):
