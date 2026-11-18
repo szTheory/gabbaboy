@@ -633,7 +633,14 @@ def validate_recovery_contract(snapshot: dict[str, bytes], plan_paths: list[str]
         raise Reject("recovery-plan-boundary-invalid")
 
 
+def require_source_archive_pair(snapshot: dict[str, bytes]) -> None:
+    archive_flags = (V04_ARCHIVED_REQUIREMENTS in snapshot, V04_ARCHIVED_ROADMAP in snapshot)
+    if archive_flags != (True, True):
+        raise Reject("source-archive-pair-invalid" if any(archive_flags) else "source-archive-pair-required")
+
+
 def validate_recovery_route(snapshot: dict[str, bytes], root: pathlib.Path, revision: str) -> None:
+    require_source_archive_pair(snapshot)
     phase_dir = V04_RECOVERY_PLAN.rsplit("/", 1)[0] + "/"
     plan_paths = sorted(
         path for path in tree_entries(root, revision)
@@ -644,9 +651,7 @@ def validate_recovery_route(snapshot: dict[str, bytes], root: pathlib.Path, revi
 
 
 def validate_requirements(snapshot: dict[str, bytes], root: pathlib.Path) -> None:
-    archive_flags = (V04_ARCHIVED_REQUIREMENTS in snapshot, V04_ARCHIVED_ROADMAP in snapshot)
-    if archive_flags != (True, True):
-        raise Reject("source-archive-pair-invalid" if any(archive_flags) else "source-archive-pair-required")
+    require_source_archive_pair(snapshot)
     if V04_ROOT_REQUIREMENTS in snapshot:
         raise Reject("active-root-requirements-restored")
     for path in (V04_ARCHIVED_REQUIREMENTS, V04_ARCHIVED_ROADMAP):
@@ -1435,10 +1440,20 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
         route_without_archives = dict(snapshot)
         route_without_archives.pop(V04_ARCHIVED_REQUIREMENTS)
         route_without_archives.pop(V04_ARCHIVED_ROADMAP)
-        route_without_archives[V04_ROOT_ROADMAP] = route_without_archives[V04_ROOT_ROADMAP].replace(
-            b"D-209", b"D-208", 1)
         expect_reject(lambda: validate_recovery_route(route_without_archives, repo, revision),
-                      "recovery-route-content-invalid", "route-validated-without-archive-pair")
+                      "source-archive-pair-required", "route-validated-without-archive-pair")
+        changed_route = dict(snapshot)
+        roadmap = changed_route[V04_ROOT_ROADMAP]
+        recovery_marker = b"## Recovery Phase"
+        recovery_start = roadmap.find(recovery_marker)
+        if recovery_start < 0:
+            raise Reject("self-test-recovery-route-marker-missing")
+        changed_route[V04_ROOT_ROADMAP] = (
+            roadmap[:recovery_start]
+            + roadmap[recovery_start:].replace(b"D-209", b"D-208")
+        )
+        expect_reject(lambda: validate_recovery_route(changed_route, repo, revision),
+                      "recovery-route-content-invalid", "mutated-recovery-route-contract")
         for label, old, new, reason in (
             ("altered-archived-criterion", b"shared game-acceptance runner",
              b"changed game-acceptance runner", f"archived-source-mismatch:{V04_ARCHIVED_REQUIREMENTS}"),
