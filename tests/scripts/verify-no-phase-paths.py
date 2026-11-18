@@ -584,9 +584,48 @@ def self_test_planning_hygiene_path_contract() -> int:
     need(escaped_root != source, "fixture-root mutation did not find its source site")
     expect_rejected("fixture read root escape", escaped_root, "REJECT planning-path-fixture-root")
 
+    contained_helper = source + r'''
+def injected_fixture_builder(root, name):
+    child = root / name
+    return child / "probe.md"
+
+def injected_contained_fixture_reader():
+    with tempfile.TemporaryDirectory() as scratch:
+        base = Path(scratch)
+        path = injected_fixture_builder(base, "sample")
+        return path.read_text(encoding="utf-8")
+'''
+    try:
+        validate_planning_hygiene_source(contained_helper)
+    except LintError as error:
+        raise LintError("contained fixture helper positive: refused: %s" % error) from None
+    controls += 1
+
     reader_mutations = (
+        ("escaped decoded path reader",
+         r'''
+def injected_escaped_reader():
+    return Path("\x2eplanning/phases/private.md").read_text(encoding="utf-8")
+'''),
+        ("adjacent escaped path fragments",
+         r'''
+def injected_adjacent_reader():
+    return Path("\x2e" "planning/" "phases/private.md").read_text(encoding="utf-8")
+'''),
         ("PHASES_AT_REV alias reader",
          "\ndef injected_alias_reader():\n    alias = PHASES_AT_REV\n    return Path(alias).read_text(encoding=\"utf-8\")\n"),
+        ("path through positional and keyword helpers",
+         r'''
+def injected_helper_reader(path):
+    return Path(path).read_text(encoding="utf-8")
+
+def injected_helper_forwarder(path):
+    return injected_helper_reader(path=path)
+
+def injected_helper_caller():
+    alias = PHASES_AT_REV
+    return injected_helper_forwarder(alias)
+'''),
         ("approved path passed to open",
          "\ndef injected_open_reader():\n    return open(V04_GAP_REPORT_PATH, encoding=\"utf-8\").read()\n"),
         ("approved path passed to read_text",
@@ -595,9 +634,52 @@ def self_test_planning_hygiene_path_contract() -> int:
          "\ndef injected_bytes_reader():\n    return Path(V04_GAP_REPORT_PATH).read_bytes()\n"),
         ("approved path passed to traversal",
          "\ndef injected_tree_reader():\n    return Path(V04_GAP_SOURCE_PATHS[3]).rglob(\"*\")\n"),
+        ("parent component escapes temporary root",
+         r'''
+def injected_parent_escape_reader():
+    with tempfile.TemporaryDirectory() as scratch:
+        base = Path(scratch)
+        repo = base / "rev-repo"
+        escaped = repo / ".." / PHASES_AT_REV
+        return escaped.read_text(encoding="utf-8")
+'''),
+        ("dynamic component escapes temporary root",
+         r'''
+def injected_dynamic_escape_reader():
+    with tempfile.TemporaryDirectory() as scratch:
+        base = Path(scratch)
+        repo = base / "rev-repo"
+        escaped = repo / os.path.relpath(ROOT, repo) / PHASES_AT_REV
+        return escaped.read_text(encoding="utf-8")
+'''),
+        ("absolute component escapes temporary root",
+         r'''
+def injected_absolute_escape_reader():
+    with tempfile.TemporaryDirectory() as scratch:
+        base = Path(scratch)
+        escaped = base / Path("/outside") / PHASES_AT_REV
+        return escaped.read_text(encoding="utf-8")
+'''),
+        ("temporary root rebinding",
+         r'''
+def injected_rebound_root_reader():
+    with tempfile.TemporaryDirectory() as scratch:
+        base = Path(scratch)
+        base = Path(ROOT)
+        return (base / PHASES_AT_REV).read_text(encoding="utf-8")
+'''),
     )
     for label, addition in reader_mutations:
-        expect_rejected(label, source + addition, "REJECT live-phase-path-reader", same_count=True)
+        reason = ("REJECT temporary-path-containment" if "escape" in label or "rebinding" in label
+                  else "REJECT live-phase-path-reader")
+        expect_rejected(label, source + addition, reason, same_count=True)
+
+    escaped_helper_return = source.replace(
+        'phases = root / "phases"',
+        'phases = root / os.path.relpath(ROOT, root) / "phases"', 1)
+    need(escaped_helper_return != source, "temporary helper-return mutation did not find its source site")
+    expect_rejected("temporary helper return escapes root", escaped_helper_return,
+                    "REJECT temporary-path-containment", same_count=True)
     return controls
 
 
