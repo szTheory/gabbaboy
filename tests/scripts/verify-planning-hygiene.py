@@ -2081,7 +2081,7 @@ def self_test(rev: str | None = None, repo: Path = Path(".")) -> int:
             raise
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         count = result if isinstance(result, int) and not isinstance(result, bool) else 0
-        print(f"planning-hygiene stage={name} status=pass elapsed_ms={elapsed_ms} stage_controls={count}")
+        print(f"planning-hygiene stage={name} status=pass elapsed_ms={elapsed_ms} stage_count={count}")
         return result
 
     def expect(label: str, errors: list[str], code: str | None) -> None:
@@ -2300,7 +2300,7 @@ def self_test(rev: str | None = None, repo: Path = Path(".")) -> int:
         controls += 1
 
     elapsed_ms = int((time.perf_counter() - self_test_started) * 1000)
-    print(f"planning-hygiene stage=total status=pass elapsed_ms={elapsed_ms} stage_controls={controls}")
+    print(f"planning-hygiene stage=total status=pass elapsed_ms={elapsed_ms} stage_count={controls}")
     print(f"planning-hygiene self-test pass controls={controls}")
     return 0
 
