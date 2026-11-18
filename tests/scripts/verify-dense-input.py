@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -26,6 +27,7 @@ MUTANT_REPLACEMENT = (
     + "        }\n"
 )
 BASELINE_COMMIT = "7cc6495e64f3645caa120e7458f754585b788985"
+FULL_COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
 
 def require(condition: bool, message: str) -> None:
@@ -129,6 +131,165 @@ def create_baseline_object_store(destination: Path) -> None:
     require(verified.returncode == 0, "copied baseline object did not verify at its full commit identity")
 
 
+def git(repo: Path, *args: str, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["git", "-C", str(repo), *args], cwd=repo, text=True,
+                          input=input_text, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          check=False)
+
+
+def active_admission_pins(source: Path, source_revision: str) -> list[tuple[str, str]]:
+    require(FULL_COMMIT.fullmatch(source_revision) is not None,
+            "source revision must be one full lowercase commit identity")
+    available = git(source, "cat-file", "-e", f"{source_revision}^{{commit}}")
+    require(available.returncode == 0,
+            f"candidate-object-unavailable: {source_revision}")
+    tree = git(source, "ls-tree", "-r", "--name-only", source_revision, "--", "fixtures")
+    require(tree.returncode == 0, f"cannot enumerate candidate fixture tree: {tree.stdout.strip()}")
+    paths = set(tree.stdout.splitlines())
+    manifests = {path for path in paths if re.fullmatch(r"fixtures/[^/]+/manifest\.json", path)}
+    pins = sorted(path for path in paths if re.fullmatch(r"fixtures/[^/]+/admission\.commit", path))
+    require(pins, "candidate has no active fixture admission pins")
+    for pin_path in pins:
+        manifest_path = pin_path.removesuffix("admission.commit") + "manifest.json"
+        require(manifest_path in manifests,
+                f"admission pin has no sibling manifest: {pin_path}")
+    result: list[tuple[str, str]] = []
+    for pin_path in pins:
+        pin = git(source, "show", f"{source_revision}:{pin_path}")
+        require(pin.returncode == 0, f"cannot read immutable admission pin {pin_path}: {pin.stdout.strip()}")
+        value = pin.stdout
+        require(FULL_COMMIT.fullmatch(value.rstrip("\r\n")) is not None and
+                value in {value.rstrip("\r\n"), value.rstrip("\r\n") + "\n", value.rstrip("\r\n") + "\r\n"},
+                f"admission pin is not exactly one full identity: {pin_path}")
+        result.append((pin_path, value.rstrip("\r\n")))
+    return result
+
+
+def validate_candidate_git_context(subject: Path, source_revision: str) -> list[tuple[str, str]]:
+    require(FULL_COMMIT.fullmatch(source_revision) is not None,
+            "candidate revision is not one full lowercase identity")
+    candidate = git(subject, "cat-file", "-e", f"{source_revision}^{{commit}}")
+    require(candidate.returncode == 0, f"candidate-object-unavailable: {source_revision}")
+    head = git(subject, "rev-parse", "--verify", "HEAD^{commit}")
+    require(head.returncode == 0, f"candidate-head-unavailable: {head.stdout.strip()}")
+    actual_head = head.stdout.strip()
+    require(actual_head == source_revision,
+            f"candidate-head-mismatch: expected={source_revision} actual={actual_head}")
+    pins = active_admission_pins(subject, source_revision)
+    for path, pin in pins:
+        present = git(subject, "cat-file", "-e", f"{pin}^{{commit}}")
+        require(present.returncode == 0,
+                f"admission-pin-object-unavailable: {path} {pin}")
+        ancestry = git(subject, "merge-base", "--is-ancestor", pin, source_revision)
+        require(ancestry.returncode == 0,
+                f"admission-pin-not-in-history: {path} {pin}")
+    return pins
+
+
+def install_candidate_git_context(subject: Path, source_revision: str) -> list[tuple[str, str]]:
+    initialized = git(subject, "init", "-q")
+    require(initialized.returncode == 0, f"candidate subject init failed: {initialized.stdout.strip()}")
+    fetched = git(subject, "fetch", "--no-tags", str(ROOT), source_revision)
+    require(fetched.returncode == 0,
+            f"candidate object transfer failed: {fetched.stdout.strip()}")
+    branch = "refs/heads/phase24-d213-candidate"
+    updated = git(subject, "update-ref", branch, source_revision)
+    require(updated.returncode == 0, f"candidate HEAD setup failed: {updated.stdout.strip()}")
+    symbolic = git(subject, "symbolic-ref", "HEAD", branch)
+    require(symbolic.returncode == 0, f"candidate HEAD binding failed: {symbolic.stdout.strip()}")
+    read_index = git(subject, "read-tree", source_revision)
+    require(read_index.returncode == 0, f"candidate index setup failed: {read_index.stdout.strip()}")
+    return validate_candidate_git_context(subject, source_revision)
+
+
+def candidate_git_context_controls(source_revision: str) -> int:
+    pins = active_admission_pins(ROOT, source_revision)
+    with tempfile.TemporaryDirectory(prefix="dense-git-context-", dir=ROOT) as temp_name:
+        temp = Path(temp_name)
+        candidate = temp / "candidate"
+        candidate.mkdir()
+        installed = install_candidate_git_context(candidate, source_revision)
+        require(installed == pins, "candidate subject changed the enumerated admission pin set")
+
+        missing = temp / "missing-object"
+        missing.mkdir()
+        initialized = git(missing, "init", "-q")
+        require(initialized.returncode == 0, "missing-object fixture init failed")
+        try:
+            validate_candidate_git_context(missing, source_revision)
+        except RuntimeError as error:
+            require("candidate-object-unavailable" in str(error),
+                    f"missing-object control refused for wrong cause: {error}")
+        else:
+            raise RuntimeError("missing candidate object control was accepted")
+
+        wrong_head = temp / "wrong-head"
+        wrong_head.mkdir()
+        wrong_install = install_candidate_git_context(wrong_head, source_revision)
+        require(wrong_install == pins, "wrong-head control lost an admission pin")
+        parent = git(wrong_head, "rev-parse", "--verify", f"{source_revision}^{{commit}}^")
+        require(parent.returncode == 0, "candidate has no parent for the wrong-head control")
+        wrong_ref = git(wrong_head, "update-ref", "refs/heads/wrong", parent.stdout.strip())
+        require(wrong_ref.returncode == 0, "wrong-head ref setup failed")
+        symbolic = git(wrong_head, "symbolic-ref", "HEAD", "refs/heads/wrong")
+        require(symbolic.returncode == 0, "wrong-head binding failed")
+        try:
+            validate_candidate_git_context(wrong_head, source_revision)
+        except RuntimeError as error:
+            require("candidate-head-mismatch" in str(error),
+                    f"wrong-head control refused for wrong cause: {error}")
+        else:
+            raise RuntimeError("wrong candidate HEAD control was accepted")
+
+        shallow = temp / "missing-pin-object"
+        shallow.mkdir()
+        initialized = git(shallow, "init", "-q")
+        require(initialized.returncode == 0, "missing-pin fixture init failed")
+        fetched = git(shallow, "fetch", "--no-tags", "--depth=1", str(ROOT), source_revision)
+        require(fetched.returncode == 0, f"shallow candidate transfer failed: {fetched.stdout.strip()}")
+        shallow_ref = git(shallow, "update-ref", "refs/heads/candidate", source_revision)
+        require(shallow_ref.returncode == 0, "shallow candidate ref setup failed")
+        symbolic = git(shallow, "symbolic-ref", "HEAD", "refs/heads/candidate")
+        require(symbolic.returncode == 0, "shallow candidate binding failed")
+        try:
+            validate_candidate_git_context(shallow, source_revision)
+        except RuntimeError as error:
+            require("admission-pin-object-unavailable" in str(error),
+                    f"missing-pin control refused for wrong cause: {error}")
+        else:
+            raise RuntimeError("missing admission pin object control was accepted")
+
+        unrelated = temp / "unrelated-ancestry"
+        unrelated.mkdir()
+        unrelated_install = install_candidate_git_context(unrelated, source_revision)
+        require(unrelated_install == pins, "ancestry control lost an admission pin")
+        empty_tree = git(unrelated, "mktree", input_text="")
+        require(empty_tree.returncode == 0, f"unrelated root tree creation failed: {empty_tree.stdout.strip()}")
+        root_commit = git(unrelated, "-c", "user.name=Fixture Control", "-c",
+                          "user.email=fixture-control@example.invalid", "commit-tree",
+                          empty_tree.stdout.strip(), "-m", "unrelated ancestry control")
+        require(root_commit.returncode == 0, f"unrelated root commit creation failed: {root_commit.stdout.strip()}")
+        candidate_tree = git(unrelated, "rev-parse", f"{source_revision}^{{tree}}")
+        require(candidate_tree.returncode == 0, "candidate tree is unavailable for ancestry control")
+        alternate = git(unrelated, "-c", "user.name=Fixture Control", "-c",
+                        "user.email=fixture-control@example.invalid", "commit-tree",
+                        candidate_tree.stdout.strip(), "-p", root_commit.stdout.strip(),
+                        "-m", "same-tree unrelated candidate control")
+        require(alternate.returncode == 0, f"unrelated candidate creation failed: {alternate.stdout.strip()}")
+        alternate_ref = git(unrelated, "update-ref", "refs/heads/unrelated", alternate.stdout.strip())
+        require(alternate_ref.returncode == 0, "unrelated candidate ref setup failed")
+        symbolic = git(unrelated, "symbolic-ref", "HEAD", "refs/heads/unrelated")
+        require(symbolic.returncode == 0, "unrelated candidate binding failed")
+        try:
+            validate_candidate_git_context(unrelated, alternate.stdout.strip())
+        except RuntimeError as error:
+            require("admission-pin-not-in-history" in str(error),
+                    f"unrelated ancestry control refused for wrong cause: {error}")
+        else:
+            raise RuntimeError("unrelated admission ancestry control was accepted")
+    return len(pins) + 4
+
+
 def check_repository(subject: Path, evidence: Path | None, expected: str) -> None:
     command = [sys.executable, "-I", str(subject / "tests/scripts/verify-fixture-admission.py"),
                "--check-repository", "--repo-root", str(subject)]
@@ -150,17 +311,36 @@ def verify_documentation_contract() -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--self-test", action="store_true", required=True,
+    parser.add_argument("--self-test", action="store_true",
                         help="run the dense-input positive and negative controls")
-    parser.add_argument("--build-dir", type=Path, required=True,
+    parser.add_argument("--build-dir", type=Path,
                         help="isolated build containing gabbaboy-runner")
+    parser.add_argument("--check-git-context", action="store_true",
+                        help="run candidate identity and admission-pin controls without configure/build/runner")
+    parser.add_argument("--source-revision",
+                        help="full immutable candidate commit for --check-git-context")
     args = parser.parse_args()
+    if args.check_git_context:
+        require(not args.self_test and args.build_dir is None,
+                "--check-git-context must run alone without a runner/build directory")
+        require(args.source_revision is not None,
+                "--check-git-context requires --source-revision")
+        controls = candidate_git_context_controls(args.source_revision)
+        print(f"dense-input git-context=pass rev={args.source_revision} controls={controls} configure=0 build=0 runner=0")
+        return 0
+    require(args.self_test and args.build_dir is not None,
+            "full dense-input verification needs --self-test and --build-dir")
     build_dir = args.build_dir if args.build_dir.is_absolute() else ROOT / args.build_dir
     runner = build_dir / "gabbaboy-runner"
     if not runner.is_file():
         runner = build_dir / "gabbaboy-runner.exe"
     require(runner.is_file(), f"runner not found in {build_dir}; build gabbaboy-runner first")
     runner = runner.resolve()
+    revision_result = git(ROOT, "rev-parse", "--verify", "HEAD^{commit}")
+    require(revision_result.returncode == 0 and FULL_COMMIT.fullmatch(revision_result.stdout.strip()) is not None,
+            f"dense self-test cannot resolve a full candidate HEAD: {revision_result.stdout.strip()}")
+    source_revision = revision_result.stdout.strip()
+    context_controls = candidate_git_context_controls(source_revision)
     baseline = read_baseline()
     verify_documentation_contract()
 
@@ -232,6 +412,9 @@ def main() -> int:
                                  str(unrelated_source), unrelated_identity.stdout.strip()], cwd=ROOT)
             require(fetched_wrong.returncode == 0, f"wrong identity object copy failed:\n{fetched_wrong.stdout}")
             check_repository(mutant_root, wrong_evidence, "REJECT baseline-object-unavailable:")
+            pins = install_candidate_git_context(mutant_root, source_revision)
+            require(len(pins) == len(active_admission_pins(ROOT, source_revision)),
+                    "candidate-backed mutant has an incomplete admission pin set")
             core_path = mutant_root / "src/core/gabbaboy.c"
             core = core_path.read_text(encoding="utf-8")
             require(core.count(MUTANT_ANCHOR) == 1,
@@ -248,13 +431,13 @@ def main() -> int:
             require(mutant_configure.returncode == 0,
                     f"mutant CMake configure failed:\n{mutant_configure.stdout}")
             ninja_files = (mutant_build / "build.ninja").read_text(encoding="utf-8")
-            gitless_core_definitions = [
+            candidate_dirty_core_definitions = [
                 line for line in ninja_files.splitlines()
-                if '-DGBB_BUILD_REVISION=\\"unknown\\"' in line and
+                if f'-DGBB_BUILD_REVISION=\\"{source_revision}\\"' in line and
                 "-DGBB_BUILD_QUALIFIED=0" in line
             ]
-            require(gitless_core_definitions,
-                    "gitless source archive did not retain the unqualified unknown revision")
+            require(candidate_dirty_core_definitions,
+                    "dirty candidate-backed mutant did not retain its candidate revision as unqualified")
             mutant_compile = run(["cmake", "--build", str(mutant_build), "--target", "gabbaboy-runner"],
                                  cwd=mutant_root, timeout=300)
             require(mutant_compile.returncode == 0,
@@ -274,10 +457,30 @@ def main() -> int:
             changed_subject = Path(mutant_name) / "changed-subject"
             changed_subject.mkdir()
             copy_tracked_source(changed_subject)
+            changed_pins = install_candidate_git_context(changed_subject, source_revision)
+            require(changed_pins == pins, "changed-fixture control has a different admission pin set")
             changed_fixture = changed_subject / "fixtures/tracer/tracer.gb"
             require(changed_fixture.is_file(), "fixture-byte negative-control input is missing")
             changed_fixture.write_bytes(changed_fixture.read_bytes() + b"\ncontrolled mutation\n")
             check_repository(changed_subject, baseline_object_root, "REJECT record-field-missing:")
+
+            source_archive = Path(mutant_name) / "source-archive"
+            source_archive_build = Path(mutant_name) / "source-archive-build"
+            source_archive.mkdir()
+            copy_tracked_source(source_archive)
+            archive_configure = run(["cmake", "-S", str(source_archive), "-B", str(source_archive_build),
+                                     "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Debug", "-DBUILD_TESTING=ON"],
+                                    cwd=source_archive, timeout=180)
+            require(archive_configure.returncode == 0,
+                    f"Gitless source-archive configure failed:\n{archive_configure.stdout}")
+            archive_ninja = (source_archive_build / "build.ninja").read_text(encoding="utf-8")
+            archive_core_definitions = [
+                line for line in archive_ninja.splitlines()
+                if '-DGBB_BUILD_REVISION=\\"unknown\\"' in line and
+                "-DGBB_BUILD_QUALIFIED=0" in line
+            ]
+            require(archive_core_definitions,
+                    "Gitless source archive did not retain the unqualified unknown revision")
 
         print("dense-input status=pass ordered_events=67 same_timestamp=true")
         print("dense-input baseline=pass fields=" + ",".join(comparisons))
@@ -286,6 +489,8 @@ def main() -> int:
         print("dense-input no-refill-mutant=failed-as-expected reason=predicate-not-reached")
         print("dense-input immutable-baseline=separate-object-store full-identity=verified")
         print("dense-input baseline-controls=missing-object,wrong-identity,changed-fixture-rejected")
+        print(f"dense-input candidate-context=pass rev={source_revision} controls={context_controls}")
+        print("dense-input candidate-mutant=dirty-unqualified source-archive=unknown-unqualified")
     return 0
 
 

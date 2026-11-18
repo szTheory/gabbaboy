@@ -721,6 +721,16 @@
     {
       "path": "tests/acid2/manifest.json",
       "reason": "Optional local corpus is rights-gated (G1) and its ROM bytes are absent."
+    },
+    {
+      "path": "fixtures/acid2/manifest.json",
+      "sha256": "7f198d5964a8547d1a122d5d64d395547ba6f365264cdb00abf190a5880c5da6",
+      "reason": "Diagnostic only: Acid2 is unreplayed, including the failed cross-model comparison; this manifest must not produce state-fork cases."
+    },
+    {
+      "path": "fixtures/gbmicrotest/manifest.json",
+      "sha256": "d3aedaa5d89f583bea2951a9a58a3190ff2314fafbfa53b7e63e98ed6349cb7c",
+      "reason": "Diagnostic only: do not replay div_inc_timing_a or any of the 512 excluded gbmicrotest names; this manifest must not produce state-fork cases."
     }
   ],
   "in_flight_categories": [

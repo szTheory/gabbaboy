@@ -17,6 +17,22 @@ ROOT = Path(__file__).resolve().parents[2]
 SPEC_PATH = "tests/data/state-forks.json"
 ROM_SUFFIXES = (".gb", ".gbc")
 REVISION = re.compile(r"^[0-9a-f]{40}$")
+ACTIVE_MANIFEST_COUNT = 20
+ACTIVE_MANIFEST_ROWS = 147
+ACID2_DIAGNOSTIC_PATH = "fixtures/acid2/manifest.json"
+GBMICROTEST_DIAGNOSTIC_PATH = "fixtures/gbmicrotest/manifest.json"
+DIAGNOSTIC_EXCLUSIONS = {
+    ACID2_DIAGNOSTIC_PATH: {
+        "sha256": "7f198d5964a8547d1a122d5d64d395547ba6f365264cdb00abf190a5880c5da6",
+        "reason": "Diagnostic only: Acid2 is unreplayed, including the failed cross-model comparison; this manifest must not produce state-fork cases.",
+    },
+    GBMICROTEST_DIAGNOSTIC_PATH: {
+        "sha256": "d3aedaa5d89f583bea2951a9a58a3190ff2314fafbfa53b7e63e98ed6349cb7c",
+        "reason": "Diagnostic only: do not replay div_inc_timing_a or any of the 512 excluded gbmicrotest names; this manifest must not produce state-fork cases.",
+    },
+}
+RIGHTS_EXCLUSION_PATH = "tests/acid2/manifest.json"
+RIGHTS_EXCLUSION_REASON = "Optional local corpus is rights-gated (G1) and its ROM bytes are absent."
 
 
 class ForkError(Exception):
@@ -82,6 +98,72 @@ def load_spec(rev: str, repo: Path) -> tuple[dict, bytes]:
     return spec, raw
 
 
+def validate_manifest_census(rev: str, repo: Path, spec: dict) -> list[dict]:
+    active = spec.get("fixture_manifests")
+    excluded = spec.get("excluded")
+    if not isinstance(active, list) or not isinstance(excluded, list):
+        raise ForkError("fixture manifest inventory and exclusions must be arrays")
+    active_paths = []
+    for item in active:
+        if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+            raise ForkError("active fixture manifest entry lacks one path")
+        path = git_path(item["path"]).as_posix()
+        if path in {ACID2_DIAGNOSTIC_PATH, GBMICROTEST_DIAGNOSTIC_PATH}:
+            raise ForkError(f"diagnostic fixture manifest cannot be active: {path}")
+        active_paths.append(path)
+    if len(active_paths) != len(set(active_paths)):
+        raise ForkError("duplicate active fixture manifest")
+
+    excluded_by_path: dict[str, dict] = {}
+    for item in excluded:
+        if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+            raise ForkError("excluded manifest entry lacks one path")
+        path = git_path(item["path"]).as_posix()
+        if path in excluded_by_path:
+            raise ForkError(f"duplicate excluded manifest: {path}")
+        excluded_by_path[path] = item
+    expected_paths = {RIGHTS_EXCLUSION_PATH, *DIAGNOSTIC_EXCLUSIONS}
+    if set(excluded_by_path) != expected_paths:
+        raise ForkError(
+            f"excluded manifest inventory differs from exact policy: missing={sorted(expected_paths-set(excluded_by_path))} extra={sorted(set(excluded_by_path)-expected_paths)}")
+    if set(active_paths) & set(excluded_by_path):
+        raise ForkError("active and excluded manifest sets overlap")
+    rights = excluded_by_path[RIGHTS_EXCLUSION_PATH]
+    if rights.get("reason") != RIGHTS_EXCLUSION_REASON:
+        raise ForkError("optional Acid2 rights-gated exclusion reason changed")
+    tree = subprocess.run(["git", "ls-tree", "-r", "--name-only", rev, "--", "fixtures"],
+                          cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          text=True, check=False)
+    if tree.returncode:
+        raise ForkError(f"cannot enumerate immutable fixture tree: {tree.stderr.strip()}")
+    paths = set(tree.stdout.splitlines())
+    actual_manifests = {path for path in paths if path.endswith("/manifest.json")}
+    diagnostic_paths = set(DIAGNOSTIC_EXCLUSIONS)
+    expected_active = actual_manifests - diagnostic_paths
+    if actual_manifests != set(active_paths) | diagnostic_paths or set(active_paths) != expected_active:
+        raise ForkError(f"fixture manifest union differs from immutable tree: missing={sorted(actual_manifests-set(active_paths)-diagnostic_paths)} extra={sorted(set(active_paths)-expected_active)}")
+
+    if (spec.get("expected_case_count") != 153 or
+        spec.get("corpus_union", {}).get("fixture_manifest_rom_rows") != ACTIVE_MANIFEST_ROWS or
+        len(active) != ACTIVE_MANIFEST_COUNT or
+        any(not isinstance(item.get("rom_rows"), int) or isinstance(item.get("rom_rows"), bool)
+            for item in active) or
+        sum(item["rom_rows"] for item in active) != ACTIVE_MANIFEST_ROWS or
+        sum(item.get("case_rows", 0) for item in spec.get("acceptance_lists", [])) != 6):
+        raise ForkError("active fixture/acceptance inventory must retain 147+6 rows in 153 cases")
+
+    for path, expected in DIAGNOSTIC_EXCLUSIONS.items():
+        item = excluded_by_path[path]
+        if item.get("sha256") != expected["sha256"]:
+            raise ForkError(f"diagnostic manifest digest pin changed at {path}")
+        if item.get("reason") != expected["reason"]:
+            raise ForkError(f"diagnostic manifest non-execution reason changed at {path}")
+        raw = git_blob(rev, path, repo)
+        if digest(raw) != expected["sha256"]:
+            raise ForkError(f"immutable diagnostic manifest bytes differ from pinned digest at {path}")
+    return active
+
+
 def fork_mutant_source(source: str) -> str:
     start = source.find("static void state_apply(gbb_instance *instance, const uint8_t *body, size_t body_size) {")
     end = source.find("/* MODEL: BOTH GATE-00 basis=\"state body offsets follow the instance's declared field layout\" */", start)
@@ -133,15 +215,7 @@ def materialize_mutant_core(args: argparse.Namespace) -> None:
 def manifest_cases(rev: str, repo: Path, spec: dict, verify_blobs: bool) -> list[dict]:
     cases: list[dict] = []
     ids: set[str] = set()
-    listed_manifests = {item["path"] for item in spec.get("fixture_manifests", [])}
-    tree = subprocess.run(["git", "ls-tree", "-r", "--name-only", rev, "--", "fixtures"],
-                          cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          text=True, check=False)
-    if tree.returncode:
-        raise ForkError(f"cannot enumerate immutable fixture tree: {tree.stderr.strip()}")
-    actual_manifests = {line for line in tree.stdout.splitlines() if line.endswith("/manifest.json")}
-    if actual_manifests != listed_manifests:
-        raise ForkError(f"fixture manifest union differs from immutable tree: missing={sorted(actual_manifests-listed_manifests)} extra={sorted(listed_manifests-actual_manifests)}")
+    active_manifests = validate_manifest_census(rev, repo, spec)
     catalogs: dict[str, dict] = {}
     for item in spec.get("disposition_catalogs", []):
         raw = git_blob(rev, item["path"], repo)
@@ -167,7 +241,7 @@ def manifest_cases(rev: str, repo: Path, spec: dict, verify_blobs: bool) -> list
             raise ForkError(f"unknown CGB corpus disposition for {row.get('id')}: {status}")
     if dispositions != {"expected_failure": 82, "pass": 16, "prior_observation": 9}:
         raise ForkError(f"CGB corpus expected outcome classes changed: {dispositions}")
-    for item in spec.get("fixture_manifests", []):
+    for item in active_manifests:
         path = git_path(item["path"]).as_posix()
         manifest_dir = PurePosixPath(path).parent
         raw = git_blob(rev, path, repo)
@@ -281,9 +355,6 @@ def manifest_cases(rev: str, repo: Path, spec: dict, verify_blobs: bool) -> list
         })
     if missing_cgb:
         raise ForkError(f"CGB disposition catalog rows have no matching CGB ROM digest in the fixture union: {missing_cgb[:8]}")
-    acid_exclusions = [item for item in spec.get("excluded", []) if item.get("path") == "tests/acid2/manifest.json"]
-    if len(acid_exclusions) != 1 or "rights-gated" not in acid_exclusions[0].get("reason", ""):
-        raise ForkError("optional Acid2 rights/bytes exclusion must stay explicit")
     if len(cases) != spec.get("expected_case_count"):
         raise ForkError(f"corpus union has {len(cases)} rows, expected {spec.get('expected_case_count')}")
     return cases
@@ -676,7 +747,74 @@ def validate_report(report: dict, spec: dict, source: str, rev: str) -> list[str
     return []
 
 
-def self_test(report: dict, spec: dict, source: str, rev: str) -> None:
+def inventory_controls(rev: str, repo: Path, spec: dict) -> tuple[int, int]:
+    positive = manifest_cases(rev, repo, spec, verify_blobs=False)
+    if len(positive) != 153:
+        raise ForkError(f"non-executing inventory produced {len(positive)} cases, expected 153")
+    if any(case.get("source") in DIAGNOSTIC_EXCLUSIONS for case in positive):
+        raise ForkError("diagnostic manifest entered the active case expansion")
+
+    def reject(label: str, mutated: dict, expected: str) -> None:
+        try:
+            validate_manifest_census(rev, repo, mutated)
+        except ForkError as exc:
+            if expected not in str(exc):
+                raise ForkError(f"inventory control {label} refused for wrong reason: {exc}") from exc
+        else:
+            raise ForkError(f"inventory control accepted {label}")
+
+    controls = 0
+    missing = json.loads(json.dumps(spec))
+    missing["excluded"] = [item for item in missing["excluded"]
+                           if item.get("path") != ACID2_DIAGNOSTIC_PATH]
+    reject("missing Acid2 diagnostic exclusion", missing, "excluded manifest inventory differs")
+    controls += 1
+
+    duplicate = json.loads(json.dumps(spec))
+    duplicate["excluded"].append(json.loads(json.dumps(next(
+        item for item in duplicate["excluded"] if item.get("path") == ACID2_DIAGNOSTIC_PATH))))
+    reject("duplicate Acid2 diagnostic exclusion", duplicate, "duplicate excluded manifest")
+    controls += 1
+
+    changed_digest = json.loads(json.dumps(spec))
+    next(item for item in changed_digest["excluded"]
+         if item.get("path") == GBMICROTEST_DIAGNOSTIC_PATH)["sha256"] = "0" * 64
+    reject("changed gbmicrotest digest", changed_digest, "diagnostic manifest digest pin changed")
+    controls += 1
+
+    changed_reason = json.loads(json.dumps(spec))
+    next(item for item in changed_reason["excluded"]
+         if item.get("path") == ACID2_DIAGNOSTIC_PATH)["reason"] = "diagnostic, but replay it"
+    reject("changed Acid2 non-execution reason", changed_reason,
+           "diagnostic manifest non-execution reason changed")
+    controls += 1
+
+    unknown_exclusion = json.loads(json.dumps(spec))
+    unknown_exclusion["excluded"].append({"path": "fixtures/unknown/manifest.json",
+                                          "sha256": "0" * 64, "reason": "unknown"})
+    reject("unknown excluded manifest", unknown_exclusion,
+           "excluded manifest inventory differs")
+    controls += 1
+
+    unknown_active = json.loads(json.dumps(spec))
+    unknown_active["fixture_manifests"].append({"path": "fixtures/unknown/manifest.json",
+                                                "sha256": "0" * 64, "rom_rows": 0})
+    reject("unknown active manifest", unknown_active,
+           "fixture manifest union differs from immutable tree")
+    controls += 1
+
+    activated = json.loads(json.dumps(spec))
+    activated["fixture_manifests"].append({"path": ACID2_DIAGNOSTIC_PATH,
+                                           "sha256": DIAGNOSTIC_EXCLUSIONS[ACID2_DIAGNOSTIC_PATH]["sha256"],
+                                           "rom_rows": 0})
+    reject("diagnostic manifest activation", activated,
+           "diagnostic fixture manifest cannot be active")
+    controls += 1
+    return len(positive), controls
+
+
+def self_test(report: dict, spec: dict, source: str, rev: str, repo: Path) -> None:
+    inventory_cases, inventory_control_count = inventory_controls(rev, repo, spec)
     corrupted = json.loads(json.dumps(report))
     category_control_spec = json.loads(json.dumps(spec))
     for fixture in category_control_spec.get("generated_field_fixtures", []):
@@ -724,7 +862,7 @@ def self_test(report: dict, spec: dict, source: str, rev: str) -> None:
             raise ForkError(f"default-only field control failed for wrong reason: {exc}") from exc
     else:
         raise ForkError("census negative control passed after making a field witness default-only")
-    print("state-fork census self-test pass missing-category=refused missing-field-witness=refused default-only-field=refused")
+    print(f"state-fork census self-test pass missing-category=refused missing-field-witness=refused default-only-field=refused inventory-cases={inventory_cases} inventory-controls={inventory_control_count}")
 
 
 def check_report(args: argparse.Namespace) -> None:
@@ -738,7 +876,7 @@ def check_report(args: argparse.Namespace) -> None:
     validate_report(report, spec, source, rev)
     print(f"state-fork census pass rev={rev} cases={report['case_count']} fields={len(report['field_witnesses'])} categories={len(report['category_witnesses'])}")
     if args.self_test:
-        self_test(report, spec, source, rev)
+        self_test(report, spec, source, rev, args.repo)
 
 
 MUTANT_OBSERVATIONS = {
@@ -1060,6 +1198,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rev")
     parser.add_argument("--repo", type=Path, default=ROOT)
+    parser.add_argument("--inventory-controls", action="store_true")
     parser.add_argument("--matrix-shard", action="store_true")
     parser.add_argument("--matrix-summary", action="store_true")
     parser.add_argument("--test-exe", type=Path)
@@ -1101,7 +1240,14 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     try:
-        if args.matrix_shard:
+        if args.inventory_controls:
+            if not args.rev or args.check or args.report or args.report_dir or args.test_exe:
+                raise ForkError("--inventory-controls needs --rev and cannot use report/build/runner inputs")
+            rev = checked_rev(args.rev, args.repo)
+            spec, _ = load_spec(rev, args.repo)
+            cases, controls = inventory_controls(rev, args.repo, spec)
+            print(f"state-fork inventory-controls pass rev={rev} cases={cases} controls={controls} runner=0 build=0 configure=0")
+        elif args.matrix_shard:
             if not args.test_exe or not args.report or not args.rev:
                 raise ForkError("--matrix-shard needs --rev, --test-exe and --report")
             run_shard(args)

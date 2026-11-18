@@ -70,10 +70,26 @@ REQUIRED = (
     "docs/diagnostic-evidence.md", "docs/cgb-profile.md", ".planning/REQUIREMENTS.md",
     "tests/CMakeLists.txt", "tests/expected-tests.txt", *PRESERVED,
 )
+V04_D209_ARCHIVE_REV = "96d502d4733ac54aa8bf7fbfd7813065143771dc"
+V04_ARCHIVED_REQUIREMENTS = ".planning/milestones/v0.4-REQUIREMENTS.md"
+V04_ARCHIVED_ROADMAP = ".planning/milestones/v0.4-ROADMAP.md"
+V04_ROOT_REQUIREMENTS = ".planning/REQUIREMENTS.md"
+V04_ROOT_ROADMAP = ".planning/ROADMAP.md"
+V04_ARCHIVED_DISPOSITIONS = {
+    "GAME-01": ("21", "Complete"), "GAME-02": ("21", "Complete"),
+    "FIXT-01": ("21", "Pending"), "RIGHTS-01": ("20", "Complete"),
+    "DIAG-01": ("22", "Complete"), "DIAG-02": ("22", "Complete"),
+    "FEED-01": ("21", "Complete"), "REL-01": ("23", "Complete"),
+}
+V04_ARCHIVED_REQUIREMENT_IDS = frozenset(V04_ARCHIVED_DISPOSITIONS)
 BOUNDARY_PATHS = (
     ".planning/STATE.md", ".planning/state.json", ".planning/ROADMAP.md",
     ".planning/REQUIREMENTS.md", ".planning/config.json",
     ".planning/phases/GB-22-composition-and-microtest-evidence/.continue-here.md",
+)
+V04_RECOVERY_PLAN = BOUNDARY_PATHS[-1].replace(
+    "GB-22-composition-and-microtest-evidence/.continue-here.md",
+    "GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md",
 )
 FORBIDDEN_DIRS = ("fixtures/acid2", "fixtures/gbmicrotest")
 PHASE24_ADMITTED_FIXTURE_DIRS = ("fixtures/acid2", "fixtures/gbmicrotest")
@@ -254,10 +270,27 @@ def tree_entries(root: pathlib.Path, revision: str) -> dict[str, tuple[str, int,
     return result
 
 
+def selected_snapshot_paths(root: pathlib.Path, revision: str) -> tuple[str, ...]:
+    entries = tree_entries(root, revision)
+    has_requirements_archive = V04_ARCHIVED_REQUIREMENTS in entries
+    has_roadmap_archive = V04_ARCHIVED_ROADMAP in entries
+    if has_requirements_archive != has_roadmap_archive:
+        raise Reject("source-archive-pair-invalid")
+    if has_requirements_archive:
+        if V04_ROOT_REQUIREMENTS in entries:
+            raise Reject("active-root-requirements-restored")
+        shared = tuple(path for path in REQUIRED if path != V04_ROOT_REQUIREMENTS)
+        return (*shared, V04_ARCHIVED_REQUIREMENTS, V04_ARCHIVED_ROADMAP,
+                V04_ROOT_ROADMAP, V04_RECOVERY_PLAN)
+    return REQUIRED
+
+
 def load_snapshot(root: pathlib.Path, revision: str,
-                  paths: tuple[str, ...] = REQUIRED) -> dict[str, bytes]:
+                  paths: tuple[str, ...] | None = None) -> dict[str, bytes]:
     entries = tree_entries(root, revision)
     result = {}
+    if paths is None:
+        paths = selected_snapshot_paths(root, revision)
     for path in paths:
         if not safe_path(path):
             raise Reject(f"source-path-unsafe:{path}")
@@ -516,7 +549,105 @@ def requirement_parts(text: str) -> tuple[dict[str, str], dict[str, str]]:
     return definitions, trace
 
 
+def immutable_regular_blob(root: pathlib.Path, revision: str, path: str) -> bytes:
+    entries = tree_entries(root, revision)
+    item = entries.get(path)
+    if item is None:
+        raise Reject(f"archive-source-missing:{path}")
+    _oid, size, mode = item
+    if mode not in ("100644", "100755"):
+        raise Reject(f"archive-source-not-regular:{path}")
+    content = git(root, "show", f"{revision}:{path}", limit=MAX_BYTES + 1)
+    if len(content) != size:
+        raise Reject(f"archive-source-size-mismatch:{path}")
+    return content
+
+
+def archived_requirement_facts(raw: bytes) -> tuple[dict[str, str], dict[str, str]]:
+    try:
+        text = raw.decode("utf-8", "strict")
+    except UnicodeError:
+        raise Reject("archived-requirements-invalid-utf8") from None
+    criteria: dict[str, str] = {}
+    checkbox: dict[str, str] = {}
+    trace: dict[str, str] = {}
+    for line in text.splitlines():
+        definition = re.match(r"- \[([ xX])\] \*\*([A-Z]+-\d+)\*\*: (.+)$", line)
+        if definition:
+            identifier = definition.group(2)
+            if identifier in criteria or not definition.group(3).strip():
+                raise Reject("archived-requirement-definition-invalid")
+            criteria[identifier] = definition.group(3)
+            checkbox[identifier] = "Complete" if definition.group(1).casefold() == "x" else "Pending"
+        row = re.match(r"\| ([A-Z]+-\d+) \| Phase (\d+) \| (Complete|Pending) \|", line)
+        if row:
+            identifier = row.group(1)
+            if identifier in trace:
+                raise Reject("archived-requirement-trace-duplicate")
+            trace[identifier] = f"{row.group(2)}|{row.group(3)}"
+    expected_trace = {identifier: f"{owner}|{status}"
+                      for identifier, (owner, status) in V04_ARCHIVED_DISPOSITIONS.items()}
+    if (set(criteria) != V04_ARCHIVED_REQUIREMENT_IDS
+            or set(trace) != V04_ARCHIVED_REQUIREMENT_IDS
+            or trace != expected_trace
+            or checkbox != {identifier: status
+                            for identifier, (_owner, status) in V04_ARCHIVED_DISPOSITIONS.items()}):
+        raise Reject("archived-requirement-owner-status-invalid")
+    return criteria, trace
+
+
+def validate_recovery_contract(snapshot: dict[str, bytes], plan_paths: list[str]) -> None:
+    roadmap = decode(snapshot, V04_ROOT_ROADMAP)
+    if V04_ROOT_REQUIREMENTS in snapshot:
+        raise Reject("active-root-requirements-restored")
+    sections = re.findall(r"(?ms)^## Recovery Phase[ \t]*\n(.*?)(?=^##[ \t]+|\Z)", roadmap)
+    if len(sections) != 1:
+        raise Reject("recovery-route-section-invalid")
+    section = sections[0]
+    phases = re.findall(r"(?m)^### Phase (\d+(?:\.\d+)?): ([^\n]+)$", section)
+    plans = re.findall(r"(?<![A-Za-z0-9._-])24-\d[^/\\\s`]*-PLAN[^/\\\s`]*\.md", section,
+                       flags=re.IGNORECASE)
+    if (phases != [("24", "Resolve remaining v0.4 evidence and verification gaps")]
+            or plans != ["24-01-PLAN.md"] or "D-209" not in section):
+        raise Reject("recovery-route-content-invalid")
+    if plan_paths != [V04_RECOVERY_PLAN]:
+        raise Reject("recovery-plan-set-invalid")
+    plan = decode(snapshot, V04_RECOVERY_PLAN)
+    frontmatter = re.match(r"\A---\n(.*?)\n---(?:\n|\Z)", plan, re.DOTALL)
+    if (frontmatter is None
+            or re.search(r"(?m)^phase: GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps$",
+                         frontmatter.group(1)) is None
+            or re.search(r"(?m)^plan: [\"']?01[\"']?$", frontmatter.group(1)) is None
+            or re.search(r"(?m)^requirements: \[\]$", frontmatter.group(1)) is None
+            or "archived v0.4 tracker authoritative" not in frontmatter.group(1)):
+        raise Reject("recovery-plan-boundary-invalid")
+
+
+def validate_recovery_route(snapshot: dict[str, bytes], root: pathlib.Path, revision: str) -> None:
+    if V04_ARCHIVED_REQUIREMENTS not in snapshot and V04_ARCHIVED_ROADMAP not in snapshot:
+        return
+    phase_dir = V04_RECOVERY_PLAN.rsplit("/", 1)[0] + "/"
+    plan_paths = sorted(
+        path for path in tree_entries(root, revision)
+        if path.startswith(phase_dir)
+        and re.match(r"^24-\d[^/\\]*-PLAN[^/\\]*\.md$", path.rsplit("/", 1)[-1], re.IGNORECASE)
+    )
+    validate_recovery_contract(snapshot, plan_paths)
+
+
 def validate_requirements(snapshot: dict[str, bytes], root: pathlib.Path) -> None:
+    archive_flags = (V04_ARCHIVED_REQUIREMENTS in snapshot, V04_ARCHIVED_ROADMAP in snapshot)
+    if any(archive_flags):
+        if not all(archive_flags):
+            raise Reject("source-archive-pair-invalid")
+        if V04_ROOT_REQUIREMENTS in snapshot:
+            raise Reject("active-root-requirements-restored")
+        for path in (V04_ARCHIVED_REQUIREMENTS, V04_ARCHIVED_ROADMAP):
+            expected = immutable_regular_blob(root, V04_D209_ARCHIVE_REV, path)
+            if snapshot[path] != expected:
+                raise Reject(f"archived-source-mismatch:{path}")
+        archived_requirement_facts(snapshot[V04_ARCHIVED_REQUIREMENTS])
+        return
     current = decode(snapshot, ".planning/REQUIREMENTS.md")
     old = git(root, "show", f"{BASELINE}:.planning/REQUIREMENTS.md",
               limit=MAX_BYTES).decode("utf-8", "strict")
@@ -920,6 +1051,7 @@ def check_snapshot(snapshot: dict[str, bytes], revision: str, root: pathlib.Path
     metadata = validate_metadata(snapshot, revision, root)
     docs = validate_docs(snapshot, complete=complete_docs)
     validate_requirements(snapshot, root)
+    validate_recovery_route(snapshot, root, revision)
     tests = validate_tests(snapshot, build)
     added = validate_boundaries(snapshot, root, revision)
     return {"metadata": metadata, "documentation_sections": docs,
@@ -1169,6 +1301,8 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
         raise Reject("self-test-positive-inventory-failed")
     validate_metadata(snapshot, revision, repo)
     validate_docs(snapshot, complete=True)
+    validate_requirements(snapshot, repo)
+    validate_recovery_route(snapshot, repo, revision)
     if not controls:
         print("diagnostic evidence self-test pass metadata=513 gates=7")
         return
@@ -1224,11 +1358,50 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     value = json.loads(json.dumps(assessment))
     next(row for row in value["required_gates"] if row["id"] == GATES[0])["status"] = "supported"
     expect_reject(lambda: validate_gate_shape(value), "gate-set-mutated", "gate-authorization")
-    requirement = dict(snapshot)
-    requirement[".planning/REQUIREMENTS.md"] = snapshot[".planning/REQUIREMENTS.md"].replace(
+    if V04_ARCHIVED_REQUIREMENTS in snapshot:
+        plan_dir = V04_RECOVERY_PLAN.rsplit("/", 1)[0] + "/"
+        plan_paths = sorted(path for path in tree_entries(repo, revision)
+                            if path.startswith(plan_dir)
+                            and re.match(r"^24-\d[^/\\]*-PLAN[^/\\]*\.md$",
+                                         path.rsplit("/", 1)[-1], re.IGNORECASE))
+        missing_archive = dict(snapshot)
+        missing_archive.pop(V04_ARCHIVED_REQUIREMENTS)
+        expect_reject(lambda: validate_requirements(missing_archive, repo),
+                      "source-archive-pair-invalid", "missing-archive-source")
+        for label, old, new, reason in (
+            ("altered-archived-criterion", b"shared game-acceptance runner",
+             b"changed game-acceptance runner", f"archived-source-mismatch:{V04_ARCHIVED_REQUIREMENTS}"),
+            ("altered-archived-owner", b"| GAME-01 | Phase 21 | Complete |",
+             b"| GAME-01 | Phase 20 | Complete |", f"archived-source-mismatch:{V04_ARCHIVED_REQUIREMENTS}"),
+            ("altered-archived-status", b"| FIXT-01 | Phase 21 | Pending |",
+             b"| FIXT-01 | Phase 21 | Complete |", f"archived-source-mismatch:{V04_ARCHIVED_REQUIREMENTS}"),
+        ):
+            changed = dict(snapshot)
+            changed[V04_ARCHIVED_REQUIREMENTS] = changed[V04_ARCHIVED_REQUIREMENTS].replace(old, new, 1)
+            if changed[V04_ARCHIVED_REQUIREMENTS] == snapshot[V04_ARCHIVED_REQUIREMENTS]:
+                raise Reject(f"self-test-archive-mutant-inactive:{label}")
+            expect_reject(lambda item=changed: validate_requirements(item, repo), reason, label)
+        changed_roadmap = dict(snapshot)
+        changed_roadmap[V04_ARCHIVED_ROADMAP] = changed_roadmap[V04_ARCHIVED_ROADMAP].replace(
+            b"Owner-directed closeout", b"Altered closeout", 1)
+        expect_reject(lambda: validate_requirements(changed_roadmap, repo),
+                      f"archived-source-mismatch:{V04_ARCHIVED_ROADMAP}", "altered-archived-roadmap")
+        restored_root = dict(snapshot)
+        restored_root[V04_ROOT_REQUIREMENTS] = b"# restored active tracker\n"
+        expect_reject(lambda: validate_requirements(restored_root, repo),
+                      "active-root-requirements-restored", "restored-active-requirements")
+        archived_only = dict(snapshot)
+        archived_only[V04_ROOT_ROADMAP] = snapshot[V04_ARCHIVED_ROADMAP]
+        expect_reject(lambda: validate_recovery_contract(archived_only, plan_paths),
+                      "recovery-route-content-invalid", "archive-only-route")
+        expect_reject(lambda: validate_recovery_contract(
+            snapshot, [*plan_paths, V04_RECOVERY_PLAN.replace("24-01", "24-02")]),
+            "recovery-plan-set-invalid", "extra-recovery-plan")
+    historical_requirement = load_snapshot(repo, BASELINE, (V04_ROOT_REQUIREMENTS,))
+    historical_requirement[V04_ROOT_REQUIREMENTS] = historical_requirement[V04_ROOT_REQUIREMENTS].replace(
         b"**DIAG-01**", b"**DIAG-01 completed**", 1)
-    expect_reject(lambda: validate_requirements(requirement, pathlib.Path.cwd()),
-                  "requirement-definition-changed", "requirement-completion")
+    expect_reject(lambda: validate_requirements(historical_requirement, repo),
+                  "requirement-definition-changed", "historical-requirement-completion")
     cmake = dict(snapshot)
     cmake["tests/CMakeLists.txt"] = re.sub(
         rb"(?m)^add_test\(NAME phase22_evidence_controls\b[^\n]*\n?", b"",
@@ -1402,8 +1575,8 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
         b"DIAG-01 | Phase 22 | Pending", b"DIAG-01 | Phase 22 | Complete")
     expect_reject(lambda: validate_boundary(value), "boundary-requirement-disposition-invalid",
                   "boundary-requirement-completion")
-    requirement = dict(snapshot)
-    requirement[".planning/REQUIREMENTS.md"] = snapshot[".planning/REQUIREMENTS.md"].replace(
+    requirement = load_snapshot(repo, BASELINE, (V04_ROOT_REQUIREMENTS,))
+    requirement[V04_ROOT_REQUIREMENTS] = requirement[V04_ROOT_REQUIREMENTS].replace(
         b"**DIAG-01**", b"**DIAG-01 changed**", 1)
     expect_reject(lambda: validate_requirements(requirement, pathlib.Path.cwd()),
                   "requirement-definition-changed", "boundary-requirement-definition")
@@ -1468,7 +1641,7 @@ def run_check(args: argparse.Namespace) -> int:
         payload = {
             "schema": "gabbaboy-diagnostic-evidence-v1",
             "source_revision": revision,
-            "snapshot_sha256": {path: sha256(snapshot[path]) for path in REQUIRED},
+            "snapshot_sha256": {path: sha256(raw) for path, raw in sorted(snapshot.items())},
             "assessment": result,
         }
         output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -1526,6 +1699,7 @@ def check_snapshot(snapshot: dict[str, bytes], revision: str, root: pathlib.Path
     metadata = validate_metadata(snapshot, revision, root)
     docs = validate_docs(snapshot, complete=complete_docs)
     validate_requirements(snapshot, root)
+    validate_recovery_route(snapshot, root, revision)
     tests = validate_tests(snapshot, build)
     added = validate_boundaries(snapshot, root, revision)
     return {"metadata": metadata, "documentation_sections": docs,

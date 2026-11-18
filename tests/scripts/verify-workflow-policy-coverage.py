@@ -34,6 +34,11 @@ REVIEWED_POLICY_COMMIT = "56ff25b6a9a9cad4bb19e4a367e3f7c937975a88"
 REVIEWED_POLICY_SHA256 = "77d78361fd8005d61c9cb605549293ec6869cc40b4cfb5cc92a4d20c60fcf568"
 REVIEWED_ARCHIVE_HELPER_COMMIT = "37de7e8a9afee6b2b8a263e543279704cbfc1d56"
 REVIEWED_ARCHIVE_HELPER_SHA256 = "54fcfd4869ca2f3d085cfac690804858b42c37d73e7032ff6912a4e972123ce5"
+TRUSTED_FIXTURE_CHECKER_COMMIT = "3de1b0e427f37a202be4469dd818266f359c8b20"
+TRUSTED_FIXTURE_CHECKER_SHA256 = "fda3cca42bf638742230d232779b56627cd0fd68178bae31d7f771714f726159"
+D209_FIXTURE_CHECKER_COMMIT = "96d502d4733ac54aa8bf7fbfd7813065143771dc"
+D209_FIXTURE_CHECKER_SHA256 = "32022b4578426289c24d089c03563a934f964b58bb68c62f5f9bdffcf26e0325"
+FIXTURE_CHECKER_PATH = "tests/scripts/verify-fixture-admission.py"
 GROUPS = {
     "ci": "workflow_policy_group_ci",
     "release_jobs": "workflow_policy_group_release_jobs",
@@ -244,6 +249,174 @@ def git_text(root: Path, revision: str, path: str) -> bytes:
     if result.returncode != 0:
         reject(f"immutable candidate source is unavailable: {revision}:{path}")
     return result.stdout
+
+
+def fixture_checker_overlay_hunks() -> tuple[tuple[str, bytes, bytes], ...]:
+    """Fixed, reversible D-209 notice-only changes from the trusted v0.4.0 checker."""
+    return (
+        ("notice constants",
+         b"MAX_MANIFEST_BYTES = 2 * 1024 * 1024\n",
+         b'NOTICE_ACID2_STATUS_BEFORE = (\n'
+         b'    b"bytes are excluded. Runtime comparison has not been performed yet. See\\n"\n'
+         b'    b"fixtures/acid2/SOURCES.md."\n'
+         b')\n'
+         b'NOTICE_ACID2_STATUS_AFTER = (\n'
+         b'    b"bytes are excluded. One software comparison was run: DMG-on-DMG and CGB-on-CGB\\n"\n'
+         b'    b"matched, while DMG-on-CGB differed in all 19,840 compared pixels. The failed\\n"\n'
+         b'    b"cross-model result was not replayed; its cause is not established. These results\\n"\n'
+         b'    b"are controlled-composition evidence, not mode-3 timing evidence. See\\n"\n'
+         b'    b"fixtures/acid2/SOURCES.md and the Phase 24 closeout record."\n'
+         b')\n'
+         b'NOTICE_D209_APPROVED_INDEX_SHA256 = "38820b1dbf48d099438ccc5381d5d75d3b03ea18433e5ea46b7cbd744c1d0011"\n'
+         b'MAX_MANIFEST_BYTES = 2 * 1024 * 1024\n'),
+        ("admission notice overlay call",
+         b"    if current_notice_index != notice_index:\n",
+         b"    if not _notice_index_matches_admission_pin(notice_index, current_notice_index, index_path):\n"),
+        ("current notice digest consumer",
+         b"    if not _notice_digest_table_matches(notice_index, fixture_id, manifest_digest, license_digest):\n",
+         b"    if not _notice_digest_table_matches(current_notice_index, fixture_id, manifest_digest, license_digest):\n"),
+        ("product notice contract description",
+         b'    """Allow the reviewed product-policy paragraph while pinning every other notice byte."""\n',
+         b'    """Allow the baseline, reviewed product claim, or the exact D-209 notice snapshot."""\n'),
+        ("exact product notice snapshot gate",
+         b"    if current_index not in (baseline_index, approved_index):\n"
+         b'        raise Reject("product-source-mismatch", "THIRD_PARTY_NOTICES.md differs outside the approved product-policy paragraph")\n',
+         b"    if (current_index not in (baseline_index, approved_index)\n"
+         b"            and sha256(current_index) != NOTICE_D209_APPROVED_INDEX_SHA256):\n"
+         b'        raise Reject("product-source-mismatch", "THIRD_PARTY_NOTICES.md differs from the exact approved D-209 notice snapshot")\n'),
+        ("admission pin matcher",
+         b"def _product_source_expectations(root: Path, rules: dict, layout: str) -> tuple[dict[str, dict], set[str], bytes]:\n",
+         b"def _notice_index_matches_admission_pin(pinned_index: bytes, current_index: bytes,\n"
+         b"                                        index_path: str) -> bool:\n"
+         b'    """Permit the exact global Acid2 status update while pinning all other notice bytes."""\n'
+         b"    if current_index == pinned_index:\n"
+         b"        return True\n"
+         b'    if (index_path != "THIRD_PARTY_NOTICES.md"\n'
+         b"            or pinned_index.count(NOTICE_ACID2_STATUS_BEFORE) != 1):\n"
+         b"        return False\n"
+         b"    return current_index == pinned_index.replace(NOTICE_ACID2_STATUS_BEFORE,\n"
+         b"                                                  NOTICE_ACID2_STATUS_AFTER, 1)\n"
+         b"\n\n"
+         b"def _product_source_expectations(root: Path, rules: dict, layout: str) -> tuple[dict[str, dict], set[str], bytes]:\n"),
+        ("product notice negative controls",
+         b'        ("historical-digest-row-change",\n'
+         b'         approved.replace(b"59284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c",\n'
+         b'                          b"09284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c", 1)),\n'
+         b"    ]\n",
+         b'        ("historical-digest-row-change",\n'
+         b'         approved.replace(b"59284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c",\n'
+         b'                          b"09284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c", 1)),\n'
+         b'        ("altered-acid2-status", current.replace(b"19,840", b"19,839", 1)),\n'
+         b'        ("status-update-with-unrelated-edit", current + b"unreviewed\\n"),\n'
+         b"    ]\n"),
+        ("admission overlay self-test",
+         b"def self_test_packages(layout: str) -> int:\n",
+         b"def _self_test_acid2_notice_admission_overlay() -> int:\n"
+         b"    pinned = b\"prefix\\n\" + NOTICE_ACID2_STATUS_BEFORE + b\"\\nsuffix\\n\"\n"
+         b"    approved = b\"prefix\\n\" + NOTICE_ACID2_STATUS_AFTER + b\"\\nsuffix\\n\"\n"
+         b"    cases = (\n"
+         b'        ("exact-acid2-status-update", approved, "THIRD_PARTY_NOTICES.md", True),\n'
+         b'        ("status-change-on-other-path", approved, "fixtures/acid2/LICENSE.txt", False),\n'
+         b'        ("altered-status-result", approved.replace(b"19,840", b"19,839", 1),\n'
+         b'         "THIRD_PARTY_NOTICES.md", False),\n'
+         b'        ("unrelated-index-edit", approved + b"unreviewed\\n", "THIRD_PARTY_NOTICES.md", False),\n'
+         b'        ("duplicate-status-anchor", pinned + NOTICE_ACID2_STATUS_BEFORE,\n'
+         b'         "THIRD_PARTY_NOTICES.md", False),\n'
+         b"    )\n"
+         b"    for label, candidate, index_path, expected in cases:\n"
+         b"        actual = _notice_index_matches_admission_pin(pinned, candidate, index_path)\n"
+         b"        if actual is not expected:\n"
+         b'            raise Reject("self-test-acid2-notice-admission-overlay", label)\n'
+         b"    return sum(1 for _, _, _, expected in cases if not expected)\n"
+         b"\n\n"
+         b"def self_test_packages(layout: str) -> int:\n"),
+        ("invoke admission overlay controls",
+         b"        manifest_controls = _run_manifest_mutations(root) + _run_live_byte_mutations(root)\n",
+         b"        manifest_controls = _run_manifest_mutations(root) + _run_live_byte_mutations(root)\n"
+         b"    notice_overlay_controls = _self_test_acid2_notice_admission_overlay()\n"),
+        ("account for admission overlay refusals",
+         b"          f\"{manifest_controls + len(cases) + repository_controls + bounded_controls}\")\n",
+         b"          f\"{manifest_controls + notice_overlay_controls + len(cases) + repository_controls + bounded_controls}\")\n"),
+    )
+
+
+def apply_fixture_checker_overlay(trusted_source: bytes) -> bytes:
+    result = trusted_source
+    for label, before, after in fixture_checker_overlay_hunks():
+        count = result.count(before)
+        if count != 1:
+            reject(f"trusted fixture checker overlay anchor {label} is {'missing' if count == 0 else 'ambiguous'}")
+        result = result.replace(before, after, 1)
+    return result
+
+
+def verify_fixture_checker_overlay(trusted_source: bytes, d209_source: bytes,
+                                   candidate_source: bytes) -> bytes:
+    if hashlib.sha256(trusted_source).hexdigest() != TRUSTED_FIXTURE_CHECKER_SHA256:
+        reject("tagged trusted fixture checker identity differs from v0.4.0")
+    if hashlib.sha256(d209_source).hexdigest() != D209_FIXTURE_CHECKER_SHA256:
+        reject("frozen D-209 fixture checker identity changed")
+    expected = apply_fixture_checker_overlay(trusted_source)
+    if hashlib.sha256(expected).hexdigest() != D209_FIXTURE_CHECKER_SHA256 or expected != d209_source:
+        reject("fixed D-209 notice overlay does not reproduce the frozen checker bytes")
+    restored = expected
+    for label, before, after in reversed(fixture_checker_overlay_hunks()):
+        count = restored.count(after)
+        if count != 1:
+            reject(f"D-209 checker overlay inverse anchor {label} is {'missing' if count == 0 else 'ambiguous'}")
+        restored = restored.replace(after, before, 1)
+    if restored != trusted_source:
+        reject("D-209 checker notice overlay inverse does not reconstruct the trusted tag")
+    if candidate_source != expected:
+        reject("candidate fixture checker differs from the exact D-209 notice overlay")
+    return expected
+
+
+def fixture_checker_overlay_controls(trusted_source: bytes, d209_source: bytes) -> int:
+    if hashlib.sha256(trusted_source).hexdigest() != TRUSTED_FIXTURE_CHECKER_SHA256:
+        reject("fixture checker overlay tag-base positive lacks the trusted v0.4.0 identity")
+    expected = apply_fixture_checker_overlay(trusted_source)
+    controls = 1  # independently pinned tag-base positive
+    verify_fixture_checker_overlay(trusted_source, d209_source, expected)
+    controls += 1  # exact approved overlay positive
+
+    def refused(label: str, operation, expected_reason: str) -> None:
+        try:
+            operation()
+        except CoverageError as error:
+            if expected_reason not in str(error):
+                reject(f"fixture checker overlay control {label} refused for wrong reason: {error}")
+        else:
+            reject(f"fixture checker overlay control accepted {label}")
+
+    refused("wrong trusted base", lambda: verify_fixture_checker_overlay(
+        trusted_source + b"\n", d209_source, expected),
+        "tagged trusted fixture checker identity differs")
+    label, anchor, _after = fixture_checker_overlay_hunks()[0]
+    refused("missing fixed hunk", lambda: apply_fixture_checker_overlay(trusted_source.replace(anchor, b"", 1)),
+            f"overlay anchor {label} is missing")
+    refused("duplicate fixed hunk", lambda: apply_fixture_checker_overlay(
+        trusted_source.replace(anchor, anchor + anchor, 1)),
+        f"overlay anchor {label} is ambiguous")
+
+    mutations = (
+        ("modified status", b"cross-model result was not replayed", b"cross-model result was replayed"),
+        ("changed comparison count", b"19,840 compared pixels", b"19,839 compared pixels"),
+        ("changed approved digest", b"38820b1dbf48d099438ccc5381d5d75d3b03ea18433e5ea46b7cbd744c1d0011",
+         b"48820b1dbf48d099438ccc5381d5d75d3b03ea18433e5ea46b7cbd744c1d0011"),
+        ("modified overlay hunk", b"mode-3 timing evidence", b"mode-3 timing assertion"),
+        ("off-path checker change", b"MAX_FILES = 4096", b"MAX_FILES = 4095"),
+        ("unrelated checker code", b"def check_commit(root: Path", b"def check_commit_mutated(root: Path"),
+    )
+    for label, before, after in mutations:
+        if expected.count(before) != 1:
+            reject(f"fixture checker overlay control {label} target is missing or ambiguous")
+        mutant = expected.replace(before, after, 1)
+        refused(label, lambda mutant=mutant: verify_fixture_checker_overlay(
+            trusted_source, d209_source, mutant),
+            "candidate fixture checker differs from the exact D-209 notice overlay")
+        controls += 1
+    return controls + 3  # wrong base plus missing/duplicate hunk controls
 
 
 def _workflow_job_block_text(workflow: str, job_id: str) -> str | None:
@@ -2116,7 +2289,7 @@ def _self_test(root: Path, revision: str) -> int:
     candidate_release = git_text(root, candidate, ".github/workflows/release.yml").decode("utf-8")
     # Post-tag recovery profile: keep the generic production checker and every
     # earlier control unchanged. Read the original tagged workflow as immutable data.
-    recovery_source = "3de1b0e427f37a202be4469dd818266f359c8b20"
+    recovery_source = TRUSTED_FIXTURE_CHECKER_COMMIT
     recovery_baseline = _parse_workflow_text(
         git_text(root, recovery_source, ".github/workflows/release.yml").decode("utf-8"),
         "release.yml", candidate_namespace)
@@ -2434,9 +2607,11 @@ def _self_test(root: Path, revision: str) -> int:
     import importlib.util
     import shlex
     trusted_fixture = root / "tests/scripts/verify-fixture-admission.py"
-    fixture_source = git_text(root, recovery_source, "tests/scripts/verify-fixture-admission.py")
-    if trusted_fixture.read_bytes() != fixture_source:
-        reject("release recovery fixture checker differs from the tagged trusted snapshot")
+    fixture_source = git_text(root, recovery_source, FIXTURE_CHECKER_PATH)
+    d209_fixture_source = git_text(root, D209_FIXTURE_CHECKER_COMMIT, FIXTURE_CHECKER_PATH)
+    candidate_fixture_source = trusted_fixture.read_bytes()
+    controls += fixture_checker_overlay_controls(fixture_source, d209_fixture_source)
+    verify_fixture_checker_overlay(fixture_source, d209_fixture_source, candidate_fixture_source)
     spec = importlib.util.spec_from_file_location("release_recovery_fixture_probe", trusted_fixture)
     if spec is None or spec.loader is None:
         reject("release recovery fixture checker cannot be loaded")
@@ -2843,7 +3018,7 @@ def _self_test(root: Path, revision: str) -> int:
     # Preserve the 640 original cases plus both recovery profiles, the receipt
     # runner regression controls, and four real-Git byte controls.
     # Retain the original 694 refusals plus the seven publisher identity mutants.
-    if controls != 701:
+    if controls != 712:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
 
     # A recovery's verifier overlay must not dirty the source inspected by the

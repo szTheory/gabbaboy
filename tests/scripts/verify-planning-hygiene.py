@@ -70,6 +70,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -222,6 +223,77 @@ def git_run(repo: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, check=False, env=env, timeout=60)
 
 
+def immutable_blob(repo: Path, revision: str, path: str) -> bytes:
+    """Read one regular file from a commit, refusing missing, ambiguous, or symlink inputs."""
+    listed = git_run(repo, "ls-tree", revision, "--", path)
+    rows = [row for row in listed.stdout.splitlines() if row]
+    if listed.returncode != 0 or len(rows) != 1:
+        raise SystemExit(f"plan-cap-v04-archive: missing or ambiguous {path} at {revision}")
+    metadata, separator, raw_path = rows[0].partition(b"\t")
+    try:
+        fields = metadata.decode("ascii", "strict").split()
+        actual_path = raw_path.decode("utf-8", "strict")
+    except UnicodeError:
+        raise SystemExit(f"plan-cap-v04-archive: invalid tree entry for {path} at {revision}") from None
+    if not separator or actual_path != path or len(fields) != 3:
+        raise SystemExit(f"plan-cap-v04-archive: invalid tree entry for {path} at {revision}")
+    if fields[0] not in ("100644", "100755") or fields[1] != "blob":
+        raise SystemExit(f"plan-cap-v04-archive: non-regular source refused: {path}")
+    shown = git_run(repo, "show", f"{revision}:{path}")
+    if shown.returncode != 0:
+        raise SystemExit(f"plan-cap-v04-archive: cannot read {path} at {revision}")
+    return shown.stdout
+
+
+def validate_v04_archive_and_recovery(repo: Path, revision: str,
+                                      root_roadmap: str, active_paths: list[bytes]) -> str:
+    """Bind D-209 archive bytes to their frozen candidate and validate the current Phase 24 route."""
+    current_requirements = immutable_blob(repo, revision, V04_ARCHIVED_REQUIREMENTS)
+    current_archive_roadmap = immutable_blob(repo, revision, V04_ARCHIVED_ROADMAP)
+    expected_requirements = immutable_blob(repo, V04_D209_ARCHIVE_REV, V04_ARCHIVED_REQUIREMENTS)
+    expected_archive_roadmap = immutable_blob(repo, V04_D209_ARCHIVE_REV, V04_ARCHIVED_ROADMAP)
+    if current_requirements != expected_requirements:
+        raise SystemExit("plan-cap-v04-archive: archived requirements differ from the D-209 source")
+    if current_archive_roadmap != expected_archive_roadmap:
+        raise SystemExit("plan-cap-v04-archive: archived roadmap differs from the D-209 source")
+
+    try:
+        archived_text = current_requirements.decode("utf-8", "strict")
+    except UnicodeError:
+        raise SystemExit("plan-cap-v04-archive: archived requirements are not UTF-8") from None
+    dispositions: dict[str, tuple[str, str]] = {}
+    for line in archived_text.splitlines():
+        match = re.match(r"\| ([A-Z]+-\d+) \| Phase (\d+) \| (Complete|Pending) \|", line)
+        if match:
+            requirement = match.group(1)
+            if requirement in dispositions:
+                raise SystemExit("plan-cap-v04-archive: duplicate requirement disposition")
+            dispositions[requirement] = (match.group(2), match.group(3))
+    if dispositions != V04_ARCHIVED_DISPOSITIONS:
+        raise SystemExit("plan-cap-v04-archive: requirement owners or dispositions changed")
+
+    root_requirements = git_run(repo, "ls-tree", revision, "--", V04_ROOT_REQUIREMENTS)
+    if root_requirements.returncode != 0 or root_requirements.stdout.strip():
+        raise SystemExit("plan-cap-v04-archive: an active root requirements tracker was restored")
+    recovery_sections = re.findall(r"(?ms)^## Recovery Phase[ \t]*\n(.*?)(?=^##[ \t]+|\Z)", root_roadmap)
+    if len(recovery_sections) != 1:
+        raise SystemExit("plan-cap-recovery-route: root roadmap must contain one recovery section")
+    section = recovery_sections[0]
+    phase_lines = [line for line in section.splitlines() if PHASE_HEADING.match(line)]
+    plan_mentions = re.findall(r"(?<![A-Za-z0-9._-])24-\d[^/\\\s`]*-PLAN[^/\\\s`]*\.md", section,
+                               flags=re.IGNORECASE)
+    if (phase_lines != ["### Phase 24: Resolve remaining v0.4 evidence and verification gaps"]
+            or plan_mentions != ["24-01-PLAN.md"] or "D-209" not in section):
+        raise SystemExit("plan-cap-recovery-route: active Phase 24 route or requirement boundary is invalid")
+    phase24_dir = V04_RECOVERY_PLAN.rsplit("/", 1)[0] + "/"
+    plan_paths = sorted(path.decode("utf-8", "strict") for path in active_paths
+                        if path.decode("utf-8", "replace").startswith(phase24_dir)
+                        and PLAN_FILE.match(path.decode("utf-8", "replace").rsplit("/", 1)[-1]))
+    if plan_paths != [V04_RECOVERY_PLAN]:
+        raise SystemExit("plan-cap-recovery-route: Phase 24 must resolve to its sole existing plan")
+    return current_archive_roadmap.decode("utf-8", "strict")
+
+
 def read_rev(repo: Path, rev: str) -> tuple[str, PlanTree, str | None]:
     """Read the roadmap, plan tree, and D-205 authority from one immutable commit."""
     if not FULL_COMMIT.fullmatch(rev):
@@ -240,6 +312,16 @@ def read_rev(repo: Path, rev: str) -> tuple[str, PlanTree, str | None]:
     # A collapsed roadmap is legitimate only at the recorded milestone boundary. Never
     # hide an incomplete active roadmap by falling back to a previous archive.
     active_paths = [path for path in listing.stdout.split(b"\0") if path]
+    archived_requirements = git_run(repo, "ls-tree", rev, "--", V04_ARCHIVED_REQUIREMENTS)
+    archived_roadmap = git_run(repo, "ls-tree", rev, "--", V04_ARCHIVED_ROADMAP)
+    has_archived_requirements = bool(archived_requirements.stdout.strip())
+    has_archived_roadmap = bool(archived_roadmap.stdout.strip())
+    if has_archived_requirements != has_archived_roadmap:
+        raise SystemExit("plan-cap-v04-archive: archived requirements and roadmap must exist together")
+    if has_archived_requirements:
+        root_text = roadmap.stdout.decode("utf-8", errors="strict")
+        archived_text = validate_v04_archive_and_recovery(repo, rev, root_text, active_paths)
+        roadmap = subprocess.CompletedProcess([], 0, archived_text.encode("utf-8"), b"")
     placeholder = (PHASES_AT_REV + "/.gitkeep").encode("utf-8")
     if phase_details(roadmap.stdout.decode("utf-8")) is None and active_paths in ([], [placeholder]):
         state = git_run(repo, "show", f"{rev}:.planning/STATE.md")
@@ -285,6 +367,23 @@ V04_EVIDENCE_HEAD = "d18db4c56d2a79e6138df37a9d16e3d346a86e13"
 V04_PENDING_OWNERS = {"FIXT-01": "Phase 21", "RIGHTS-01": "Phase 20",
                       "DIAG-01": "Phase 22", "DIAG-02": "Phase 22"}
 V04_GAP_INPUT_REV = "f511baa8c0330f5cd90d56da55d79dbc873b0559"
+V04_D209_ARCHIVE_REV = "96d502d4733ac54aa8bf7fbfd7813065143771dc"
+# The legacy D-205 report contract is exercised against its final internally
+# consistent active-tracker snapshot, before the audit refresh and D-209 archive.
+# Current archive/route checks use the candidate revision independently.
+V04_GAP_ASSESSMENT_FIXTURE_REV = "883fdbba160b0afcd2b35d8c0363b2cba598c016"
+V04_ARCHIVED_REQUIREMENTS = ".planning/milestones/v0.4-REQUIREMENTS.md"
+V04_ARCHIVED_ROADMAP = ".planning/milestones/v0.4-ROADMAP.md"
+V04_ROOT_REQUIREMENTS = ".planning/REQUIREMENTS.md"
+V04_ROOT_ROADMAP = ".planning/ROADMAP.md"
+V04_RECOVERY_PLAN = (f"{PHASES_AT_REV}/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/"
+                     "24-01-PLAN.md")
+V04_ARCHIVED_DISPOSITIONS = {
+    "GAME-01": ("21", "Complete"), "GAME-02": ("21", "Complete"),
+    "FIXT-01": ("21", "Pending"), "RIGHTS-01": ("20", "Complete"),
+    "DIAG-01": ("22", "Complete"), "DIAG-02": ("22", "Complete"),
+    "FEED-01": ("21", "Complete"), "REL-01": ("23", "Complete"),
+}
 V04_GAP_REPORT_PATH = ".planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-EVIDENCE.md"
 V04_GAP_AUDIT_PATH = ".planning/v0.4-MILESTONE-AUDIT.md"
 V04_GAP_REQUIREMENTS_PATH = ".planning/REQUIREMENTS.md"
@@ -1955,7 +2054,22 @@ def make_phases(root: Path, counts: dict[str, int], gaps: dict[str, int] | None 
 
 
 def self_test(rev: str | None = None, repo: Path = Path(".")) -> int:
+    self_test_started = time.perf_counter()
     controls = 0
+
+    def measured_stage(name: str, operation: Callable[[], object]) -> object:
+        started = time.perf_counter()
+        print(f"planning-hygiene stage={name} status=start")
+        try:
+            result = operation()
+        except BaseException as error:
+            elapsed_ms = int((time.perf_counter() - started) * 1000)
+            print(f"planning-hygiene stage={name} status=fail elapsed_ms={elapsed_ms} error={type(error).__name__}")
+            raise
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        count = result if isinstance(result, int) and not isinstance(result, bool) else 0
+        print(f"planning-hygiene stage={name} status=pass elapsed_ms={elapsed_ms} controls={count}")
+        return result
 
     def expect(label: str, errors: list[str], code: str | None) -> None:
         nonlocal controls
@@ -2070,7 +2184,7 @@ def self_test(rev: str | None = None, repo: Path = Path(".")) -> int:
         _, errors = check_plan_cap(fixture_roadmap, phases("fixture", {"16": 4}))
         expect("the committed over-cap roadmap fixture is rejected", errors, "plan-cap-exceeded")
 
-        controls += self_test_plan_cap_rev(base, repo, rev)
+        controls += measured_stage("immutable-plan-cap-recovery", lambda: self_test_plan_cap_rev(base, repo, rev))
 
         # lessons-ids: exact tokens, every occurrence named, earliest kept, order independent.
         lessons = "### GB-TEST-001 / d / one\n\n### GB-TEST-0010 / d / ten\n\n### GB-TEST-002 / d / two\n"
@@ -2128,8 +2242,8 @@ def self_test(rev: str | None = None, repo: Path = Path(".")) -> int:
             raise SystemExit("planning-hygiene self-test FAIL: a missing LESSONS file exited zero")
         controls += 1
 
-        controls += self_test_playstead(base)
-        controls += self_test_v04_reconciliation(base, repo)
+        controls += measured_stage("playstead-docs", lambda: self_test_playstead(base))
+        controls += measured_stage("v04-reconciliation", lambda: self_test_v04_reconciliation(base, repo))
 
         live_revision = rev
         if live_revision is None:
@@ -2137,8 +2251,9 @@ def self_test(rev: str | None = None, repo: Path = Path(".")) -> int:
             if head.returncode != 0:
                 raise SystemExit(f"deferrals-rev: cannot resolve HEAD in {repo}")
             live_revision = head.stdout.decode("ascii").strip()
-        controls += self_test_v04_gap_assessment(base, repo, live_revision)
-        live_text = read_deferrals(repo, live_revision)
+        controls += measured_stage("v04-gap-assessment", lambda: self_test_v04_gap_assessment(
+            base, repo, V04_GAP_ASSESSMENT_FIXTURE_REV))
+        live_text = measured_stage("immutable-deferrals-read", lambda: read_deferrals(repo, live_revision))
         summary, errors = check_deferrals(live_text)
         if errors or summary != "deferrals pass pins=8":
             raise SystemExit(f"planning-hygiene self-test FAIL: live deferrals at {live_revision}: {errors}")
@@ -2171,6 +2286,8 @@ def self_test(rev: str | None = None, repo: Path = Path(".")) -> int:
             raise SystemExit(f"planning-hygiene self-test FAIL: unrelated phrase changed deferral result: {errors}")
         controls += 1
 
+    elapsed_ms = int((time.perf_counter() - self_test_started) * 1000)
+    print(f"planning-hygiene stage=total status=pass elapsed_ms={elapsed_ms} controls={controls}")
     print(f"planning-hygiene self-test pass controls={controls}")
     return 0
 
@@ -2481,6 +2598,81 @@ def self_test_plan_cap_rev(base: Path, source_repo: Path, source_rev: str | None
     d205_variant("repeated-BOM Phase 24 ordinary plan", {phase24_path: repeated_bom_false},
                  "plan-cap-d205-phase24-gap", exact_expected_code=True)
     d205_variant("attempted reserve renewal", {".planning/ROADMAP.md": renewed_path_roadmap}, "plan-cap-d205-reserve")
+
+    # D-209 keeps v0.4's detailed cap/requirement records archived while the root roadmap
+    # carries one active Phase 24 recovery route. Judge both from the same immutable tree.
+    archive_entry = git_run(source_repo, "ls-tree", source_rev, "--", V04_ARCHIVED_REQUIREMENTS)
+    if archive_entry.returncode == 0 and archive_entry.stdout.strip():
+        active_roadmap, active_tree, active_decisions = read_rev(source_repo, source_rev)
+        summary, errors = check_plan_tree(active_roadmap, active_tree, source_rev, active_decisions)
+        if errors or summary != "plan-cap pass phases=6 plans=40":
+            raise SystemExit(f"planning-hygiene self-test FAIL: D-209 archive/recovery positive: {summary} {errors}")
+        controls += 1
+
+        d212_repo = base / "d212-recovery-rev-repo"
+        d212_repo.mkdir()
+        d212_env = dict(env)
+        def d212_git(*args: str, input_bytes: bytes | None = None) -> bytes:
+            done = subprocess.run(["git", "-C", str(d212_repo), *args], capture_output=True,
+                                  check=False, env=d212_env, timeout=60, input=input_bytes)
+            if done.returncode != 0:
+                raise SystemExit("planning-hygiene self-test FAIL: D-209 fixture git operation failed: "
+                                 + done.stderr.decode("utf-8", "replace"))
+            return done.stdout.strip()
+
+        d212_git("init", "-q")
+        object_dir_raw = git_run(source_repo, "rev-parse", "--git-path", "objects")
+        if object_dir_raw.returncode != 0:
+            raise SystemExit("planning-hygiene self-test FAIL: D-209 fixture cannot locate source objects")
+        object_dir = Path(object_dir_raw.stdout.decode("utf-8", "strict").strip())
+        if not object_dir.is_absolute():
+            object_dir = source_repo.resolve() / object_dir
+        alternates = d212_repo / ".git/objects/info/alternates"
+        alternates.parent.mkdir(parents=True, exist_ok=True)
+        alternates.write_text(str(object_dir.resolve()) + "\n", encoding="utf-8")
+        d212_git("update-ref", "refs/heads/main", source_rev)
+        d212_git("symbolic-ref", "HEAD", "refs/heads/main")
+
+        def d212_commit(path: str, content: bytes, message: str) -> str:
+            d212_git("read-tree", f"{source_rev}^{{tree}}")
+            oid = d212_git("hash-object", "-w", "--stdin", input_bytes=content).decode("ascii")
+            d212_git("update-index", "--add", "--cacheinfo", "100644", oid, path)
+            tree = d212_git("write-tree").decode("ascii")
+            revision = d212_git("commit-tree", tree, "-p", source_rev, "-m", message).decode("ascii")
+            d212_git("update-ref", "refs/heads/main", revision)
+            return revision
+
+        def d212_refused(label: str, revision: str, reason: str) -> None:
+            nonlocal controls
+            try:
+                read_rev(d212_repo, revision)
+            except SystemExit as error:
+                if reason not in str(error):
+                    raise SystemExit(f"planning-hygiene self-test FAIL: {label} refused for wrong reason: {error}")
+                controls += 1
+                return
+            raise SystemExit(f"planning-hygiene self-test FAIL: {label} was accepted")
+
+        root_roadmap = commit_file(source_repo, source_rev, V04_ROOT_ROADMAP)
+        archived_requirements = commit_file(source_repo, source_rev, V04_ARCHIVED_REQUIREMENTS)
+        if root_roadmap is None or archived_requirements is None:
+            raise SystemExit("planning-hygiene self-test FAIL: D-209 recovery candidate lacks pinned inputs")
+        wrong_route = root_roadmap.replace(b"24-01-PLAN.md", b"24-02-PLAN.md", 1)
+        if wrong_route == root_roadmap:
+            raise SystemExit("planning-hygiene self-test FAIL: D-209 root route mutation was inactive")
+        d212_refused("wrong active Phase 24 route",
+                     d212_commit(V04_ROOT_ROADMAP, wrong_route, "wrong recovery route"),
+                     "plan-cap-recovery-route")
+        d212_refused("restored root requirements tracker",
+                     d212_commit(V04_ROOT_REQUIREMENTS, b"active requirements\n", "restore active tracker"),
+                     "active root requirements tracker was restored")
+        d212_refused("mutated D-209 requirements archive",
+                     d212_commit(V04_ARCHIVED_REQUIREMENTS, archived_requirements + b"\n", "mutate archive"),
+                     "archived requirements differ from the D-209 source")
+        d212_refused("second active Phase 24 plan",
+                     d212_commit(V04_RECOVERY_PLAN[:-len("24-01-PLAN.md")] + "24-02-PLAN.md",
+                                 b"---\nphase: GB-24\nplan: 02\n---\n", "add second recovery plan"),
+                     "Phase 24 must resolve to its sole existing plan")
     return controls
 
 
