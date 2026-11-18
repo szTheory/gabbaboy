@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import ast
 import collections
+import ntpath
 import hashlib
 import io
 import json
@@ -34,6 +35,7 @@ import subprocess
 import sys
 import tempfile
 import tokenize
+from dataclasses import dataclass
 from pathlib import Path
 
 if not __debug__ or sys.flags.optimize:
@@ -273,7 +275,119 @@ def _assigned_names(target: ast.AST) -> set[str]:
     return set()
 
 
-def _has_path_spelling(node: ast.AST, source_lines: list[str]) -> bool:
+def _literal_string(node: ast.AST, names: dict[str, str] | None = None, depth: int = 0) -> str | None:
+    """Fold only statically known strings and path joins; never evaluate inspected source."""
+    if depth > 12:
+        return None
+    names = names or {}
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name):
+        return names.get(node.id)
+    if isinstance(node, ast.JoinedStr):
+        parts = []
+        for item in node.values:
+            if isinstance(item, ast.Constant) and isinstance(item.value, str):
+                parts.append(item.value)
+            elif isinstance(item, ast.FormattedValue):
+                value = _literal_string(item.value, names, depth + 1)
+                if value is None:
+                    return None
+                parts.append(value)
+            else:
+                return None
+        return "".join(parts)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Div)):
+        left = _literal_string(node.left, names, depth + 1)
+        right = _literal_string(node.right, names, depth + 1)
+        if left is None or right is None:
+            return None
+        if isinstance(node.op, ast.Add):
+            return left + right
+        # pathlib-style joining: an absolute right side replaces its left side.
+        if right.startswith(("/", "\\")) or ntpath.splitdrive(right)[0]:
+            return right
+        return left.rstrip("/\\") + "/" + right.lstrip("/\\")
+    if isinstance(node, ast.Subscript):
+        value = _literal_string(node.value, names, depth + 1)
+        index = node.slice
+        if value is None or not isinstance(index, ast.Constant) or not isinstance(index.value, int):
+            return None
+        try:
+            return value[index.value]
+        except IndexError:
+            return None
+    return None
+
+
+def _literal_path_string(node: ast.AST, names: dict[str, str] | None = None, depth: int = 0) -> str | None:
+    """Fold only literal pathlib/os.path construction, without evaluating source."""
+    if depth > 12:
+        return None
+    names = names or {}
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        left = _literal_path_string(node.left, names, depth + 1)
+        right = _literal_string(node.right, names, depth + 1)
+        if left is None or right is None:
+            return None
+        if right.startswith(("/", "\\")) or ntpath.splitdrive(right)[0]:
+            return right
+        return left.rstrip("/\\") + "/" + right.lstrip("/\\")
+    if isinstance(node, ast.Call):
+        function = node.func
+        is_constructor = ((isinstance(function, ast.Name) and function.id in
+                           {"Path", "PurePath", "PosixPath", "WindowsPath"})
+                          or (isinstance(function, ast.Attribute) and function.attr in
+                              {"Path", "PurePath", "PosixPath", "WindowsPath"}))
+        if is_constructor and node.args:
+            parts = [_literal_string(item, names, depth + 1) for item in node.args]
+            if any(item is None for item in parts):
+                return None
+            folded = parts[0]
+            for part in parts[1:]:
+                assert part is not None and folded is not None
+                folded = (part if part.startswith(("/", "\\")) or ntpath.splitdrive(part)[0]
+                          else folded.rstrip("/\\") + "/" + part.lstrip("/\\"))
+            return folded
+        if isinstance(function, ast.Attribute) and function.attr == "joinpath":
+            folded = _literal_path_string(function.value, names, depth + 1)
+            parts = [_literal_string(item, names, depth + 1) for item in node.args]
+            if folded is None or any(item is None for item in parts):
+                return None
+            for part in parts:
+                assert part is not None
+                folded = (part if part.startswith(("/", "\\")) or ntpath.splitdrive(part)[0]
+                          else folded.rstrip("/\\") + "/" + part.lstrip("/\\"))
+            return folded
+        if (isinstance(function, ast.Attribute) and function.attr == "join"
+                and isinstance(function.value, ast.Attribute) and function.value.attr == "path"):
+            parts = [_literal_string(item, names, depth + 1) for item in node.args]
+            if not parts or any(item is None for item in parts):
+                return None
+            folded = parts[0]
+            for part in parts[1:]:
+                assert part is not None and folded is not None
+                folded = (part if part.startswith(("/", "\\")) or ntpath.splitdrive(part)[0]
+                          else folded.rstrip("/\\") + "/" + part.lstrip("/\\"))
+            return folded
+    return _literal_string(node, names, depth + 1)
+
+
+def _protected_path_text(value: str) -> bool:
+    return SPELLINGS.search(value.replace("\\", "/")) is not None
+
+
+def _has_path_spelling(node: ast.AST, source_lines: list[str], names: dict[str, str] | None = None) -> bool:
+    # AST Constant.value is already Python-decoded: \x2e, \u002e, and adjacent literals
+    # therefore receive the same semantic check as their unescaped source spelling.
+    folded = _literal_string(node, names)
+    if folded is not None and _protected_path_text(folded):
+        return True
+    for item in ast.walk(node):
+        if isinstance(item, ast.Constant) and isinstance(item.value, str) and _protected_path_text(item.value):
+            return True
+    if not hasattr(node, "lineno") or not hasattr(node, "end_lineno"):
+        return False
     start_line, end_line = node.lineno - 1, node.end_lineno - 1
     start_column, end_column = node.col_offset, node.end_col_offset
     if start_line == end_line:
@@ -289,21 +403,903 @@ def _uses_name(node: ast.AST, names: set[str]) -> bool:
     return any(isinstance(item, ast.Name) and item.id in names for item in ast.walk(node))
 
 
-def _is_temporary_path(node: ast.AST, roots: set[str]) -> bool:
+def _safe_relative_component(node: ast.AST, names: dict[str, str] | None = None) -> bool:
+    value = _literal_string(node, names)
+    if value is None or not value or value.startswith(("/", "\\")) or ntpath.splitdrive(value)[0]:
+        return False
+    normalized = value.replace("\\", "/")
+    return all(component not in ("", "..") for component in normalized.split("/"))
+
+
+def _is_temporary_path(node: ast.AST, roots: set[str], names: dict[str, str] | None = None) -> bool:
     if isinstance(node, ast.Name):
         return node.id in roots
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
-        return _is_temporary_path(node.left, roots)
+        return (_is_temporary_path(node.left, roots, names)
+                and _safe_relative_component(node.right, names))
     if isinstance(node, ast.Call):
         if isinstance(node.func, ast.Name) and node.func.id == "Path" and node.args:
-            return _is_temporary_path(node.args[0], roots)
+            return _is_temporary_path(node.args[0], roots, names)
         if isinstance(node.func, ast.Name) and node.func.id == "make_phases" and node.args:
-            return _is_temporary_path(node.args[0], roots)
+            return _is_temporary_path(node.args[0], roots, names)
         if isinstance(node.func, ast.Name) and node.func.id in ("sorted", "list") and node.args:
-            return _is_temporary_path(node.args[0], roots)
+            return _is_temporary_path(node.args[0], roots, names)
         if isinstance(node.func, ast.Attribute) and node.func.attr in ("iterdir", "glob", "rglob"):
-            return _is_temporary_path(node.func.value, roots)
+            return _is_temporary_path(node.func.value, roots, names)
     return False
+
+
+def _has_temporary_origin(node: ast.AST, roots: set[str],
+                          assignments: list[tuple[ast.AST, list[ast.AST], set[str], bool]],
+                          names: dict[str, str] | None = None,
+                          seen: frozenset[str] = frozenset()) -> bool:
+    """Track whether a possibly-escaped expression was ever derived from a proven temp root."""
+    names = names or {}
+    if isinstance(node, ast.Name):
+        if node.id in roots:
+            return True
+        if node.id in seen:
+            return False
+        return any(node.id in _assigned_names(target)
+                   and _has_temporary_origin(value, roots, assignments, names, seen | {node.id})
+                   for value, targets, _referenced, _direct in assignments for target in targets)
+    if isinstance(node, ast.BinOp):
+        return (_has_temporary_origin(node.left, roots, assignments, names, seen)
+                or _has_temporary_origin(node.right, roots, assignments, names, seen))
+    if isinstance(node, ast.Call):
+        if isinstance(node.func, ast.Name) and node.func.id in {"Path", "make_phases"}:
+            return bool(node.args) and _has_temporary_origin(node.args[0], roots, assignments, names, seen)
+        if isinstance(node.func, ast.Attribute) and node.func.attr in {"iterdir", "glob", "rglob"}:
+            return _has_temporary_origin(node.func.value, roots, assignments, names, seen)
+    return False
+
+
+@dataclass(frozen=True)
+class _PathFact:
+    text: str | None = None
+    protected: bool = False
+    temporary_origin: bool = False
+    contained: bool = False
+    callable_name: str | None = None
+    callable_target: ast.AST | None = None
+
+
+def _merge_path_facts(*facts: _PathFact) -> _PathFact:
+    protected = any(item.protected for item in facts)
+    origins = [item for item in facts if item.temporary_origin]
+    return _PathFact(protected=protected,
+                     temporary_origin=bool(origins),
+                     contained=bool(origins) and all(item.contained for item in origins),
+                     callable_name=(facts[0].callable_name if facts and
+                                    all(item.callable_name == facts[0].callable_name for item in facts) else None),
+                     callable_target=(facts[0].callable_target if facts and
+                                      all(item.callable_target is facts[0].callable_target for item in facts) else None))
+
+
+def _validate_decoded_path_flow(source: str, tree: ast.Module,
+                                roots_by_function: dict[str, set[str]]) -> None:
+    """Check decoded values and bounded helper calls without importing or executing source."""
+    parents = _parents(tree)
+    functions = [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    scope_by_node: dict[ast.AST, ast.AST | None] = {}
+    nodes_by_scope: dict[ast.AST | None, list[ast.AST]] = {None: []}
+    for node in ast.walk(tree):
+        scope = next((ancestor for ancestor in _ancestor_chain(node, parents)
+                      if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
+        scope_by_node[node] = scope
+        nodes_by_scope.setdefault(scope, []).append(node)
+    function_parent = {node: scope_by_node[node] for node in functions}
+    by_parent: dict[tuple[ast.AST | None, str], list[ast.AST]] = {}
+    for function in functions:
+        by_parent.setdefault((function_parent[function], function.name), []).append(function)
+
+    def scope_of(node: ast.AST) -> ast.AST | None:
+        return scope_by_node.get(node)
+
+    def direct_scope_nodes(function: ast.AST) -> list[ast.AST]:
+        return [function, *nodes_by_scope.get(function, [])]
+
+    def function_path_builders() -> set[ast.AST]:
+        builders: set[ast.AST] = set()
+        changed = True
+        while changed:
+            changed = False
+            for function in functions:
+                if function in builders:
+                    continue
+                assigned = {name: value for node in direct_scope_nodes(function)
+                            if isinstance(node, (ast.Assign, ast.AnnAssign))
+                            for value in [node.value]
+                            for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
+                            for name in _assigned_names(target)}
+                returns = [node.value for node in direct_scope_nodes(function)
+                           if isinstance(node, ast.Return) and node.value is not None]
+                def is_path_expr(node: ast.AST, seen: frozenset[str] = frozenset()) -> bool:
+                    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+                        return True
+                    if isinstance(node, ast.Call):
+                        if isinstance(node.func, ast.Name) and node.func.id == "Path":
+                            return True
+                        if isinstance(node.func, ast.Name):
+                            candidates = [item for item in builders if item.name == node.func.id]
+                            if candidates:
+                                return True
+                    if isinstance(node, ast.Name) and node.id not in seen and node.id in assigned:
+                        return is_path_expr(assigned[node.id], seen | {node.id})
+                    return False
+                if any(is_path_expr(node) for node in returns):
+                    builders.add(function)
+                    changed = True
+        return builders
+
+    path_builders = function_path_builders()
+    function_used_names = {
+        function: {node.id for node in direct_scope_nodes(function) if isinstance(node, ast.Name)}
+        for function in functions
+    }
+
+    module_env: dict[str, _PathFact] = {}
+    for statement in tree.body:
+        if isinstance(statement, ast.Assign):
+            value = _literal_string(statement.value, {name: fact.text for name, fact in module_env.items()
+                                                      if fact.text is not None})
+            literal_protected = any(isinstance(item, ast.Constant) and isinstance(item.value, str)
+                                    and _protected_path_text(item.value) for item in ast.walk(statement.value))
+            inherited = _merge_path_facts(*[module_env[item.id] for item in ast.walk(statement.value)
+                                            if isinstance(item, ast.Name) and item.id in module_env])
+            fact = _PathFact(text=value,
+                             protected=(literal_protected or inherited.protected
+                                        or (value is not None and _protected_path_text(value))))
+            for target in statement.targets:
+                for name in _assigned_names(target):
+                    module_env[name] = fact
+        elif isinstance(statement, ast.AnnAssign) and statement.value is not None:
+            value = _literal_string(statement.value, {name: fact.text for name, fact in module_env.items()
+                                                      if fact.text is not None})
+            literal_protected = any(isinstance(item, ast.Constant) and isinstance(item.value, str)
+                                    and _protected_path_text(item.value) for item in ast.walk(statement.value))
+            inherited = _merge_path_facts(*[module_env[item.id] for item in ast.walk(statement.value)
+                                            if isinstance(item, ast.Name) and item.id in module_env])
+            for name in _assigned_names(statement.target):
+                module_env[name] = _PathFact(text=value,
+                                             protected=(literal_protected or inherited.protected or
+                                                        (value is not None and _protected_path_text(value))))
+
+    # The lexical inventory stays authoritative for exact source sites. This second pass sees
+    # decoded constants and finite AST compositions even when they add no lexical hit.
+    module_strings = {name: fact.text for name, fact in module_env.items() if fact.text is not None}
+    literal_names_by_scope: dict[ast.AST | None, dict[str, str]] = {}
+    for scope in [None, *functions]:
+        names = dict(module_strings)
+        if scope is not None:
+            scoped_assignments = sorted(
+                (node for node in nodes_by_scope.get(scope, ())
+                 if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None),
+                key=lambda node: (node.lineno, node.col_offset))
+            for _ in range(min(len(scoped_assignments), 12)):
+                changed = False
+                for statement in scoped_assignments:
+                    value = _literal_string(statement.value, names)
+                    if value is None:
+                        continue
+                    targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+                    for target in targets:
+                        for name in _assigned_names(target):
+                            if name not in names:
+                                names[name] = value
+                                changed = True
+                if not changed:
+                    break
+        literal_names_by_scope[scope] = names
+    path_flow_names_by_scope: dict[ast.AST | None, set[str]] = {}
+    for node in ast.walk(tree):
+        scope = scope_of(node)
+        folded = _literal_path_string(node, literal_names_by_scope.get(scope, {}))
+        if folded is not None and _protected_path_text(folded):
+            path_flow_names_by_scope.setdefault(scope, set()).update(
+                item.id for item in ast.walk(node) if isinstance(item, ast.Name))
+
+    def resolve_name(name: str, scope: ast.AST | None) -> tuple[ast.AST | None, bool]:
+        current = scope
+        while True:
+            candidates = by_parent.get((current, name), [])
+            if candidates:
+                return (candidates[0], False) if len(candidates) == 1 else (None, True)
+            if current is None:
+                break
+            current = function_parent.get(current)
+        return None, False
+
+    def resolve_call(call: ast.Call, scope: ast.AST | None,
+                     env: dict[str, _PathFact] | None = None) -> tuple[ast.AST | None, bool]:
+        if not isinstance(call.func, ast.Name):
+            return None, False
+        alias = (env or {}).get(call.func.id, _PathFact())
+        if alias.callable_target is not None:
+            return alias.callable_target, False
+        return resolve_name(call.func.id, scope)
+
+    def parameter_nodes(function: ast.AST) -> list[ast.arg]:
+        arguments = function.args
+        optional = [item for item in (arguments.vararg, arguments.kwarg) if item is not None]
+        return [*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs, *optional]
+
+    def bind_call(call: ast.Call, function: ast.AST) -> tuple[dict[str, ast.AST], bool]:
+        params = parameter_nodes(function)
+        bound: dict[str, ast.AST] = {}
+        positional = [*function.args.posonlyargs, *function.args.args]
+        ambiguous = False
+        extra_positional: list[ast.expr] = []
+        for index, actual in enumerate(call.args):
+            if index >= len(positional):
+                if function.args.vararg is None:
+                    ambiguous = True
+                else:
+                    extra_positional.append(actual.value if isinstance(actual, ast.Starred) else actual)
+                continue
+            if isinstance(actual, ast.Starred):
+                ambiguous = True
+                continue
+            bound[positional[index].arg] = actual
+        if extra_positional and function.args.vararg is not None:
+            bound[function.args.vararg.arg] = ast.Tuple(elts=extra_positional, ctx=ast.Load())
+        names = {item.arg for item in params}
+        extra_keywords: list[ast.expr] = []
+        for keyword in call.keywords:
+            if keyword.arg is None:
+                if function.args.kwarg is None:
+                    ambiguous = True
+                else:
+                    extra_keywords.append(keyword.value)
+                continue
+            if keyword.arg not in names or keyword.arg in bound:
+                if function.args.kwarg is None:
+                    ambiguous = True
+                else:
+                    extra_keywords.append(keyword.value)
+                continue
+            bound[keyword.arg] = keyword.value
+        if extra_keywords and function.args.kwarg is not None:
+            bound[function.args.kwarg.arg] = ast.Dict(keys=[None] * len(extra_keywords), values=extra_keywords)
+        defaults = [None] * (len(positional) - len(function.args.defaults)) + list(function.args.defaults)
+        for parameter, default in zip(positional, defaults):
+            if parameter.arg not in bound and default is not None:
+                bound[parameter.arg] = default
+        for parameter, default in zip(function.args.kwonlyargs, function.args.kw_defaults):
+            if parameter.arg not in bound and default is not None:
+                bound[parameter.arg] = default
+        return bound, ambiguous
+
+    def fact_from_text(value: str | None) -> _PathFact:
+        return _PathFact(text=value,
+                         protected=value is not None and _protected_path_text(value))
+
+    def component_is_safe(value: str | None) -> bool:
+        if value is None or not value or value.startswith(("/", "\\")) or ntpath.splitdrive(value)[0]:
+            return False
+        return all(part not in ("", "..") for part in value.replace("\\", "/").split("/"))
+
+    def join_facts(left: _PathFact, right: _PathFact) -> _PathFact:
+        text = None
+        if left.text is not None and right.text is not None:
+            text = (right.text if right.text.startswith(("/", "\\")) or ntpath.splitdrive(right.text)[0]
+                    else left.text.rstrip("/\\") + "/" + right.text.lstrip("/\\"))
+        origin = left.temporary_origin or right.temporary_origin
+        contained = (left.temporary_origin and left.contained and component_is_safe(right.text)
+                     and not right.temporary_origin)
+        return _PathFact(text=text,
+                         protected=left.protected or right.protected
+                         or (text is not None and _protected_path_text(text)),
+                         temporary_origin=origin, contained=contained)
+
+    def bind_facts(call: ast.Call, function: ast.AST,
+                   caller_env: dict[str, _PathFact], depth: int,
+                   visiting: frozenset[ast.AST]) -> tuple[dict[str, _PathFact], bool]:
+        bound_nodes, ambiguous = bind_call(call, function)
+        facts = {name: eval_expr(expr, caller_env, scope_of(call), depth + 1, visiting)
+                 for name, expr in bound_nodes.items()}
+        return facts, ambiguous
+
+    harmless_value_calls = {"str", "repr", "len", "bool", "bytes", "tuple", "list", "dict", "set",
+                            "sorted", "min", "max", "sum", "any", "all", "enumerate", "zip", "range",
+                            "iter", "next", "print", "format", "hash", "id", "isinstance", "getattr",
+                            "hasattr", "compile", "json.dumps", "SystemExit", "RuntimeError", "ValueError",
+                            "TypeError", "OSError", "AssertionError", "sha1", "sha256", "sha512", "dirname",
+                            "basename", "normpath", "commonpath"}
+    harmless_value_methods = {"startswith", "endswith", "split", "rsplit", "replace", "strip", "rstrip",
+                              "lstrip", "lower", "upper", "casefold", "encode", "decode", "format",
+                              "search", "match", "fullmatch", "find", "count", "get", "items", "keys",
+                              "values", "append", "extend", "add", "update", "copy", "join"}
+    source_lines = source.splitlines(keepends=True)
+
+    def needs_decoded_flow() -> bool:
+        protected_names = {name for name, fact in module_env.items() if fact.protected}
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+                continue
+            if _protected_path_text(node.value):
+                raw = ast.get_source_segment(source, node) or ""
+                if not SPELLINGS.search(raw):
+                    return True
+
+        # A path may become sensitive only after finite pieces are joined, e.g.
+        # Path("\\x2eplanning") / "phases". Detect the composed value before
+        # deciding that the decoded-flow pass is unnecessary.
+        for node in ast.walk(tree):
+            folded = _literal_path_string(node, literal_names_by_scope.get(scope_of(node), {}))
+            raw = ast.get_source_segment(source, node) or ""
+            if folded is not None and _protected_path_text(folded) and not SPELLINGS.search(raw):
+                return True
+
+        def names_in(node: ast.AST) -> set[str]:
+            return {item.id for item in ast.walk(node) if isinstance(item, ast.Name)}
+
+        tainted_names_cache: dict[ast.AST, set[str]] = {}
+
+        def tainted_scope_names(function: ast.AST) -> set[str]:
+            if function in tainted_names_cache:
+                return tainted_names_cache[function]
+            tainted = set(protected_names)
+            changed = True
+            while changed:
+                changed = False
+                for statement in direct_scope_nodes(function):
+                    if isinstance(statement, (ast.For, ast.AsyncFor)) \
+                            and names_in(statement.iter).intersection(tainted):
+                        before = len(tainted)
+                        tainted.update(_assigned_names(statement.target))
+                        changed |= len(tainted) != before
+                    if not isinstance(statement, (ast.Assign, ast.AnnAssign)):
+                        continue
+                    value = statement.value
+                    if _has_path_spelling(value, source_lines, module_strings) \
+                            or names_in(value).intersection(tainted):
+                        targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+                        for target in targets:
+                            before = len(tainted)
+                            tainted.update(_assigned_names(target))
+                            changed |= len(tainted) != before
+            tainted_names_cache[function] = tainted
+            return tainted
+
+        def carries(node: ast.AST, tainted: set[str]) -> bool:
+            return (_has_path_spelling(node, source_lines, module_strings)
+                    or bool(names_in(node).intersection(tainted)))
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or _reader_target(node) is None:
+                continue
+            scope = scope_of(node)
+            if scope is not None and (scope.name == "self_test" or scope.name.startswith("self_test_")):
+                continue
+            tainted = set(protected_names)
+            if scope is not None:
+                tainted |= tainted_scope_names(scope)
+            if carries(_reader_target(node), tainted):
+                return True
+
+        def is_path_component(node: ast.AST) -> bool:
+            current = node
+            while current in parents:
+                parent = parents[current]
+                if isinstance(parent, ast.BinOp) and isinstance(parent.op, ast.Div) and parent.right is current:
+                    return True
+                if isinstance(parent, ast.Call):
+                    args = list(parent.args)
+                    if (isinstance(parent.func, ast.Name) and parent.func.id in
+                            {"Path", "PurePath", "PosixPath", "WindowsPath"} and current in args[1:]):
+                        return True
+                    if (isinstance(parent.func, ast.Attribute) and parent.func.attr == "join"
+                            and current in args[1:]):
+                        return True
+                current = parent
+            return False
+
+        def helper_can_read(function: ast.AST, tainted_params: set[str],
+                            seen: frozenset[ast.AST] = frozenset()) -> bool:
+            if function in seen:
+                return bool(tainted_params)
+            tainted = tainted_scope_names(function) | tainted_params
+            for node in direct_scope_nodes(function):
+                if not isinstance(node, ast.Call):
+                    continue
+                target = _reader_target(node)
+                if target is not None and carries(target, tainted):
+                    return True
+                callee, ambiguous = resolve_call(node, scope_of(node))
+                if callee is not None:
+                    bound, binding_ambiguous = bind_call(node, callee)
+                    if ambiguous or binding_ambiguous:
+                        if any(carries(actual, tainted) for actual in bound.values()):
+                            return True
+                        continue
+                    forwarded = {parameter for parameter, actual in bound.items() if carries(actual, tainted)}
+                    if forwarded and helper_can_read(callee, forwarded, seen | {function}):
+                        return True
+                elif any(carries(actual, tainted) for actual in [*node.args, *(item.value for item in node.keywords)]):
+                    name = (node.func.id if isinstance(node.func, ast.Name) else
+                            node.func.attr if isinstance(node.func, ast.Attribute) else "dynamic")
+                    if name not in harmless_value_calls and name not in harmless_value_methods and name != "git_run":
+                        return True
+            return False
+
+        for function in functions:
+            nodes = direct_scope_nodes(function)
+            parameter_names = {item.arg for item in parameter_nodes(function)}
+            reader_uses_parameter = any(isinstance(node, ast.Call) and _reader_target(node) is not None
+                                        and bool(names_in(_reader_target(node)).intersection(parameter_names))
+                                        for node in nodes)
+            for default in [*function.args.defaults, *function.args.kw_defaults]:
+                if default is not None and carries(default, protected_names) and reader_uses_parameter:
+                    return True
+            local_protected = any(isinstance(node, ast.Name) and node.id in protected_names for node in nodes)
+            if local_protected:
+                for node in nodes:
+                    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                        normalized = node.value.replace("\\", "/")
+                        if is_path_component(node) and (normalized == ".." or
+                                                        (normalized != "/" and
+                                                         (normalized.startswith("/")
+                                                          or ntpath.splitdrive(node.value)[0]))):
+                            return True
+                    if isinstance(node, ast.Call):
+                        if (isinstance(node.func, ast.Attribute) and node.func.attr == "relpath") or (
+                                isinstance(node.func, ast.Attribute) and node.func.attr == "join"
+                                and isinstance(node.func.value, ast.Attribute)
+                                and node.func.value.attr == "path"):
+                            return True
+            has_temp_scope = any(isinstance(node, ast.With) and any(
+                _is_temporary_directory_context(item.context_expr) for item in node.items) for node in nodes)
+            if local_protected and has_temp_scope:
+                if any(isinstance(node, (ast.Assign, ast.AnnAssign))
+                       and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
+                       and node.value.func.id == "Path" and node.value.args
+                       and isinstance(node.value.args[0], ast.Name) and node.value.args[0].id == "ROOT"
+                       and bool(_assigned_names(node.targets[0] if isinstance(node, ast.Assign) else node.target)
+                                .intersection({"base", "root", "repo"})) for node in nodes):
+                    return True
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            scope = scope_of(node)
+            tainted = set(protected_names)
+            if scope is not None:
+                tainted |= tainted_scope_names(scope)
+            if any(carries(actual, tainted) for actual in [*node.args, *(item.value for item in node.keywords)]):
+                function, ambiguous = resolve_call(node, scope)
+                actuals = [*node.args, *(item.value for item in node.keywords)]
+                if function is None:
+                    name = (node.func.id if isinstance(node.func, ast.Name) else
+                            node.func.attr if isinstance(node.func, ast.Attribute) else "dynamic")
+                    if ambiguous or name not in harmless_value_calls | harmless_value_methods | {"git_run"}:
+                        return True
+                else:
+                    bound, binding_ambiguous = bind_call(node, function)
+                    forwarded = {parameter for parameter, actual in bound.items() if carries(actual, tainted)}
+                    if binding_ambiguous or (forwarded and helper_can_read(function, forwarded)):
+                        return True
+        if any(function in path_builders and any(isinstance(node, ast.Call)
+                                                 and isinstance(node.func, ast.Attribute)
+                                                 and node.func.attr == "relpath"
+                                                 for node in direct_scope_nodes(function))
+               for function in functions):
+            return True
+        for function in functions:
+            nodes = direct_scope_nodes(function)
+            if not any(isinstance(node, ast.With) and any(_is_temporary_directory_context(item.context_expr)
+                                                          for item in node.items) for node in nodes):
+                continue
+            builder_targets = set()
+            for node in nodes:
+                if isinstance(node, (ast.Assign, ast.AnnAssign)) and isinstance(node.value, ast.Call) \
+                        and isinstance(node.value.func, ast.Name) \
+                        and any(item.name == node.value.func.id for item in path_builders):
+                    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                    builder_targets.update(set().union(*(_assigned_names(target) for target in targets)))
+            if builder_targets and any(isinstance(node, ast.Call) and _reader_target(node) is not None
+                                       and bool(names_in(_reader_target(node)).intersection(builder_targets))
+                                       for node in nodes):
+                return True
+        return False
+
+    if not needs_decoded_flow():
+        return
+
+    analyzed_contexts: set[tuple[object, ...]] = set()
+    analyzed_results: dict[tuple[object, ...], _PathFact] = {}
+    active_functions: set[ast.AST] = set()
+    call_budget = 0
+
+    def eval_expr(node: ast.AST, env: dict[str, _PathFact], scope: ast.AST | None,
+                  depth: int, visiting: frozenset[ast.AST]) -> _PathFact:
+        if depth > 18:
+            return _merge_path_facts(*[env.get(name, module_env.get(name, _PathFact()))
+                                       for name in _assigned_names(node)])
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return fact_from_text(node.value)
+        if isinstance(node, ast.Name):
+            if node.id in env:
+                return env[node.id]
+            if node.id in module_env:
+                return module_env[node.id]
+            if node.id in {"Path", "PurePath", "PosixPath", "WindowsPath"}:
+                return _PathFact(callable_name=node.id)
+            function, ambiguous = resolve_name(node.id, scope)
+            if function is not None:
+                return _PathFact(callable_target=function)
+            if ambiguous:
+                return _PathFact()
+            return _PathFact()
+        if isinstance(node, ast.JoinedStr):
+            value = _literal_string(node, {name: fact.text for name, fact in env.items() if fact.text is not None}
+                                     | module_strings)
+            inherited = _merge_path_facts(*[eval_expr(item.value, env, scope, depth + 1, visiting)
+                                            for item in node.values if isinstance(item, ast.FormattedValue)])
+            return _PathFact(text=value or inherited.text,
+                             protected=inherited.protected or (value is not None and _protected_path_text(value)),
+                             temporary_origin=inherited.temporary_origin,
+                             contained=inherited.contained)
+        if isinstance(node, ast.BinOp):
+            left = eval_expr(node.left, env, scope, depth + 1, visiting)
+            right = eval_expr(node.right, env, scope, depth + 1, visiting)
+            left_text = left.text
+            right_text = right.text
+            if isinstance(node.op, ast.Add):
+                text = (left_text + right_text) if left_text is not None and right_text is not None else None
+                return _PathFact(text=text,
+                                 protected=left.protected or right.protected
+                                 or (text is not None and _protected_path_text(text)),
+                                 temporary_origin=left.temporary_origin or right.temporary_origin,
+                                 contained=(left.contained and right.contained
+                                            if left.temporary_origin or right.temporary_origin else False))
+            if isinstance(node.op, ast.Div):
+                return join_facts(left, right)
+            return _merge_path_facts(left, right)
+        if isinstance(node, ast.Subscript):
+            base = eval_expr(node.value, env, scope, depth + 1, visiting)
+            literal = _literal_string(node, {name: fact.text for name, fact in env.items() if fact.text is not None}
+                                      | module_strings)
+            if literal is not None:
+                return fact_from_text(literal)
+            return base
+        if isinstance(node, ast.Call):
+            reader_target = _reader_target(node)
+            if reader_target is not None:
+                target_fact = eval_expr(reader_target, env, scope, depth + 1, visiting)
+                if target_fact.protected:
+                    owner = scope.name if scope is not None else "module"
+                    if target_fact.temporary_origin and not target_fact.contained:
+                        raise LintError("REJECT temporary-path-containment: %s has an unproven temporary path component"
+                                        % owner)
+                    if not target_fact.temporary_origin:
+                        raise LintError("REJECT live-phase-path-reader: %s reads a protected path outside a verified fixture root"
+                                        % owner)
+            if ((isinstance(node.func, ast.Name) and node.func.id in
+                 {"Path", "PurePath", "PosixPath", "WindowsPath"})
+                    or (isinstance(node.func, ast.Attribute) and node.func.attr in
+                        {"Path", "PurePath", "PosixPath", "WindowsPath"})) and node.args:
+                result = eval_expr(node.args[0], env, scope, depth + 1, visiting)
+                for component in node.args[1:]:
+                    result = join_facts(result, eval_expr(component, env, scope, depth + 1, visiting))
+                return result
+            if isinstance(node.func, ast.Name):
+                constructor = env.get(node.func.id, _PathFact()).callable_name
+                if constructor in {"Path", "PurePath", "PosixPath", "WindowsPath"} and node.args:
+                    result = eval_expr(node.args[0], env, scope, depth + 1, visiting)
+                    for component in node.args[1:]:
+                        result = join_facts(result, eval_expr(component, env, scope, depth + 1, visiting))
+                    return result
+            if (isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Attribute)
+                    and isinstance(node.func.value.value, ast.Name) and node.func.value.value.id == "os"
+                    and node.func.value.attr == "path" and node.func.attr == "join" and node.args):
+                result = eval_expr(node.args[0], env, scope, depth + 1, visiting)
+                for component in node.args[1:]:
+                    result = join_facts(result, eval_expr(component, env, scope, depth + 1, visiting))
+                return result
+            if isinstance(node.func, ast.Attribute) and node.func.attr == "joinpath" and node.args:
+                result = eval_expr(node.func.value, env, scope, depth + 1, visiting)
+                for component in node.args:
+                    result = join_facts(result, eval_expr(component, env, scope, depth + 1, visiting))
+                return result
+            if (isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Attribute)
+                    and isinstance(node.func.value.value, ast.Name) and node.func.value.value.id == "os"
+                    and node.func.value.attr == "path" and node.func.attr == "relpath"):
+                facts = [eval_expr(item, env, scope, depth + 1, visiting) for item in node.args]
+                return _PathFact(protected=any(item.protected for item in facts),
+                                 temporary_origin=any(item.temporary_origin for item in facts),
+                                 contained=False)
+            if isinstance(node.func, ast.Attribute):
+                eval_expr(node.func.value, env, scope, depth + 1, visiting)
+            function, ambiguous = resolve_call(node, scope, env)
+            actual_facts = [eval_expr(item, env, scope, depth + 1, visiting) for item in node.args]
+            actual_facts += [eval_expr(item.value, env, scope, depth + 1, visiting) for item in node.keywords]
+            if function is not None:
+                # git_run is the reviewed immutable Git-object adapter. Its path arguments are
+                # revision/tree operands, not filesystem readers; preserve this narrow seam.
+                if function.name == "git_run":
+                    return _merge_path_facts(*actual_facts)
+                closure_has_path = any(name in function_used_names.get(function, set())
+                                       and (item.protected or item.temporary_origin)
+                                       for name, item in env.items())
+                if any(item.protected or item.temporary_origin for item in actual_facts) or (
+                        function_parent[function] is not None and closure_has_path):
+                    nonlocal call_budget
+                    call_budget += 1
+                    if call_budget > 4000:
+                        raise LintError("REJECT live-phase-path-flow: bounded helper analysis exhausted")
+                    facts, binding_ambiguous = bind_facts(node, function, env, depth, visiting)
+                    if binding_ambiguous or ambiguous:
+                        if any(item.protected for item in actual_facts):
+                            detail = "helper resolution" if ambiguous else "argument binding"
+                            raise LintError("REJECT live-phase-path-flow: ambiguous protected-path %s at line %d"
+                                            % (detail, node.lineno))
+                        return _PathFact(temporary_origin=any(item.temporary_origin for item in actual_facts),
+                                         contained=False)
+                    if function in visiting:
+                        if any(item.protected or item.temporary_origin for item in facts.values()):
+                            raise LintError("REJECT live-phase-path-flow: recursive protected-path helper")
+                        return _PathFact(temporary_origin=any(item.temporary_origin for item in facts.values()),
+                                         contained=False)
+                    closure_state = tuple(sorted((name, env[name].text, env[name].protected,
+                                                  env[name].temporary_origin, env[name].contained)
+                                                 for name in function_used_names.get(function, set())
+                                                 if name in env))
+                    key = (id(function), tuple(sorted((name, fact.text, fact.protected,
+                                                       fact.temporary_origin, fact.contained)
+                                                      for name, fact in facts.items())), closure_state)
+                    if key in analyzed_contexts:
+                        return analyzed_results.get(key, _PathFact())
+                    analyzed_contexts.add(key)
+                    try:
+                        returned = analyze_function(function, facts, env, depth + 1, visiting | {function})
+                    except LintError as error:
+                        raise LintError("%s via helper call at line %d" % (error, node.lineno)) from None
+                    analyzed_results[key] = returned
+                    return returned
+            if ambiguous and any(item.protected for item in actual_facts):
+                raise LintError("REJECT live-phase-path-flow: ambiguous protected-path helper binding")
+            if any(item.protected for item in actual_facts):
+                if isinstance(node.func, ast.Name):
+                    callee_name = node.func.id
+                elif isinstance(node.func, ast.Attribute):
+                    callee_name = node.func.attr
+                else:
+                    callee_name = "dynamic"
+                qualified = ("json.dumps" if isinstance(node.func, ast.Attribute)
+                             and isinstance(node.func.value, ast.Name) and node.func.value.id == "json"
+                             else callee_name)
+                if qualified not in harmless_value_calls and callee_name not in harmless_value_methods:
+                    raise LintError("REJECT live-phase-path-flow: unclassified protected-path helper %s at line %d"
+                                    % (qualified, node.lineno))
+            elif any(item.temporary_origin for item in actual_facts):
+                if isinstance(node.func, ast.Name):
+                    callee_name = node.func.id
+                elif isinstance(node.func, ast.Attribute):
+                    callee_name = node.func.attr
+                else:
+                    callee_name = "dynamic"
+                if callee_name not in harmless_value_calls and callee_name not in harmless_value_methods:
+                    raise LintError("REJECT temporary-path-containment: unclassified temporary-path helper %s at line %d"
+                                    % (callee_name, node.lineno))
+            return _merge_path_facts(*actual_facts)
+        if isinstance(node, ast.Attribute):
+            return eval_expr(node.value, env, scope, depth + 1, visiting)
+        if isinstance(node, ast.UnaryOp):
+            return eval_expr(node.operand, env, scope, depth + 1, visiting)
+        return _merge_path_facts(*[eval_expr(item, env, scope, depth + 1, visiting)
+                                   for item in ast.iter_child_nodes(node)])
+
+    def merge_env(target: dict[str, _PathFact], branches: list[dict[str, _PathFact]]) -> None:
+        names = set().union(*(branch.keys() for branch in branches))
+        for name in names:
+            values = [branch.get(name, target.get(name, module_env.get(name, _PathFact()))) for branch in branches]
+            text = values[0].text if values and all(item.text == values[0].text for item in values) else None
+            origin = any(item.temporary_origin for item in values)
+            target[name] = _PathFact(text=text,
+                                     protected=any(item.protected for item in values),
+                                     temporary_origin=origin,
+                                     contained=origin and all(not item.temporary_origin or item.contained
+                                                              for item in values))
+
+    path_builder_names = {function.name for function in path_builders}
+
+    def statement_relevant(statement: ast.stmt, env: dict[str, _PathFact], function: ast.AST | None) -> bool:
+        if function in path_builders:
+            return True
+        if isinstance(statement, (ast.Assign, ast.AnnAssign)):
+            targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+            assigned = set().union(*(_assigned_names(target) for target in targets))
+            if assigned.intersection(path_flow_names_by_scope.get(function, set())):
+                return True
+        literal_names = {name: fact.text for name, fact in {**module_env, **env}.items()
+                         if fact.text is not None}
+        if isinstance(statement, (ast.Assign, ast.AnnAssign)):
+            value = statement.value
+            if isinstance(value, ast.Name) and value.id in {"Path", "PurePath", "PosixPath", "WindowsPath"}:
+                return True
+            if isinstance(value, ast.Name) and resolve_name(value.id, function)[0] is not None:
+                return True
+        for node in ast.walk(statement):
+            folded_path = _literal_path_string(node, literal_names)
+            if folded_path is not None and _protected_path_text(folded_path):
+                return True
+            if isinstance(node, ast.Constant) and isinstance(node.value, str) and _protected_path_text(node.value):
+                return True
+            if isinstance(node, ast.Name):
+                fact = env.get(node.id, module_env.get(node.id, _PathFact()))
+                if fact.protected or fact.temporary_origin:
+                    return True
+            if isinstance(node, ast.Call):
+                if _reader_target(node) is not None:
+                    return True
+                if isinstance(node.func, ast.Name) and node.func.id in path_builder_names:
+                    return True
+        return False
+
+    def process_block(statements: list[ast.stmt], env: dict[str, _PathFact], function: ast.AST | None,
+                      depth: int, visiting: frozenset[ast.AST], returns: list[_PathFact]) -> None:
+        scope = function
+        for statement in statements:
+            if not statement_relevant(statement, env, function):
+                continue
+            if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                continue
+            if isinstance(statement, ast.Assign):
+                fact = eval_expr(statement.value, env, scope, depth + 1, visiting)
+                for target in statement.targets:
+                    for name in _assigned_names(target):
+                        old = env.get(name, _PathFact())
+                        if old.temporary_origin and not fact.temporary_origin:
+                            fact = _PathFact(text=fact.text, protected=fact.protected,
+                                             temporary_origin=True, contained=False)
+                        env[name] = fact
+            elif isinstance(statement, ast.AnnAssign) and statement.value is not None:
+                fact = eval_expr(statement.value, env, scope, depth + 1, visiting)
+                for name in _assigned_names(statement.target):
+                    old = env.get(name, _PathFact())
+                    env[name] = (_PathFact(text=fact.text, protected=fact.protected,
+                                           temporary_origin=True, contained=False)
+                                 if old.temporary_origin and not fact.temporary_origin else fact)
+            elif isinstance(statement, (ast.With, ast.AsyncWith)):
+                for item in statement.items:
+                    fact = (_PathFact(temporary_origin=True, contained=True)
+                            if _is_temporary_directory_context(item.context_expr) else
+                            eval_expr(item.context_expr, env, scope, depth + 1, visiting))
+                    if item.optional_vars is not None:
+                        for name in _assigned_names(item.optional_vars):
+                            env[name] = fact
+                process_block(statement.body, env, function, depth + 1, visiting, returns)
+            elif isinstance(statement, ast.If):
+                eval_expr(statement.test, env, scope, depth + 1, visiting)
+                branches = []
+                for body in (statement.body, statement.orelse):
+                    branch = dict(env)
+                    process_block(body, branch, function, depth + 1, visiting, returns)
+                    branches.append(branch)
+                merge_env(env, branches)
+            elif isinstance(statement, (ast.For, ast.AsyncFor, ast.While)):
+                test = statement.iter if isinstance(statement, (ast.For, ast.AsyncFor)) else statement.test
+                iterable_fact = eval_expr(test, env, scope, depth + 1, visiting)
+                branch = dict(env)
+                if isinstance(statement, (ast.For, ast.AsyncFor)):
+                    for name in _assigned_names(statement.target):
+                        branch[name] = iterable_fact
+                process_block(statement.body, branch, function, depth + 1, visiting, returns)
+                merge_env(env, [env, branch])
+                if statement.orelse:
+                    process_block(statement.orelse, env, function, depth + 1, visiting, returns)
+            elif isinstance(statement, (ast.Try, getattr(ast, "TryStar", ast.Try))):
+                branch = dict(env)
+                process_block(statement.body, branch, function, depth + 1, visiting, returns)
+                branches = [branch]
+                for handler in statement.handlers:
+                    handler_env = dict(env)
+                    process_block(handler.body, handler_env, function, depth + 1, visiting, returns)
+                    branches.append(handler_env)
+                merge_env(env, branches)
+                process_block(statement.orelse, env, function, depth + 1, visiting, returns)
+                process_block(statement.finalbody, env, function, depth + 1, visiting, returns)
+            elif isinstance(statement, ast.Return):
+                fact = eval_expr(statement.value, env, scope, depth + 1, visiting) if statement.value else _PathFact()
+                returns.append(fact)
+            elif isinstance(statement, ast.Expr):
+                eval_expr(statement.value, env, scope, depth + 1, visiting)
+            else:
+                # Inspect expressions embedded in declarations/assertions without interpreting code.
+                for child in ast.iter_child_nodes(statement):
+                    if isinstance(child, ast.expr):
+                        eval_expr(child, env, scope, depth + 1, visiting)
+
+    def analyze_function(function: ast.AST, arguments: dict[str, _PathFact],
+                         closure: dict[str, _PathFact], depth: int,
+                         visiting: frozenset[ast.AST]) -> _PathFact:
+        if function in active_functions and any(item.protected for item in arguments.values()):
+            raise LintError("REJECT live-phase-path-flow: recursive protected-path helper")
+        active_functions.add(function)
+        env = dict(module_env)
+        env.update(closure)
+        env.update(arguments)
+        for name in roots_by_function.get(function.name, set()):
+            env.setdefault(name, _PathFact(temporary_origin=True, contained=True))
+        positional = [*function.args.posonlyargs, *function.args.args]
+        defaults = [None] * (len(positional) - len(function.args.defaults)) + list(function.args.defaults)
+        for parameter, default in zip(positional, defaults):
+            if parameter.arg not in arguments and default is not None:
+                env[parameter.arg] = eval_expr(default, env, function, depth + 1, visiting)
+        for parameter, default in zip(function.args.kwonlyargs, function.args.kw_defaults):
+            if parameter.arg not in arguments and default is not None:
+                env[parameter.arg] = eval_expr(default, env, function, depth + 1, visiting)
+        for parameter in parameter_nodes(function):
+            env.setdefault(parameter.arg, _PathFact())
+        returns: list[_PathFact] = []
+
+        # Reader checks run against the same evolving bindings used for helper return analysis.
+        process_block(function.body, env, function, depth, visiting, returns)
+        # A helper's own component must be proven when its incoming root is proven. An
+        # unresolved caller component remains unknown (fixture labels may come from a bounded
+        # loop) and is not promoted into proof of either escape or safety.
+        if function in path_builders and any(fact.temporary_origin and fact.contained
+                                             for fact in arguments.values()):
+            for result in returns:
+                if result.temporary_origin and not result.contained:
+                    facts = [(name, item.text, item.temporary_origin, item.contained)
+                             for name, item in arguments.items()]
+                    raise LintError("REJECT temporary-path-containment: %s returns an escaped temporary path (text=%r args=%r)"
+                                    % (function.name, result.text, facts))
+        active_functions.discard(function)
+        return _merge_path_facts(*returns) if returns else _PathFact()
+
+    # Run each declared function once as an entry point; relevant helper calls are followed with
+    # their local argument and closure facts. This catches direct aliases plus positional,
+    # keyword, default and nested helper flow while leaving unrelated functions as unknown.
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or scope_of(node) is not None:
+            continue
+        actuals = [eval_expr(item, module_env, None, 0, frozenset()) for item in node.args]
+        actuals.extend(eval_expr(item.value, module_env, None, 0, frozenset()) for item in node.keywords)
+        if _reader_target(node) is not None or any(item.protected or item.temporary_origin for item in actuals):
+            eval_expr(node, module_env, None, 0, frozenset())
+
+    for function in functions:
+        if function_parent[function] is not None:
+            continue
+        if function.name == "self_test" or function.name.startswith("self_test_"):
+            # These large test drivers are already covered by the lexical/fixture-root pass.
+            # Their newly appended causal fixtures are separate injected_* functions below.
+            continue
+        body_nodes = direct_scope_nodes(function)
+        positional = [*function.args.posonlyargs, *function.args.args]
+        symbolic_root_builder = False
+        if function in path_builders and positional and positional[0].arg == "root":
+            other_parameters = {item.arg for item in parameter_nodes(function)} - {positional[0].arg}
+            dynamic_return_component = any(isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)
+                                           and any(isinstance(child, ast.Name) and child.id in other_parameters
+                                                   for child in ast.walk(node.right))
+                                           for node in body_nodes)
+            symbolic_root_builder = not dynamic_return_component
+        relevant = (function.name in roots_by_function
+                    or symbolic_root_builder
+                    or any((folded := _literal_path_string(node,
+                                                           literal_names_by_scope.get(function, {}))) is not None
+                           and _protected_path_text(folded) for node in body_nodes)
+                    or any(isinstance(node, ast.Name) and module_env.get(node.id, _PathFact()).protected
+                           for node in body_nodes)
+                    or any(isinstance(node, ast.Constant) and isinstance(node.value, str)
+                           and _protected_path_text(node.value) for node in body_nodes)
+                    or (any(isinstance(node, ast.With) and any(_is_temporary_directory_context(item.context_expr)
+                                                              for item in node.items) for node in body_nodes)
+                        and any(isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                                and any(builder.name == node.func.id for builder in path_builders)
+                                for node in body_nodes)))
+        if not relevant:
+            continue
+        seed = {name: _PathFact(temporary_origin=True, contained=True)
+                for name in roots_by_function.get(function.name, set())}
+        if symbolic_root_builder and positional:
+            analyze_function(function, {positional[0].arg: _PathFact(temporary_origin=True, contained=True)},
+                             seed, 0, frozenset({function}))
+            continue
+        analyze_function(function, {}, seed, 0, frozenset({function}))
 
 
 def _is_temporary_directory_context(node: ast.AST) -> bool:
@@ -513,6 +1509,7 @@ def validate_planning_hygiene_source(source: str) -> None:
         raise LintError("REJECT planning-path-site-missing: %s" % missing[0][0])
 
     roots = _fixture_root_contract(tree)
+    _validate_decoded_path_flow(source, tree, roots)
     _validate_path_readers(source, tree, roots)
 
 
@@ -562,6 +1559,28 @@ def self_test_planning_hygiene_path_contract() -> int:
             return
         raise LintError("%s: unsafe path-use mutation was accepted" % label)
 
+    def validate_decoded_flow(candidate: str) -> None:
+        try:
+            tree = ast.parse(candidate, filename=PLANNING_HYGIENE_FILE)
+        except (SyntaxError, IndentationError) as error:
+            raise LintError("REJECT planning-path-parse: %s" % error.__class__.__name__) from None
+        roots = _fixture_root_contract(tree)
+        _validate_decoded_path_flow(candidate, tree, roots)
+
+    def expect_flow_rejected(label: str, candidate: str, reason: str, same_count: bool = False) -> None:
+        nonlocal controls
+        if same_count:
+            need(len(list(SPELLINGS.finditer(candidate))) == original_lexical_count,
+                 "%s: mutation changed the lexical hit count" % label)
+        try:
+            validate_decoded_flow(candidate)
+        except LintError as error:
+            need(str(error).startswith(reason), "%s: refused for %r instead of %s"
+                 % (label, str(error), reason))
+            controls += 1
+            return
+        raise LintError("%s: unsafe path-use mutation was accepted" % label)
+
     extra_path = source + "\nUNCLASSIFIED_PATH = " + path_token + "\n"
     expect_rejected("unclassified path literal", extra_path, "REJECT planning-path-unclassified")
 
@@ -596,7 +1615,7 @@ def injected_contained_fixture_reader():
         return path.read_text(encoding="utf-8")
 '''
     try:
-        validate_planning_hygiene_source(contained_helper)
+        validate_decoded_flow(contained_helper)
     except LintError as error:
         raise LintError("contained fixture helper positive: refused: %s" % error) from None
     controls += 1
@@ -607,10 +1626,31 @@ def injected_contained_fixture_reader():
 def injected_escaped_reader():
     return Path("\x2eplanning/phases/private.md").read_text(encoding="utf-8")
 '''),
+        ("unicode escaped path reader",
+         r'''
+def injected_unicode_escaped_reader():
+    return Path("\u002eplanning/phases/private.md").read_bytes()
+'''),
         ("adjacent escaped path fragments",
          r'''
 def injected_adjacent_reader():
     return Path("\x2e" "planning/" "phases/private.md").read_text(encoding="utf-8")
+'''),
+        ("escaped path fragments joined with Path division",
+         r'''
+def injected_fragment_join_reader():
+    return (Path("\x2eplanning") / "phases/private.md").read_text(encoding="utf-8")
+'''),
+        ("escaped path fragments joined by constructor",
+         r'''
+def injected_fragment_constructor_reader():
+    return Path("\x2eplanning", "phases/private.md").read_text(encoding="utf-8")
+'''),
+        ("escaped path fragments through a local alias",
+         r'''
+def injected_fragment_alias_reader():
+    fragment = "\x2eplanning"
+    return (Path(fragment) / "phases/private.md").read_text(encoding="utf-8")
 '''),
         ("PHASES_AT_REV alias reader",
          "\ndef injected_alias_reader():\n    alias = PHASES_AT_REV\n    return Path(alias).read_text(encoding=\"utf-8\")\n"),
@@ -625,6 +1665,49 @@ def injected_helper_forwarder(path):
 def injected_helper_caller():
     alias = PHASES_AT_REV
     return injected_helper_forwarder(alias)
+'''),
+        ("default helper argument reader",
+         r'''
+def injected_default_reader(path=PHASES_AT_REV):
+    return Path(path).read_bytes()
+
+def injected_default_caller():
+    return injected_default_reader()
+'''),
+        ("keyword open helper reader",
+         r'''
+def injected_open_helper(path):
+    return open(path, encoding="utf-8").read()
+
+def injected_open_caller():
+    return injected_open_helper(path=PHASES_AT_REV)
+'''),
+        ("nested traversal helper reader",
+         r'''
+def injected_traversal_helper(path):
+    return Path(path).rglob("*")
+
+def injected_traversal_caller():
+    return injected_traversal_helper(PHASES_AT_REV)
+'''),
+        ("aliased helper reader",
+         r'''
+def injected_alias_reader(path):
+    return Path(path).read_text(encoding="utf-8")
+
+def injected_alias_caller():
+    reader = injected_alias_reader
+    return reader(PHASES_AT_REV)
+'''),
+        ("recursive protected helper",
+         r'''
+def injected_recursive_reader(path):
+    if path:
+        return injected_recursive_reader(path)
+    return Path(path).read_text(encoding="utf-8")
+
+def injected_recursive_caller():
+    return injected_recursive_reader(PHASES_AT_REV)
 '''),
         ("approved path passed to open",
          "\ndef injected_open_reader():\n    return open(V04_GAP_REPORT_PATH, encoding=\"utf-8\").read()\n"),
@@ -660,6 +1743,40 @@ def injected_absolute_escape_reader():
         escaped = base / Path("/outside") / PHASES_AT_REV
         return escaped.read_text(encoding="utf-8")
 '''),
+        ("absolute Path constructor escapes temporary root",
+         r'''
+def injected_absolute_constructor_escape_reader():
+    with tempfile.TemporaryDirectory() as scratch:
+        base = Path(scratch)
+        escaped = Path(base, "/outside", PHASES_AT_REV)
+        return escaped.read_text(encoding="utf-8")
+'''),
+        ("dynamic join escapes temporary root",
+         r'''
+def injected_dynamic_join_escape_reader():
+    with tempfile.TemporaryDirectory() as scratch:
+        base = Path(scratch)
+        repo = base / "rev-repo"
+        escaped = os.path.join(repo, os.path.relpath(ROOT, repo), PHASES_AT_REV)
+        return Path(escaped).read_text(encoding="utf-8")
+'''),
+        ("relpath escapes temporary root",
+         r'''
+def injected_relpath_escape_reader():
+    with tempfile.TemporaryDirectory() as scratch:
+        repo = Path(scratch)
+        escaped = Path(os.path.relpath(ROOT / PHASES_AT_REV, repo))
+        return escaped.read_text(encoding="utf-8")
+'''),
+        ("aliased Path constructor escapes temporary root",
+         r'''
+def injected_aliased_path_escape_reader():
+    with tempfile.TemporaryDirectory() as scratch:
+        base = Path(scratch)
+        path_factory = Path
+        escaped = path_factory(base, "/outside", PHASES_AT_REV)
+        return escaped.read_text(encoding="utf-8")
+'''),
         ("temporary root rebinding",
          r'''
 def injected_rebound_root_reader():
@@ -670,16 +1787,49 @@ def injected_rebound_root_reader():
 '''),
     )
     for label, addition in reader_mutations:
-        reason = ("REJECT temporary-path-containment" if "escape" in label or "rebinding" in label
-                  else "REJECT live-phase-path-reader")
-        expect_rejected(label, source + addition, reason, same_count=True)
+        if "temporary root" in label or "rebinding" in label:
+            reason = "REJECT temporary-path-containment"
+        elif "recursive protected helper" in label:
+            reason = "REJECT live-phase-path-flow"
+        else:
+            reason = "REJECT live-phase-path-reader"
+        expect_flow_rejected(label, source + addition, reason, same_count=True)
+
+    module_reader = source + r'''
+def injected_module_reader(path):
+    return Path(path).read_text(encoding="utf-8")
+
+injected_module_reader(PHASES_AT_REV)
+'''
+    expect_flow_rejected("module-scope protected helper flow", module_reader,
+                         "REJECT live-phase-path-reader", same_count=True)
+
+    module_container_reader = source + r'''
+PATH_ALIAS = V04_GAP_SOURCE_PATHS[3]
+
+def injected_module_container_reader(path):
+    return Path(path).read_text(encoding="utf-8")
+
+def injected_module_container_caller():
+    return injected_module_container_reader(PATH_ALIAS)
+'''
+    expect_flow_rejected("module container subscript helper flow", module_container_reader,
+                         "REJECT live-phase-path-reader", same_count=True)
+
+    module_container_loop = source + r'''
+def injected_module_container_loop_reader():
+    for path in V04_GAP_SOURCE_PATHS:
+        Path(path).read_text(encoding="utf-8")
+'''
+    expect_flow_rejected("module container loop reader", module_container_loop,
+                         "REJECT live-phase-path-reader", same_count=True)
 
     escaped_helper_return = source.replace(
         'phases = root / "phases"',
         'phases = root / os.path.relpath(ROOT, root) / "phases"', 1)
     need(escaped_helper_return != source, "temporary helper-return mutation did not find its source site")
-    expect_rejected("temporary helper return escapes root", escaped_helper_return,
-                    "REJECT temporary-path-containment", same_count=True)
+    expect_flow_rejected("temporary helper return escapes root", escaped_helper_return,
+                         "REJECT temporary-path-containment", same_count=True)
     return controls
 
 
