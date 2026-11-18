@@ -71,7 +71,10 @@ REQUIRED = (
     "tests/CMakeLists.txt", "tests/expected-tests.txt", *PRESERVED,
 )
 V04_D209_ARCHIVE_REV = "96d502d4733ac54aa8bf7fbfd7813065143771dc"
-V04_D209_NOTICE_INDEX_SHA256 = "38820b1dbf48d099438ccc5381d5d75d3b03ea18433e5ea46b7cbd744c1d0011"
+D209_PRESERVED_SOURCE_SHA256 = {
+    "THIRD_PARTY_NOTICES.md": "38820b1dbf48d099438ccc5381d5d75d3b03ea18433e5ea46b7cbd744c1d0011",
+    "tests/scripts/verify-fixture-admission.py": "32022b4578426289c24d089c03563a934f964b58bb68c62f5f9bdffcf26e0325",
+}
 V04_ARCHIVED_REQUIREMENTS = ".planning/milestones/v0.4-REQUIREMENTS.md"
 V04_ARCHIVED_ROADMAP = ".planning/milestones/v0.4-ROADMAP.md"
 V04_ROOT_REQUIREMENTS = ".planning/REQUIREMENTS.md"
@@ -1019,13 +1022,16 @@ def reviewed_notice_index(root: pathlib.Path) -> bytes:
     return raw
 
 
-def d209_notice_index(root: pathlib.Path) -> bytes:
+def d209_preserved_source(root: pathlib.Path, path: str) -> bytes:
+    expected = D209_PRESERVED_SOURCE_SHA256.get(path)
+    if expected is None:
+        raise Reject(f"source-package-d209-path-unapproved:{path}")
     try:
-        raw = git(root, "show", f"{V04_D209_ARCHIVE_REV}:THIRD_PARTY_NOTICES.md", limit=MAX_BYTES)
+        raw = git(root, "show", f"{V04_D209_ARCHIVE_REV}:{path}", limit=MAX_BYTES)
     except Reject:
-        raise Reject("source-package-d209-notice-index-unavailable") from None
-    if sha256(raw) != V04_D209_NOTICE_INDEX_SHA256:
-        raise Reject("source-package-d209-notice-index-digest-mismatch")
+        raise Reject(f"source-package-d209-source-unavailable:{path}") from None
+    if sha256(raw) != expected:
+        raise Reject(f"source-package-d209-source-digest-mismatch:{path}")
     return raw
 
 
@@ -1033,9 +1039,9 @@ def validate_preserved_path(path: str, raw: bytes | None, root: pathlib.Path) ->
     baseline = git(root, "show", f"{BASELINE}:{path}", limit=MAX_BYTES)
     if raw == baseline:
         return
-    if path == "THIRD_PARTY_NOTICES.md" and raw == reviewed_notice_index(root):
+    if path in D209_PRESERVED_SOURCE_SHA256 and raw == d209_preserved_source(root, path):
         return
-    if path == "THIRD_PARTY_NOTICES.md" and raw == d209_notice_index(root):
+    if path == "THIRD_PARTY_NOTICES.md" and raw == reviewed_notice_index(root):
         return
     if path == ARCHIVE_HARNESS_PATH and raw == reviewed_archive_harness(root):
         return
@@ -1553,14 +1559,15 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     expect_reject(lambda: validate_preserved(notice_index_mutated, repo),
                   "source-package-boundary-changed:THIRD_PARTY_NOTICES.md",
                   "mutated-reviewed-notice-index")
-    d209_notice_reviewed = dict(notice_path_reviewed)
-    d209_notice_reviewed["THIRD_PARTY_NOTICES.md"] = d209_notice_index(repo)
-    validate_preserved(d209_notice_reviewed, repo)
-    d209_notice_mutated = dict(d209_notice_reviewed)
-    d209_notice_mutated["THIRD_PARTY_NOTICES.md"] += b"\nmutated\n"
-    expect_reject(lambda: validate_preserved(d209_notice_mutated, repo),
-                  "source-package-boundary-changed:THIRD_PARTY_NOTICES.md",
-                  "mutated-d209-notice-index")
+    for path in sorted(D209_PRESERVED_SOURCE_SHA256):
+        d209_source_reviewed = dict(notice_path_reviewed)
+        d209_source_reviewed[path] = d209_preserved_source(repo, path)
+        validate_preserved(d209_source_reviewed, repo)
+        d209_source_mutated = dict(d209_source_reviewed)
+        d209_source_mutated[path] += b"\nmutated\n"
+        expect_reject(lambda item=d209_source_mutated: validate_preserved(item, repo),
+                      f"source-package-boundary-changed:{path}",
+                      f"mutated-d209-source:{path}")
     notice_path_mutated = dict(notice_path_reviewed)
     notice_path_mutated[ARCHIVE_HARNESS_PATH] += b"\nmutated\n"
     expect_reject(lambda: validate_preserved(notice_path_mutated, repo),
