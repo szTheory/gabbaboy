@@ -533,6 +533,168 @@ def _has_chr_binding(tree: ast.Module) -> bool:
     return False
 
 
+def _has_stdlib_re_import(tree: ast.Module) -> bool:
+    imports = [(statement, alias) for statement in tree.body if isinstance(statement, ast.Import)
+               for alias in statement.names if alias.name == "re" or alias.asname == "re"]
+    if (len(imports) != 1 or len(imports[0][0].names) != 1 or imports[0][1].name != "re"
+            or imports[0][1].asname is not None):
+        return False
+    approved_statement, approved_alias = imports[0]
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                binds_re = alias.asname == "re" or (alias.asname is None and alias.name.split(".", 1)[0] == "re")
+                if binds_re and not (node is approved_statement and alias is approved_alias):
+                    return False
+        if isinstance(node, ast.ImportFrom) and any(alias.asname == "re" or
+                                                     (alias.asname is None and alias.name == "re")
+                                                     for alias in node.names):
+            return False
+        if isinstance(node, ast.Name) and node.id == "re" and isinstance(node.ctx, (ast.Store, ast.Del)):
+            return False
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) \
+                and node.value.id == "re" and isinstance(node.ctx, (ast.Store, ast.Del)):
+            return False
+        if isinstance(node, ast.arg) and node.arg == "re":
+            return False
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == "re":
+            return False
+        if isinstance(node, ast.ExceptHandler) and node.name == "re":
+            return False
+        if isinstance(node, (ast.Global, ast.Nonlocal)) and "re" in node.names:
+            return False
+        if ((match_as := getattr(ast, "MatchAs", None)) is not None and isinstance(node, match_as)
+                and node.name == "re"):
+            return False
+        if ((match_star := getattr(ast, "MatchStar", None)) is not None and isinstance(node, match_star)
+                and node.name == "re"):
+            return False
+        if ((match_mapping := getattr(ast, "MatchMapping", None)) is not None
+                and isinstance(node, match_mapping) and node.rest == "re"):
+            return False
+    return True
+
+
+def _has_full_commit_pattern(tree: ast.Module) -> bool:
+    if not _has_stdlib_re_import(tree):
+        return False
+    assignments = [node for node in tree.body if isinstance(node, ast.Assign)
+                   and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+                   and node.targets[0].id == "FULL_COMMIT"]
+    if len(assignments) != 1:
+        return False
+    allowed_target = assignments[0].targets[0]
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == "FULL_COMMIT" \
+                and isinstance(node.ctx, (ast.Store, ast.Del)) and node is not allowed_target:
+            return False
+        if ((match_as := getattr(ast, "MatchAs", None)) is not None and isinstance(node, match_as)
+                and node.name == "FULL_COMMIT"):
+            return False
+        if ((match_star := getattr(ast, "MatchStar", None)) is not None and isinstance(node, match_star)
+                and node.name == "FULL_COMMIT"):
+            return False
+        if ((match_mapping := getattr(ast, "MatchMapping", None)) is not None
+                and isinstance(node, match_mapping) and node.rest == "FULL_COMMIT"):
+            return False
+        if isinstance(node, ast.arg) and node.arg == "FULL_COMMIT":
+            return False
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) \
+                and node.name == "FULL_COMMIT":
+            return False
+        if isinstance(node, ast.alias) and (node.asname == "FULL_COMMIT" or
+                                            (node.asname is None and
+                                             node.name.split(".", 1)[0] == "FULL_COMMIT")):
+            return False
+        if isinstance(node, ast.ExceptHandler) and node.name == "FULL_COMMIT":
+            return False
+        if isinstance(node, (ast.Global, ast.Nonlocal)) and "FULL_COMMIT" in node.names:
+            return False
+    value = assignments[0].value
+    return (isinstance(value, ast.Call) and isinstance(value.func, ast.Attribute)
+            and value.func.attr == "compile" and isinstance(value.func.value, ast.Name)
+            and value.func.value.id == "re" and len(value.args) == 1 and not value.keywords
+            and isinstance(value.args[0], ast.Constant) and value.args[0].value == "[0-9a-f]{40}")
+
+
+def _has_full_commit_guard(function: ast.AST) -> bool:
+    body = function.body
+    if (body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)):
+        body = body[1:]
+    if not body or not isinstance(body[0], ast.If):
+        return False
+    guard = body[0]
+    test = guard.test
+    if not (isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not)
+            and isinstance(test.operand, ast.Call) and isinstance(test.operand.func, ast.Attribute)
+            and test.operand.func.attr == "fullmatch" and isinstance(test.operand.func.value, ast.Name)
+            and test.operand.func.value.id == "FULL_COMMIT" and len(test.operand.args) == 1
+            and isinstance(test.operand.args[0], ast.Name) and test.operand.args[0].id == "rev"
+            and not test.operand.keywords and not guard.orelse):
+        return False
+    if not guard.body or not isinstance(guard.body[0], ast.Raise):
+        return False
+    raised = guard.body[0].exc
+    return (isinstance(raised, ast.Call) and isinstance(raised.func, ast.Name)
+            and raised.func.id == "SystemExit")
+
+
+def _git_revision_operand(node: ast.AST, names: dict[str, str], validated_names: set[str]) -> bool:
+    if isinstance(node, ast.Name) and node.id in validated_names:
+        return True
+    value = _literal_string(node, names)
+    return value is not None and re.fullmatch(r"[0-9a-f]{40}", value) is not None
+
+
+def _approved_git_path_read(call: ast.Call, actual_facts: list[_PathFact],
+                            names: dict[str, str], validated_names: set[str]) -> bool:
+    """Accept only tree/list or blob/object reads with protected paths in read-only operands."""
+    if (call.keywords or len(call.args) < 3
+            or any(isinstance(argument, ast.Starred) for argument in call.args)):
+        return False
+    operands = call.args[1:]
+    command = operands[0]
+    if not isinstance(command, ast.Constant) or not isinstance(command.value, str):
+        return False
+
+    if command.value == "ls-tree":
+        separators = [index for index, item in enumerate(operands[1:], start=1)
+                      if isinstance(item, ast.Constant) and item.value == "--"]
+        if len(separators) != 1:
+            return False
+        separator = separators[0]
+        before = operands[1:separator]
+        after = operands[separator + 1:]
+        if (len(before) < 1 or len(after) != 1
+                or not _git_revision_operand(before[-1], names, validated_names)
+                or not actual_facts[-1].protected):
+            return False
+        flags = before[:-1]
+        allowed_flags = {"-r", "--name-only", "-z"}
+        values = [item.value for item in flags if isinstance(item, ast.Constant) and
+                  isinstance(item.value, str)]
+        return (len(values) == len(flags) and len(values) == len(set(values))
+                and set(values) <= allowed_flags
+                and not any(fact.protected for fact in actual_facts[:-1]))
+
+    if command.value == "show" and len(operands) == 2 and actual_facts[-1].protected:
+        expression = operands[1]
+        value = _literal_string(expression, names)
+        if value is not None:
+            revision, separator, path = value.partition(":")
+            if separator and re.fullmatch(r"[0-9a-fA-F]{40}", revision) and _protected_path_text(path):
+                return not any(fact.protected for fact in actual_facts[:-1])
+        if isinstance(expression, ast.JoinedStr):
+            parts = expression.values
+            if (len(parts) >= 3 and isinstance(parts[0], ast.FormattedValue)
+                    and isinstance(parts[0].value, ast.Name)
+                    and parts[0].value.id in validated_names
+                    and isinstance(parts[1], ast.Constant) and parts[1].value == ":"):
+                return not any(fact.protected for fact in actual_facts[:-1])
+    return False
+
+
 def _validate_decoded_path_flow(source: str, tree: ast.Module,
                                 roots_by_function: dict[str, set[str]]) -> None:
     """Check decoded values and bounded helper calls without importing or executing source."""
@@ -563,6 +725,16 @@ def _validate_decoded_path_flow(source: str, tree: ast.Module,
 
     def scope_of(node: ast.AST) -> ast.AST | None:
         return scope_by_node.get(node)
+
+    def validated_revision_names(scope: ast.AST | None) -> set[str]:
+        current = scope
+        while current is not None:
+            if (isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and current.name == "read_rev" and _has_full_commit_pattern(tree)
+                    and _has_full_commit_guard(current)):
+                return {"rev"}
+            current = function_parent.get(current)
+        return set()
 
     def direct_scope_nodes(function: ast.AST) -> list[ast.AST]:
         return [function, *nodes_by_scope.get(function, [])]
@@ -1099,6 +1271,12 @@ def _validate_decoded_path_flow(source: str, tree: ast.Module,
                 # Only the structurally verified immutable Git-object adapter is allowed to
                 # receive a protected path as a Git revision/tree operand.
                 if function in trusted_git_adapters:
+                    git_names = {name: fact.text for name, fact in {**module_env, **env}.items()
+                                 if fact.text is not None}
+                    if (any(item.protected for item in actual_facts)
+                            and not _approved_git_path_read(
+                                node, actual_facts, git_names, validated_revision_names(scope))):
+                        raise LintError("REJECT planning-path-git-command: unapproved Git command or protected operand position")
                     return _merge_path_facts(*actual_facts)
                 closure_has_path = any(name in function_used_names.get(function, set())
                                        and (item.protected or item.temporary_origin)
@@ -1920,6 +2098,57 @@ def injected_rebound_root_reader():
                                               "@injected_wrapper\n" + git_run_definition, 1)
     expect_flow_rejected("git_run wrapper mutation", git_run_decorator_mutant,
                          "REJECT planning-path-git-adapter", same_count=True)
+
+    git_hash = "a" * 40
+    git_argument_mutant = source + r'''
+def injected_live_git_reader(repo):
+    return git_run(repo, "hash-object", PHASES_AT_REV + "/private.md")
+'''
+    expect_flow_rejected("git_run hash-object path mutation", git_argument_mutant,
+                         "REJECT planning-path-git-command", same_count=True)
+    unvalidated_revision_mutant = source + r'''
+def injected_unvalidated_git_revision_reader(repo, rev):
+    return git_run(repo, "ls-tree", rev, "--", PHASES_AT_REV)
+'''
+    expect_flow_rejected("git_run unvalidated revision mutation", unvalidated_revision_mutant,
+                         "REJECT planning-path-git-command", same_count=True)
+
+    commit_guard_raise = '        raise SystemExit("plan-cap-rev: --rev must be a full 40-hex commit id, not a name")'
+    need(commit_guard_raise in source, "nested-raise mutation did not find the full-commit guard")
+    nested_raise_mutant = source.replace(
+        commit_guard_raise,
+        '        if not isinstance(rev, str):\n            ' + commit_guard_raise.strip(), 1)
+    expect_flow_rejected("nested full-commit guard raise", nested_raise_mutant,
+                         "REJECT planning-path-git-command", same_count=True)
+
+    commit_binding = 'FULL_COMMIT = re.compile(r"[0-9a-f]{40}")'
+    need(commit_binding in source, "reassignment mutation did not find FULL_COMMIT")
+    full_commit_rebindings = (
+        ("FULL_COMMIT reassignment", source.replace(
+            commit_binding, commit_binding + '\nFULL_COMMIT = re.compile(r".*")', 1)),
+        ("FULL_COMMIT annotated assignment", source + '\nFULL_COMMIT: object = re.compile(r".*")\n'),
+        ("FULL_COMMIT named expression", source + '\nFULL_COMMIT_COPY = (FULL_COMMIT := re.compile(r".*"))\n'),
+    )
+    for label, candidate in full_commit_rebindings:
+        expect_flow_rejected(label, candidate, "REJECT planning-path-git-command", same_count=True)
+    re_binding_mutant = source + "\nre = object()\n"
+    expect_flow_rejected("re binding shadows the standard-library import", re_binding_mutant,
+                         "REJECT planning-path-git-command", same_count=True)
+
+    git_read_positives = (
+        ("full-commit ls-tree pathspec",
+         "\ndef injected_git_ls_tree_reader(repo):\n"
+         "    return git_run(repo, 'ls-tree', '" + git_hash + "', '--', PHASES_AT_REV)\n"),
+        ("full-commit show object path",
+         "\ndef injected_git_show_reader(repo):\n"
+         "    return git_run(repo, 'show', '" + git_hash + ":' + PHASES_AT_REV)\n"),
+    )
+    for label, addition in git_read_positives:
+        try:
+            validate_decoded_flow(source + addition)
+        except LintError as error:
+            raise LintError("%s positive: refused: %s" % (label, error)) from None
+        controls += 1
 
     module_reader = source + r'''
 def injected_module_reader(path):
