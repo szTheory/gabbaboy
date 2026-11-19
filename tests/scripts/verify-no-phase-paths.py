@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import ast
 import collections
+from functools import lru_cache
 import ntpath
 import hashlib
 import io
@@ -180,8 +181,36 @@ def read_text(root: Path, name: str) -> str | None:
     return data.decode("utf-8", "replace")
 
 
+@lru_cache(maxsize=1)
 def _parents(tree: ast.AST) -> dict[ast.AST, ast.AST]:
+    """Reuse the read-only parent index within one AST analysis; retain only the latest tree."""
     return {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+
+
+_PYTHON_SOURCE_LINE = re.compile(r"(.*?(?:\r\n|\n|\r|$))")
+
+
+def _python_source_lines(source: str) -> list[str]:
+    """Split source on parser line endings without treating form-feed as a newline."""
+    return [match[0] for match in _PYTHON_SOURCE_LINE.finditer(source)]
+
+
+def _source_segment_from_lines(lines: list[str], node: ast.AST) -> str | None:
+    """Match ast.get_source_segment using pre-split parser lines and UTF-8 byte columns."""
+    try:
+        if node.end_lineno is None or node.end_col_offset is None:
+            return None
+        start = node.lineno - 1
+        end = node.end_lineno - 1
+        start_column = node.col_offset
+        end_column = node.end_col_offset
+    except AttributeError:
+        return None
+    if end == start:
+        return lines[start].encode()[start_column:end_column].decode()
+    first = lines[start].encode()[start_column:].decode()
+    last = lines[end].encode()[:end_column].decode()
+    return first + "".join(lines[start + 1:end]) + last
 
 
 def _function_scope_by_node(tree: ast.AST) -> dict[ast.AST, ast.AST | None]:
@@ -1484,7 +1513,7 @@ def _validate_decoded_path_flow(source: str, tree: ast.Module,
                               "lstrip", "lower", "upper", "casefold", "encode", "decode", "format",
                               "search", "match", "fullmatch", "find", "count", "get", "items", "keys",
                               "values", "append", "extend", "add", "update", "copy", "join"}
-    source_lines = source.splitlines(keepends=True)
+    source_lines = _python_source_lines(source)
 
     def needs_decoded_flow() -> bool:
         protected_names = {name for name, fact in module_env.items() if fact.protected}
@@ -1508,7 +1537,7 @@ def _validate_decoded_path_flow(source: str, tree: ast.Module,
             if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
                 continue
             if _protected_path_text(node.value):
-                raw = ast.get_source_segment(source, node) or ""
+                raw = _source_segment_from_lines(source_lines, node) or ""
                 if not SPELLINGS.search(raw):
                     return True
 
@@ -1517,7 +1546,7 @@ def _validate_decoded_path_flow(source: str, tree: ast.Module,
         # deciding that the decoded-flow pass is unnecessary.
         for node in ast.walk(tree):
             folded = _literal_path_string(node, literal_names_by_scope.get(scope_of(node), {}))
-            raw = ast.get_source_segment(source, node) or ""
+            raw = _source_segment_from_lines(source_lines, node) or ""
             if folded is not None and _protected_path_text(folded) and not SPELLINGS.search(raw):
                 return True
 
@@ -2197,7 +2226,7 @@ def _reader_target(call: ast.Call) -> ast.AST | None:
 def _validate_path_readers(source: str, tree: ast.Module,
                            roots_by_function: dict[str, set[str]]) -> None:
     parents = _parents(tree)
-    source_lines = source.splitlines(keepends=True)
+    source_lines = _python_source_lines(source)
     functions = [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
     functions.sort(key=lambda item: (len(list(_ancestor_chain(item, parents))), item.lineno))
     scope_for = _function_scope_by_node(tree)
