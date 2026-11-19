@@ -1033,10 +1033,214 @@ def _revision_binding_changed(function: ast.AST, binding: str) -> bool:
     return False
 
 
+def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
+    """Pin the reviewed stdlib imports and the mutable objects used by git_run."""
+    expected_imports = [
+        ("from", "__future__", 0, (("annotations", None),)),
+        ("import", (("argparse", None),)), ("import", (("contextlib", None),)),
+        ("import", (("hashlib", None),)), ("import", (("io", None),)),
+        ("import", (("json", None),)), ("import", (("os", None),)),
+        ("import", (("posixpath", None),)), ("import", (("re", None),)),
+        ("import", (("shutil", None),)), ("import", (("subprocess", None),)),
+        ("import", (("sys", None),)), ("import", (("tarfile", None),)),
+        ("import", (("tempfile", None),)), ("import", (("time", None),)),
+        ("from", "collections.abc", 0, (("Callable", None),)),
+        ("from", "pathlib", 0, (("Path", None),)),
+    ]
+
+    def import_shape(node: ast.AST) -> tuple[object, ...]:
+        if isinstance(node, ast.Import):
+            return ("import", tuple((alias.name, alias.asname) for alias in node.names))
+        if isinstance(node, ast.ImportFrom):
+            return ("from", node.module, node.level,
+                    tuple((alias.name, alias.asname) for alias in node.names))
+        raise AssertionError("not an import statement")
+
+    imports = [node for node in ast.walk(tree) if isinstance(node, (ast.Import, ast.ImportFrom))]
+    top_level_imports = [node for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom))]
+    if (len(imports) != len(top_level_imports)
+            or [import_shape(node) for node in top_level_imports] != expected_imports):
+        raise LintError("REJECT planning-path-git-command: standard-library import contract changed")
+
+    parents = _parents(tree)
+    imported_names = {"argparse", "contextlib", "hashlib", "io", "json", "os", "posixpath", "re",
+                      "shutil", "subprocess", "sys", "tarfile", "tempfile", "time", "Callable", "Path"}
+    forbidden_dynamic_names = {"__import__", "__builtins__", "builtins", "getattr", "setattr", "delattr",
+                               "globals", "locals", "vars"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id in forbidden_dynamic_names:
+            raise LintError("REJECT planning-path-git-command: dynamic import or reflective lookup is unprovable")
+        if isinstance(node, ast.Name) and node.id in imported_names \
+                and isinstance(node.ctx, (ast.Store, ast.Del)):
+            raise LintError("REJECT planning-path-git-command: imported standard-library binding is reassigned")
+        if isinstance(node, ast.arg) and node.arg in imported_names:
+            raise LintError("REJECT planning-path-git-command: imported standard-library binding is shadowed")
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name in imported_names:
+            raise LintError("REJECT planning-path-git-command: imported standard-library binding is shadowed")
+        if isinstance(node, ast.ExceptHandler) and node.name in imported_names:
+            raise LintError("REJECT planning-path-git-command: imported standard-library binding is shadowed")
+        if isinstance(node, (ast.Global, ast.Nonlocal)) and set(node.names).intersection(imported_names):
+            raise LintError("REJECT planning-path-git-command: imported standard-library binding has dynamic scope")
+
+        if not isinstance(node, ast.Name) or not isinstance(node.ctx, ast.Load):
+            continue
+        parent = parents.get(node)
+        if node.id == "sys":
+            if not isinstance(parent, ast.Attribute) or parent.value is not node \
+                    or parent.attr not in {"flags", "stderr"}:
+                raise LintError("REJECT planning-path-git-command: sys namespace use is outside the reviewed import contract")
+        elif node.id == "os":
+            if not isinstance(parent, ast.Attribute) or parent.value is not node \
+                    or parent.attr not in {"environ", "devnull"}:
+                raise LintError("REJECT planning-path-git-command: os namespace use is outside the reviewed adapter contract")
+        elif node.id == "subprocess":
+            if not isinstance(parent, ast.Attribute) or parent.value is not node \
+                    or parent.attr not in {"run", "CompletedProcess"}:
+                raise LintError("REJECT planning-path-git-command: subprocess namespace use is outside the reviewed adapter contract")
+        elif node.id == "Path":
+            annotation_use = False
+            current: ast.AST = node
+            while current in parents:
+                owner = parents[current]
+                if ((isinstance(owner, ast.arg) and owner.annotation is current)
+                        or (isinstance(owner, (ast.FunctionDef, ast.AsyncFunctionDef)) and owner.returns is current)
+                        or (isinstance(owner, ast.AnnAssign) and owner.annotation is current)):
+                    annotation_use = True
+                    break
+                current = owner
+            constructor_use = isinstance(parent, ast.Call) and parent.func is node
+            if not (annotation_use or constructor_use):
+                raise LintError("REJECT planning-path-git-command: pathlib.Path escapes its reviewed constructor/type uses")
+
+    environ_reads = 0
+    devnull_reads = 0
+    subprocess_run_writes: list[ast.Attribute] = []
+    completed_process_reads = 0
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Attribute):
+            continue
+        root = node
+        while isinstance(root, (ast.Attribute, ast.Subscript)):
+            root = root.value
+        root_id = root.id if isinstance(root, ast.Name) else None
+        parent = parents.get(node)
+        if any(isinstance(ancestor, ast.Call) and isinstance(ancestor.func, ast.Name)
+               and ancestor.func.id == "__import__" for ancestor in _ancestor_chain(node, parents)):
+            raise LintError("REJECT planning-path-git-command: dynamic standard-library import is unprovable")
+        if root_id == "Path":
+            raise LintError("REJECT planning-path-git-command: pathlib.Path class attribute use is unprovable")
+        if root_id == "sys" and node.attr not in {"flags", "stderr", "optimize"}:
+            raise LintError("REJECT planning-path-git-command: sys attribute is outside the reviewed import contract")
+        if root_id == "os" and node.attr == "environ":
+            items = parent
+            call = parents.get(items) if isinstance(items, ast.Attribute) and items.attr == "items" else None
+            comp = parents.get(call) if isinstance(call, ast.Call) else None
+            if (not isinstance(items, ast.Attribute) or items.value is not node
+                    or not isinstance(call, ast.Call) or call.func is not items or call.args or call.keywords
+                    or not isinstance(comp, ast.comprehension) or comp.iter is not call
+                    or not isinstance(parents.get(comp), ast.DictComp)):
+                raise LintError("REJECT planning-path-git-command: os.environ escapes the read-only environment copy")
+            environ_reads += 1
+        elif root_id == "os" and node.attr == "devnull":
+            keyword = parent
+            call = parents.get(keyword) if isinstance(keyword, ast.keyword) else None
+            function = next((ancestor for ancestor in _ancestor_chain(node, parents)
+                             if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
+            if (not isinstance(node.ctx, ast.Load) or not isinstance(keyword, ast.keyword)
+                    or keyword.arg not in {"GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"}
+                    or not isinstance(call, ast.Call) or not isinstance(call.func, ast.Attribute)
+                    or call.func.attr != "update" or not isinstance(call.func.value, ast.Name)
+                    or call.func.value.id != "env" or function is None
+                    or function.name not in {"git_run", "self_test_plan_cap_rev",
+                                             "self_test_v04_gap_assessment", "self_test_v04_reconciliation"}):
+                raise LintError("REJECT planning-path-git-command: os.devnull escapes the reviewed Git environment")
+            devnull_reads += 1
+        elif root_id == "os" and isinstance(node.ctx, (ast.Store, ast.Del)):
+            raise LintError("REJECT planning-path-git-command: os adapter dependency is mutated")
+        if root_id == "subprocess":
+            if node.attr == "run" and isinstance(node.ctx, (ast.Store, ast.Del)):
+                subprocess_run_writes.append(node)
+                function = next((ancestor for ancestor in _ancestor_chain(node, parents)
+                                 if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
+                value_name = (parent.value.id if isinstance(parent, ast.Assign)
+                              and isinstance(parent.value, ast.Name) else None)
+                if (function is None or function.name != "self_test_plan_cap_rev"
+                        or not isinstance(parent, ast.Assign) or len(parent.targets) != 1
+                        or parent.targets[0] is not node
+                        or value_name not in {"forbidden_git_attempt", "real_subprocess_run"}):
+                    raise LintError("REJECT planning-path-git-command: subprocess.run mutation is outside its restored self-test mock")
+            elif node.attr == "run":
+                if isinstance(node.ctx, ast.Load) and isinstance(parent, ast.Call) and parent.func is node:
+                    continue
+                function = next((ancestor for ancestor in _ancestor_chain(node, parents)
+                                 if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
+                if (not isinstance(node.ctx, ast.Load) or not isinstance(parent, ast.Assign)
+                        or len(parent.targets) != 1 or not isinstance(parent.targets[0], ast.Name)
+                        or parent.targets[0].id != "real_subprocess_run" or function is None
+                        or function.name != "self_test_plan_cap_rev"):
+                    raise LintError("REJECT planning-path-git-command: subprocess.run escapes as an unreviewed callable")
+            elif node.attr == "CompletedProcess":
+                function = next((ancestor for ancestor in _ancestor_chain(node, parents)
+                                 if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
+                call_use = isinstance(parent, ast.Call) and parent.func is node
+                annotation_use = (isinstance(parent, ast.Subscript) and parent.value is node
+                                  and function is not None and function.name == "git_run"
+                                  and function.returns is parent)
+                if not isinstance(node.ctx, ast.Load) or not (call_use or annotation_use) \
+                        or function is None or function.name != "git_run":
+                    raise LintError("REJECT planning-path-git-command: subprocess.CompletedProcess escapes the approved Git adapter")
+                completed_process_reads += 1
+            else:
+                raise LintError("REJECT planning-path-git-command: subprocess attribute is outside the reviewed adapter contract")
+        if root_id == "Path" and node.attr == "resolve" and isinstance(node.ctx, (ast.Store, ast.Del)):
+            raise LintError("REJECT planning-path-git-command: pathlib.Path.resolve is mutated")
+
+    if environ_reads != 4 or devnull_reads != 8 or len(subprocess_run_writes) != 2 \
+            or completed_process_reads != 2:
+        raise LintError("REJECT planning-path-git-command: standard-library adapter dependency inventory changed")
+
+    # This self-test temporarily replaces subprocess.run to prove an invalid
+    # revision is rejected before Git is invoked. Prove the mock is restored in
+    # the matching finally block; counting two assignments alone would accept
+    # a permanent redirection of the adapter.
+    target_function = next((node for node in tree.body if isinstance(node, ast.FunctionDef)
+                            and node.name == "self_test_plan_cap_rev"), None)
+    if target_function is None:
+        raise LintError("REJECT planning-path-git-command: protected Git mock scope is missing")
+    target_parents = _parents(target_function)
+    writes = []
+    for node in ast.walk(target_function):
+        if not isinstance(node, ast.Attribute) or node.attr != "run" \
+                or not isinstance(node.ctx, (ast.Store, ast.Del)):
+            continue
+        assignment = target_parents.get(node)
+        if not isinstance(assignment, ast.Assign) or len(assignment.targets) != 1 \
+                or assignment.targets[0] is not node or not isinstance(assignment.value, ast.Name):
+            raise LintError("REJECT planning-path-git-command: Git mock binding is not an exact assignment")
+        writes.append((node, assignment, assignment.value.id))
+    writes.sort(key=lambda item: item[1].lineno)
+    if len(writes) != 2 or writes[0][2] != "forbidden_git_attempt" \
+            or writes[1][2] != "real_subprocess_run":
+        raise LintError("REJECT planning-path-git-command: Git mock/restore order changed")
+    mock_assignment, restore_assignment = writes[0][1], writes[1][1]
+    mock_index = next((index for index, statement in enumerate(target_function.body)
+                       if statement is mock_assignment), None)
+    mock_try = (target_function.body[mock_index + 1]
+                if mock_index is not None and mock_index + 1 < len(target_function.body)
+                and isinstance(target_function.body[mock_index + 1], ast.Try) else None)
+    restore_try = next((ancestor for ancestor in _ancestor_chain(restore_assignment, target_parents)
+                        if isinstance(ancestor, ast.Try)), None)
+    if (mock_try is None or restore_try is not mock_try
+            or not any(restore_assignment is child or restore_assignment in ast.walk(child)
+                       for child in mock_try.finalbody)):
+        raise LintError("REJECT planning-path-git-command: Git mock is not restored by its finally block")
+
+
 def _validate_immutable_revision_proof(tree: ast.Module, *, on_entry=None) -> None:
     """Keep each Git reader bound to its exact validated full-commit value."""
     if on_entry is not None:
         on_entry()
+    _validate_planning_hygiene_import_use(tree)
     if _reflectively_writes_binding(
             tree, {"git_run", "_GIT_OBJECT_READ_CACHE", "re", "FULL_COMMIT", "V04_D209_ARCHIVE_REV",
                    "builtins", "__builtins__"}):
@@ -2945,6 +3149,73 @@ def injected_unvalidated_git_revision_reader(repo, rev):
              and positive_bytes == fixture_bytes,
              "D-220 clean positive did not reach the same pinned immutable reader with the expected bytes")
         controls += 1
+
+        standard_library_dependency_mutants = (
+            ("sys frame plus operator methodcaller namespace route",
+             source + '\nimport operator\n'
+             '_frame = sys._getframe()\n'
+             '_frame_globals = operator.methodcaller("__getattribute__", "f_" + "globals")(_frame)\n'
+             '_frame_globals["git_run"] = lambda repo, *args: None\n'),
+            ("importlib.util loader and inspect member namespace route",
+             source + '\nimport importlib.util as loader\n'
+             '_spec = loader.find_spec("inspect")\n'
+             '_module = loader.module_from_spec(_spec)\n'
+             '_spec.loader.exec_module(_module)\n'
+             '_members = _module.getmembers(_module.currentframe())\n'
+             '_globals_name = "f_" + "globals"\n'
+             '_frame_globals = next(value for name, value in _members if name == _globals_name)\n'
+             '_frame_globals["git_run"] = lambda repo, *args: None\n'),
+            ("importlib.import_module dynamic inspect frame route",
+             source + '\nimport importlib\n'
+             '_module = importlib.import_module("inspect")\n'
+             '_members = _module.getmembers(_module.currentframe())\n'
+             '_globals_name = "f_" + "globals"\n'
+             '_frame_globals = next(value for name, value in _members if name == _globals_name)\n'
+             '_frame_globals["git_run"] = lambda repo, *args: None\n'),
+            ("importlib.util from-import loader route",
+             source + '\nfrom importlib.util import find_spec, module_from_spec\n'
+             '_spec = find_spec("inspect")\n'
+             '_module = module_from_spec(_spec)\n'
+             '_spec.loader.exec_module(_module)\n'),
+            ("operator methodcaller writes validated frame locals",
+             insert_in_function("read_rev", '    found = git_run(repo, "cat-file", "-t", rev)\n',
+                                '    import operator\n'
+                                '    _frame = sys._getframe()\n'
+                                '    _frame_locals = operator.methodcaller("__getattribute__", "f_" + "locals")(_frame)\n'
+                                '    _frame_locals["r" + "ev"] = "HEAD"\n')),
+            ("importlib.util inspect loader writes validated frame locals",
+             insert_in_function("read_rev", '    found = git_run(repo, "cat-file", "-t", rev)\n',
+                                '    import importlib.util as loader\n'
+                                '    _spec = loader.find_spec("inspect")\n'
+                                '    _module = loader.module_from_spec(_spec)\n'
+                                '    _spec.loader.exec_module(_module)\n'
+                                '    _members = _module.getmembers(_module.currentframe())\n'
+                                '    _locals_name = "f_" + "locals"\n'
+                                '    _frame_locals = next(value for name, value in _members if name == _locals_name)\n'
+                                '    _frame_locals["r" + "ev"] = "HEAD"\n')),
+            ("subprocess.run is rebound at module scope",
+             source + '\nsubprocess.run = lambda *args, **kwargs: None\n'),
+            ("environment alias can redirect the Git adapter",
+             source + '\n_adapter_environment = os.environ\n'
+             '_adapter_environment.update(PATH="/tmp/redirected")\n'),
+            ("os.environ mutation can redirect the Git adapter",
+             source + '\nos.environ["PATH"] = "/tmp/redirected"\n'),
+            ("os.devnull binding is redirected",
+             source + '\nos.devnull = "/tmp/git-config"\n'),
+            ("CompletedProcess constructor is replaced with spoofed successful result",
+             source + '\nclass SpoofedCompletedProcess:\n'
+             '    def __init__(self, *args, **kwargs):\n'
+             '        self.returncode, self.stdout, self.stderr = 0, b"forged", b""\n'
+             'subprocess.CompletedProcess = SpoofedCompletedProcess\n'),
+            ("Path.resolve class method is replaced",
+             source + '\nPath.resolve = lambda self: self\n'),
+            ("Path class escapes through an alias before mutation",
+             source + '\npath_type = Path\npath_type.resolve = lambda self: self\n'),
+            ("subprocess.run restoration is redirected to the mock",
+             source.replace("subprocess.run = real_subprocess_run", "subprocess.run = forbidden_git_attempt", 1)),
+        )
+        for label, candidate in standard_library_dependency_mutants:
+            expect_d220_gate_rejected(label, candidate)
 
         aliased_global_mutants = (
             ("aliased getter replaces git_run through split frame/global names",
