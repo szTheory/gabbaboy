@@ -3131,9 +3131,9 @@ def _self_test(root: Path, revision: str) -> int:
             temporary = scratch / "runner-temp"
             temporary.mkdir()
             clean = temporary / "release-player-source"
-            def git_run(*arguments):
-                subprocess.run(["git", "-C", str(root), *arguments], check=True,
-                               capture_output=True, timeout=15)
+            def git_run(repository: Path, *arguments):
+                subprocess.run(["git", "-C", str(repository), *arguments], check=True,
+                               capture_output=True, timeout=15, env=git_environment())
             def guard_accept(path, revision=tagged_sha):
                 result = subprocess.run([bash, "-c", probe, "guard", str(path), revision],
                                         capture_output=True, text=True, timeout=15)
@@ -3141,8 +3141,13 @@ def _self_test(root: Path, revision: str) -> int:
                     reject(result.stderr.strip())
                 if "state=clean" not in result.stdout:
                     reject("pristine player source: missing clean result")
-            git_run("worktree", "add", "--detach", str(tagged), tagged_sha)
             try:
+                # Keep the real preparation command under test, but place its worktree
+                # metadata in this disposable clone. The source checkout can be read-only.
+                subprocess.run(["git", "clone", "--shared", "--no-checkout", str(root), str(tagged)],
+                               check=True, capture_output=True, timeout=15, env=git_environment())
+                subprocess.run(["git", "-C", str(tagged), "checkout", "--detach", tagged_sha],
+                               check=True, capture_output=True, timeout=15, env=git_environment())
                 guard_accept(tagged)
                 artifact = tagged / "build/downloaded-player/archive-witness"
                 artifact.parent.mkdir(parents=True)
@@ -3186,9 +3191,8 @@ def _self_test(root: Path, revision: str) -> int:
                         or (tagged / "tests/scripts/verify-release-candidate.sh").read_bytes() != overlay_bytes:
                     reject("pristine player source: cleanup changed another namespace")
             finally:
-                for path in (clean, tagged):
-                    if path.exists():
-                        git_run("worktree", "remove", "--force", str(path))
+                if clean.exists() and tagged.exists():
+                    git_run(tagged, "worktree", "remove", "--force", str(clean))
     return controls
 
 
