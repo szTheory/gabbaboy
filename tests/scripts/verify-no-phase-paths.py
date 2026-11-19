@@ -1016,8 +1016,8 @@ def _approved_git_path_read(call: ast.Call, actual_facts: list[_PathFact],
     return False
 
 
-def _revision_binding_changed(function: ast.AST, binding: str) -> bool:
-    """Reject every finite Python binding form that can replace a validated revision."""
+def _parameter_binding_changed(function: ast.AST, binding: str) -> bool:
+    """Reject every finite Python binding form that can replace a protected parameter."""
     own_parameters = set()
     if isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
         own_parameters = set(function.args.posonlyargs + function.args.args + function.args.kwonlyargs)
@@ -1073,6 +1073,10 @@ def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
     if (len(imports) != len(top_level_imports)
             or [import_shape(node) for node in top_level_imports] != expected_imports):
         raise LintError("REJECT planning-path-git-command: standard-library import contract changed")
+    match_statement = getattr(ast, "Match", None)
+    if (match_statement is not None
+            and any(isinstance(node, match_statement) for node in ast.walk(tree))):
+        raise LintError("REJECT planning-path-git-command: structural pattern matching can rebind proof inputs")
 
     parents = _parents(tree)
     imported_names = {"argparse", "contextlib", "hashlib", "io", "json", "os", "posixpath", "re",
@@ -1630,10 +1634,29 @@ def _validate_immutable_revision_proof(tree: ast.Module, *, on_entry=None) -> No
                       *function.args.kwonlyargs]
         if sum(parameter.arg == revision_name for parameter in parameters) != 1:
             raise LintError("REJECT planning-path-git-command: %s revision parameter changed" % name)
-        if _revision_binding_changed(function, revision_name):
+        if _parameter_binding_changed(function, revision_name):
             raise LintError("REJECT planning-path-git-command: %s rebinds its validated revision" % name)
+        protected_parameters = {
+            "read_rev": ("repo",),
+            "commit_snapshot": ("repo",),
+            "immutable_blob": ("repo", "path"),
+        }[name]
+        if any(_parameter_binding_changed(function, binding) for binding in protected_parameters):
+            raise LintError("REJECT planning-path-git-command: %s rebinds a protected reader input" % name)
+        if name == "read_rev":
+            path_helpers = [node for node in ast.walk(function)
+                            if isinstance(node, ast.FunctionDef) and node.name == "read_revision_file"]
+            expected_path_helper = ast.parse(
+                "def _expected(path: str) -> bytes | None: pass"
+            ).body[0]
+            if (len(path_helpers) != 1 or path_helpers[0].decorator_list
+                    or ast.dump(path_helpers[0].args, include_attributes=False)
+                    != ast.dump(expected_path_helper.args, include_attributes=False)
+                    or _parameter_binding_changed(path_helpers[0], "path")):
+                raise LintError("REJECT planning-path-git-command: read_rev path reader changes its protected input")
 
-    def exact_revision_path(expression: ast.AST, revision_name: str) -> bool:
+    def exact_revision_path(expression: ast.AST, revision_name: str,
+                            path_name: str | None = None) -> bool:
         return (isinstance(expression, ast.JoinedStr) and len(expression.values) == 3
                 and isinstance(expression.values[0], ast.FormattedValue)
                 and isinstance(expression.values[0].value, ast.Name)
@@ -1644,26 +1667,30 @@ def _validate_immutable_revision_proof(tree: ast.Module, *, on_entry=None) -> No
                 and expression.values[1].value == ":"
                 and isinstance(expression.values[2], ast.FormattedValue)
                 and isinstance(expression.values[2].value, ast.Name)
-                and expression.values[2].value.id != revision_name
+                and (expression.values[2].value.id == path_name if path_name is not None
+                     else expression.values[2].value.id != revision_name)
                 and expression.values[2].conversion == -1
                 and expression.values[2].format_spec is None)
 
     def exact_git_reader(function: ast.FunctionDef, revision_name: str,
-                         allowed_commands: set[str]) -> None:
+                         allowed_commands: set[str], *, show_path_name: str | None = None,
+                         ls_tree_path_name: str | None = None) -> None:
         for call in ast.walk(function):
             if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
                     and call.func.id == "git_run"):
                 continue
             if (call.keywords or len(call.args) < 3
+                    or not isinstance(call.args[0], ast.Name) or call.args[0].id != "repo"
                     or any(isinstance(argument, ast.Starred) for argument in call.args)
                     or not isinstance(call.args[1], ast.Constant)
                     or not isinstance(call.args[1].value, str)):
-                raise LintError("REJECT planning-path-git-command: %s has a dynamic Git read" % function.name)
+                raise LintError("REJECT planning-path-git-command: %s has a dynamic Git read or repository operand" % function.name)
             command = call.args[1].value
             if command not in allowed_commands:
                 raise LintError("REJECT planning-path-git-command: %s uses an unapproved Git read" % function.name)
             if command == "show":
-                if len(call.args) != 3 or not exact_revision_path(call.args[2], revision_name):
+                if (len(call.args) != 3
+                        or not exact_revision_path(call.args[2], revision_name, show_path_name)):
                     raise LintError("REJECT planning-path-git-command: show revision/path operand changed")
             elif command == "ls-tree":
                 separator = next((index for index, item in enumerate(call.args[2:], start=2)
@@ -1672,6 +1699,10 @@ def _validate_immutable_revision_proof(tree: ast.Module, *, on_entry=None) -> No
                         or not isinstance(call.args[separator - 1], ast.Name)
                         or call.args[separator - 1].id != revision_name):
                     raise LintError("REJECT planning-path-git-command: ls-tree revision operand changed")
+                if (ls_tree_path_name is not None
+                        and (not isinstance(call.args[separator + 1], ast.Name)
+                             or call.args[separator + 1].id != ls_tree_path_name)):
+                    raise LintError("REJECT planning-path-git-command: ls-tree path operand changed")
             elif command == "cat-file":
                 if not isinstance(call.args[-1], ast.Name) or call.args[-1].id != revision_name:
                     raise LintError("REJECT planning-path-git-command: cat-file revision operand changed")
@@ -1680,7 +1711,8 @@ def _validate_immutable_revision_proof(tree: ast.Module, *, on_entry=None) -> No
                         or call.args[3].id != revision_name:
                     raise LintError("REJECT planning-path-git-command: archive revision operand changed")
 
-    exact_git_reader(top_level["read_rev"], "rev", {"show", "ls-tree", "cat-file"})
+    exact_git_reader(top_level["read_rev"], "rev", {"show", "ls-tree", "cat-file"},
+                     show_path_name="path")
     exact_git_reader(top_level["commit_snapshot"], "rev", {"cat-file", "archive"})
 
     immutable_blob = top_level.get("immutable_blob")
@@ -1690,13 +1722,21 @@ def _validate_immutable_revision_proof(tree: ast.Module, *, on_entry=None) -> No
             or sum(node.name == "validate_v04_archive_and_recovery" for node in top_functions) != 1):
         raise LintError("REJECT planning-path-git-command: immutable archive readers are missing")
     archive_error = "plan-cap-v04-archive: revision must be a full 40-hex commit id"
-    exact_git_reader(immutable_blob, "revision", {"show", "ls-tree"})
+    exact_git_reader(immutable_blob, "revision", {"show", "ls-tree"},
+                     show_path_name="path", ls_tree_path_name="path")
 
     archive_parameters = [*validate_archive.args.posonlyargs, *validate_archive.args.args,
                           *validate_archive.args.kwonlyargs]
-    if sum(parameter.arg == "revision" for parameter in archive_parameters) != 1 \
-            or _revision_binding_changed(validate_archive, "revision"):
-        raise LintError("REJECT planning-path-git-command: archive route rebinds its validated revision")
+    expected_archive_function = ast.parse(
+        "def _expected(repo: Path, revision: str, root_roadmap: str, active_paths: list[bytes]) -> str: pass"
+    ).body[0]
+    if (validate_archive.decorator_list
+            or ast.dump(validate_archive.args, include_attributes=False)
+            != ast.dump(expected_archive_function.args, include_attributes=False)
+            or sum(parameter.arg == "revision" for parameter in archive_parameters) != 1
+            or any(_parameter_binding_changed(validate_archive, binding)
+                   for binding in ("revision", "repo", "root_roadmap", "active_paths"))):
+        raise LintError("REJECT planning-path-git-command: archive route changes a protected input")
     exact_git_reader(validate_archive, "revision", {"ls-tree"})
 
     parents = _parents(tree)
@@ -1718,7 +1758,9 @@ def _validate_immutable_revision_proof(tree: ast.Module, *, on_entry=None) -> No
         caller_calls.append(call)
         caller_parameters = [*caller.args.posonlyargs, *caller.args.args, *caller.args.kwonlyargs]
         if (sum(parameter.arg == revision_parameter for parameter in caller_parameters) != 1
-                or _revision_binding_changed(caller, revision_parameter)):
+                or _parameter_binding_changed(caller, revision_parameter)
+                or _parameter_binding_changed(caller, "repo")
+                or (caller.name == "commit_file" and _parameter_binding_changed(caller, "path"))):
             raise LintError("REJECT planning-path-git-command: snapshot caller changes its revision value")
     if (len(snapshot_calls) != 4
             or any(len(calls) != 1 for _parameter, calls in snapshot_callers.values())):
@@ -1730,7 +1772,9 @@ def _validate_immutable_revision_proof(tree: ast.Module, *, on_entry=None) -> No
     if (len(route_calls) != 1 or not _is_descendant(route_calls[0], read_rev, parents)
             or len(route_calls[0].args) != 4 or route_calls[0].keywords
             or not isinstance(route_calls[0].args[0], ast.Name) or route_calls[0].args[0].id != "repo"
-            or not isinstance(route_calls[0].args[1], ast.Name) or route_calls[0].args[1].id != "rev"):
+            or not isinstance(route_calls[0].args[1], ast.Name) or route_calls[0].args[1].id != "rev"
+            or not isinstance(route_calls[0].args[2], ast.Name) or route_calls[0].args[2].id != "root_text"
+            or not isinstance(route_calls[0].args[3], ast.Name) or route_calls[0].args[3].id != "active_paths"):
         raise LintError("REJECT planning-path-git-command: read_rev changed the validated archive-route argument")
 
     archive_revision_calls = [node for node in ast.walk(tree)
@@ -3486,7 +3530,7 @@ def injected_unvalidated_git_revision_reader(repo, rev):
         for label, insertion in git_run_pattern_rebindings:
             candidate = insert_in_function(
                 "immutable_blob", '    listed = git_run(repo, "ls-tree", revision, "--", path)\n', insertion)
-            expect_d220_gate_rejected(label, candidate, "REJECT planning-path-git-adapter")
+            expect_d220_gate_rejected(label, candidate)
 
         imported_module_capture = insert_in_function(
             "validate_v04_archive_and_recovery",
@@ -3496,7 +3540,44 @@ def injected_unvalidated_git_revision_reader(repo, rev):
                                   imported_module_capture)
         cache_pattern_capture = source + "\nmatch {}:\n    case {**_GIT_OBJECT_READ_CACHE}:\n        pass\n"
         expect_d220_gate_rejected("MatchMapping capture shadows Git read cache", cache_pattern_capture,
-                                  "REJECT planning-path-git-adapter")
+                                  "REJECT planning-path-git-command")
+
+        repo_pattern_capture = insert_in_function(
+            "immutable_blob", '    listed = git_run(repo, "ls-tree", revision, "--", path)\n',
+            "    match None:\n        case _ as repo:\n            pass\n")
+        expect_d220_gate_rejected("MatchAs capture shadows immutable reader repository", repo_pattern_capture)
+        path_pattern_capture = insert_in_function(
+            "immutable_blob", '    listed = git_run(repo, "ls-tree", revision, "--", path)\n',
+            '    match (path if revision == V04_D209_ARCHIVE_REV else "elsewhere"):\n'
+            "        case _ as path:\n            pass\n")
+        expect_d220_gate_rejected("conditional MatchAs capture shadows immutable reader path", path_pattern_capture)
+        root_roadmap_pattern_capture = insert_in_function(
+            "validate_v04_archive_and_recovery",
+            '    current_requirements = immutable_blob(repo, revision, V04_ARCHIVED_REQUIREMENTS)\n',
+            "    match None:\n        case _ as root_roadmap:\n            pass\n")
+        expect_d220_gate_rejected("MatchAs capture shadows archived route roadmap", root_roadmap_pattern_capture)
+        active_paths_pattern_capture = insert_in_function(
+            "validate_v04_archive_and_recovery",
+            '    current_requirements = immutable_blob(repo, revision, V04_ARCHIVED_REQUIREMENTS)\n',
+            "    match None:\n        case _ as active_paths:\n            pass\n")
+        expect_d220_gate_rejected("MatchAs capture shadows archived route inventory", active_paths_pattern_capture)
+
+        wrong_repository_operand = replace_in_function(
+            "immutable_blob", '    listed = git_run(repo, "ls-tree", revision, "--", path)\n',
+            '    listed = git_run(other_repo, "ls-tree", revision, "--", path)\n')
+        expect_d220_gate_rejected("immutable reader changes repository operand", wrong_repository_operand)
+        wrong_ls_tree_path = replace_in_function(
+            "immutable_blob", '    listed = git_run(repo, "ls-tree", revision, "--", path)\n',
+            '    listed = git_run(repo, "ls-tree", revision, "--", other_path)\n')
+        expect_d220_gate_rejected("immutable reader changes ls-tree path operand", wrong_ls_tree_path)
+        wrong_show_path = replace_in_function(
+            "immutable_blob", '    content = git_run(repo, "show", f"{revision}:{path}")\n',
+            '    content = git_run(repo, "show", f"{revision}:{other_path}")\n')
+        expect_d220_gate_rejected("immutable reader changes show path operand", wrong_show_path)
+        wrong_revision_path = replace_in_function(
+            "read_rev", '        shown = git_run(repo, "show", f"{rev}:{path}")\n',
+            '        shown = git_run(repo, "show", f"{rev}:{other_path}")\n')
+        expect_d220_gate_rejected("read_rev changes show path operand", wrong_revision_path)
 
         positive_state = {"proof_entries": 0, "protected_reader_calls": 0, "protected_reader_arguments": []}
         try:
