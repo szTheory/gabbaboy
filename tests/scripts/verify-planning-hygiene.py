@@ -3400,7 +3400,6 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
     d202_namespace = {
         "__name__": "verify_planning_hygiene_d202",
         "__file__": str(source_repo / "tests/scripts/verify-planning-hygiene.py"),
-        "git_run": cached_git_run,
     }
     exec(compile(d202_source.stdout, str(d202_checker), "exec"), d202_namespace)
     output, error = io.StringIO(), io.StringIO()
