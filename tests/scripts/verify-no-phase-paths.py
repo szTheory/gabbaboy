@@ -1036,8 +1036,32 @@ def _revision_binding_changed(function: ast.AST, binding: str) -> bool:
 def _validate_immutable_revision_proof(tree: ast.Module) -> None:
     """Keep each Git reader bound to its exact validated full-commit value."""
     if _reflectively_writes_binding(
-            tree, {"git_run", "_GIT_OBJECT_READ_CACHE", "re", "FULL_COMMIT", "V04_D209_ARCHIVE_REV"}):
+            tree, {"git_run", "_GIT_OBJECT_READ_CACHE", "re", "FULL_COMMIT", "V04_D209_ARCHIVE_REV",
+                   "builtins", "__builtins__"}):
         raise LintError("REJECT planning-path-git-command: reflective namespace writes make revision proof unprovable")
+    # Do not try to model frame or module namespace capabilities in this proof.
+    # In Python 3.13+, frame.f_locals is a write-through view in optimized scopes;
+    # f_globals and builtins dictionaries can replace the same runtime bindings.
+    forbidden_namespace_names = {
+        "_getframe", "f_globals", "f_locals", "f_builtins", "__dict__",
+        "__builtins__", "builtins", "__import__",
+    }
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr in forbidden_namespace_names:
+            raise LintError("REJECT planning-path-git-command: frame or module namespace access makes revision proof unprovable")
+        if isinstance(node, ast.Name) and node.id in {"_getframe", "__builtins__", "builtins"}:
+            raise LintError("REJECT planning-path-git-command: frame or builtins namespace access makes revision proof unprovable")
+        if isinstance(node, ast.alias) and (node.name.split(".", 1)[0] == "builtins"
+                                            or node.name == "_getframe" or node.asname == "_getframe"):
+            raise LintError("REJECT planning-path-git-command: frame or builtins namespace import makes revision proof unprovable")
+        if isinstance(node, ast.ImportFrom) and node.module == "builtins":
+            raise LintError("REJECT planning-path-git-command: builtins import makes revision proof unprovable")
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) \
+                and node.value in forbidden_namespace_names:
+            raise LintError("REJECT planning-path-git-command: reflective namespace key makes revision proof unprovable")
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id in {"getattr", "vars"}:
+            raise LintError("REJECT planning-path-git-command: dynamic namespace lookup makes revision proof unprovable")
     if not _has_full_commit_pattern(tree):
         raise LintError("REJECT planning-path-git-command: full-commit validator binding changed")
 
@@ -2780,6 +2804,10 @@ def injected_unvalidated_git_revision_reader(repo, rev):
          'regex_namespace = vars(re)\nregex_namespace["compile"] = lambda pattern: None\n'),
         ("builtins importer re module write",
          'builtins.__import__("re").compile = lambda pattern: None\n'),
+        ("builtins dictionary importer re module write",
+         'import builtins\nbuiltins.__dict__["__import__"]("re").compile = lambda pattern: None\n'),
+        ("injected builtins dictionary importer re module write",
+         '__builtins__["__import__"]("re").compile = lambda pattern: None\n'),
         ("importlib re module write",
          'import importlib\nimportlib.import_module("re").compile = lambda pattern: None\n'),
         ("aliased importlib loader re module write",
@@ -2799,6 +2827,24 @@ def injected_unvalidated_git_revision_reader(repo, rev):
     expect_flow_rejected("post-guard local revision rebind", post_guard_rebind,
                          "REJECT planning-path-git-command", same_count=True)
 
+    for label, mutation in (
+        ("frame globals replace git_run",
+         '\nsys._getframe().f_globals["git_run"] = lambda repo, *args: None\n'),
+        ("frame globals replace the D-209 pin",
+         '\nsys._getframe().f_globals["V04_D209_ARCHIVE_REV"] = "' + git_hash + '"\n'),
+        ("frame globals replace the regex module",
+         '\nsys._getframe().f_globals["re"].compile = lambda pattern: None\n'),
+        ("frame globals replace the commit validator",
+         '\nsys._getframe().f_globals["FULL_COMMIT"] = re.compile(".*")\n'),
+        ("dynamic getter exposes frame locals",
+         '\nget_frame = getattr(sys, "_getframe")\n'
+         'get_frame().f_locals["revision"] = "HEAD"\n'),
+        ("globals exposes injected builtins importer",
+         '\nglobals()["__builtins__"]["__import__"]("re").compile = lambda pattern: None\n'),
+    ):
+        expect_flow_rejected(label, source + mutation,
+                             "REJECT planning-path-git-command", same_count=True)
+
     def insert_in_function(function_name: str, needle: str, insertion: str) -> str:
         start = source.index("def " + function_name + "(")
         end = source.find("\ndef ", start + 1)
@@ -2808,6 +2854,18 @@ def injected_unvalidated_git_revision_reader(repo, rev):
         need(needle in function_source, "%s mutation could not find its target in %s" %
              (function_name, needle.strip()))
         return source[:start] + function_source.replace(needle, insertion + needle, 1) + source[end:]
+
+    frame_local_rebindings = (
+        ("read_rev", '    found = git_run(repo, "cat-file", "-t", rev)\n', "rev"),
+        ("commit_snapshot", '    found = git_run(repo, "cat-file", "-t", rev)\n', "rev"),
+        ("immutable_blob", '    listed = git_run(repo, "ls-tree", revision, "--", path)\n', "revision"),
+    )
+    for function_name, needle, binding in frame_local_rebindings:
+        mutation = '    sys._getframe().f_locals["%s"] = "HEAD"\n' % binding
+        candidate = insert_in_function(function_name, needle, mutation)
+        expect_flow_rejected("frame f_locals rewrites validated %s in %s" %
+                             (binding, function_name), candidate,
+                             "REJECT planning-path-git-command", same_count=True)
 
     pattern_rebindings = (
         ("MatchAs revision capture", "    match value:\n        case _ as rev:\n            pass\n"),
