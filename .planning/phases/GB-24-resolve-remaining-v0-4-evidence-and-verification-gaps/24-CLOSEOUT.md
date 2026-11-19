@@ -394,3 +394,38 @@ All six allowlisted checkers passed syntax parsing under the configured Python 3
 The selected tests took 74.91 seconds total. The path-control test fell from 58.72 to 29.32 seconds (about 50%) between the measured adjacent candidates; the seven-test total fell from 108.96 to 74.91 seconds. These measurements support removing repeated AST traversal while retaining the same proof and control set. No timeout, CTest identity, coverage floor, dependency, CI topology, cache, or required check changed. The project already records the required CI/CD efficiency review in [WORKFLOW.md § CI/CD efficiency](../../context/WORKFLOW.md#cicd-efficiency); hosted queue, job/step, dependency-wait, package-step, and timeout-headroom measurements remain pending the single authorized protected matrix.
 
 The final closeout-bearing candidate and exact qualification receipt are recorded outside this tracked document at [d220-final-local-qualification.md](../../../build/phase24/d220-final-local-qualification.md). This evidence commit changes a scanned tracked input, so it is not yet qualified by the results above. Reconfigure as needed, rebind all immutable commands, rerun the same seven tests serially, and record that exact final revision in the linked receipt before fresh independent exact-head review. No push, protected matrix, merge, phase or milestone closure, Task 7, summary/UAT, D-103, v0.5, or worktree cleanup has occurred. FIXT-01 remains Pending, and the Acid2 mismatch remains failed and unreplayed.
+
+### D-220 same-invariant correction after candidate 5ddd481
+
+**Updated:** 2026-11-19. This records local qualification for source candidate `0451ed168275c2d40bb7f1c713e2ef32caeda93e` (tree `d1d9a9e0a966e4b36c6d3edeb8d63d2997c291ea`). It does not record a review or hosted result.
+
+Fresh code and security reviews of candidate `5ddd481e1632b4df3c86817960576704e4540413` returned NO-GO within the existing D-220 trust boundary. The code review found that a nested unreachable revision guard could satisfy the line-order check, fixture `subprocess.run` calls were not pinned to Git, and the positive reader seam counted a harness-controlled `git show` rather than invoking the candidate reader. It also identified a count-preserving PATH rewrite in a copied fixture environment. The security review found transitive module access through allowed imports such as `contextlib.sys.modules`, plus `type(Path(...))` class mutation. Neither review executed a mutant or ran CI.
+
+The changed source is confined to the already-owned `verify-no-phase-paths.py` and `verify-planning-hygiene.py`; no source path, dependency, CTest identity, fixture admission, requirement, release, or workflow changed. The existing six-checker allowlist and D-209 archive/data objects remain unchanged. The correction and causal controls are:
+
+| Finding | Correction and control |
+|---|---|
+| A revision guard can be unreachable or fail to dominate reads. | The three protected readers now require their exact signature and an undecorated, top-level first guard that immediately refuses the non-full-commit input. `commit_snapshot` now validates before consulting its cache. Source-only `if False` nested-guard mutants for `read_rev`, `commit_snapshot`, and `immutable_blob` all reached the production predicate and refused with the Git-proof error before the reader. |
+| Allowed standard-library modules expose unreviewed members and indirect module namespaces. | Every admitted module now has a finite member contract. The only builtin `type` use admitted is the existing error-name formatting expression; type-derived class mutation, `contextlib.sys.modules` binding replacement, pin replacement, and subprocess replacement mutants are refused. |
+| Fixture subprocess calls and environment copies can redirect execution. | All seven `subprocess.run` sites are pinned to their exact command, argument shape, keyword set, fixture repository and environment; each filtered environment comprehension and its `update` fields are pinned, and aliases or mutations are refused. A source-only executable change from `git` to `python3` and a PATH rewrite that preserves the number of `os.environ` reads both refuse before protected reads. |
+| The claimed clean reader positive did not call the production reader. | The positive validates the exact clean source bytes, loads only that unchanged source in a temporary module, and invokes its actual `immutable_blob` against the disposable fixture commit. The wrapped production adapter records the two expected reads (`ls-tree`, then `show`), and the returned bytes match the fixture. All mutant sources remain strings; no mutant is imported, executed, or evaluated. |
+
+Under the configured Python 3.14.4 interpreter, all six allowlisted checkers parsed successfully. `verify-no-phase-paths.py --self-test` passed 187 controls; the full tracked scan passed for 612 files and 12 allowlisted paths. Dense-input Git-context passed 21 controls with configure/build/runner all zero. State-fork inventory controls passed 153 cases and 34 controls with configure/build/runner all zero. `git diff --check` passed.
+
+`cmake --preset phase1` configured candidate `0451ed1` in 15.2 seconds without building an emulator or runner. The machine-readable inventory selected exactly the seven approved CTests once each. Five immutable-source commands carried the full candidate SHA; the two lexical path checks targeted the clean candidate checkout. The configured Python interpreter, existing control floors, and original 30/60-second deadlines were unchanged.
+
+The seven tests passed individually and serially in the required order:
+
+| Test | Result | Elapsed |
+|---|---|---:|
+| `plan_cap` | pass | 0.30 s |
+| `phase22_evidence_controls` | pass | 18.24 s |
+| `phase22_evidence_contract` | pass | 2.73 s |
+| `no_phase_paths_controls` | pass | 36.74 s |
+| `no_phase_paths` | pass | 1.83 s |
+| `workflow_policy_coverage_controls` | pass | 5.85 s |
+| `planning_hygiene_controls` | pass | 16.50 s |
+
+Selected test time totaled 82.19 seconds. The path-control test retains 23.26 seconds of headroom under its existing 60-second timeout, and planning hygiene retains 13.50 seconds under 30 seconds. Relative to the adjacent `5ddd481` candidate, the path-control run increased by about five seconds because it now checks the newly added causal cases; it remains materially below the pre-optimization 58.72-second run. This evidence does not justify reducing coverage, changing the timeout, adding dependencies, or changing workflow topology. The repository's discoverable [CI/CD efficiency guidance](../../context/WORKFLOW.md#cicd-efficiency) remains in effect; hosted queue, step, dependency-wait, package-step, and timeout-headroom measurements await the authorized protected matrix.
+
+This closeout addition changes a tracked scan input. Therefore candidate `0451ed1` is not the final evidence-bearing candidate: the exact closeout-bearing head must be rebound, configured, and run through the same seven tests before review. The fresh exact-head code and security reviews are still pending; no push, protected matrix, merge, broad suite, emulator build, ROM replay, Acid2 replay, phase verification, Task 7, phase or milestone closure, D-103, v0.5 work, or worktree cleanup has occurred. FIXT-01 remains Pending, and the Acid2 mismatch remains failed and unreplayed.
