@@ -1,8 +1,8 @@
 # Phase 24: Resolve remaining v0.4 evidence and verification gaps — Research
 
-**Researched:** 2026-11-18
+**Researched:** 2026-11-18 (D-219 refresh)
 **Domain:** Python standard-library static analysis, immutable Git evidence, planning-contract checkers, and protected CI qualification
-**Confidence:** HIGH for current in-repository contracts; MEDIUM for implementation patterns grounded in official Python and Git documentation
+**Confidence:** HIGH for current in-repository contracts; MEDIUM for implementation patterns grounded in official Python, Git, argparse, and GitHub documentation
 
 <user_constraints>
 ## User Constraints (from CONTEXT.md)
@@ -55,6 +55,30 @@ This discussion authorizes planning only; a separate owner authorization is requ
 - Add causal negative controls for escaped/concatenated paths, helper-argument flow, temporary-root escape, paired archive removal, malformed pin terminators, and Git environment redirection; retain positive controls for the approved immutable reads, historical boundary, exact archive pair, and valid pin forms. Reuse existing self-test/CTest identities and run cheap checks before longer gates.
 
 
+### D-219 — Integrated recovery after the D-218 NO-GO (owner-directed, 2026-11-18)
+
+The owner selected all three discussion areas and instructed the agent to follow the fan-out recommendation. The D-218 candidate and NO-GO review remain immutable history. This addendum reopens the sole Phase 24 plan for one integrated recovery. The next step is `$gsd-plan-phase 24`; implementation and checks begin after that plan is updated, independently checked, and committed. The user's prior “extend and execute” authorization applies only to the exact scope and limits below.
+
+#### Python proof boundary and revision integrity
+
+Keep a small, closed, standard-library AST contract for the fixed checker proof surfaces. Reject aliased dynamic-import routes and function `__globals__` access that can replace trusted runtime bindings; reject reflective mutation of proof-sensitive module bindings, including `V04_D209_ARCHIVE_REV`. Refactor self-tests that swap module globals to pass fixture values explicitly. Preserve the approved exact adapter, standard-library full-commit validator, validated revision, and D-209 pin as positive controls. At the Git-facing archive reader, require a full commit identity and prove the exact validated revision and pin reach each immutable read without rebinding. Account for ordinary stores, nested scope shadowing, `MatchAs.name`, `MatchStar.name`, and `MatchMapping.rest`.
+
+Add causal static negatives for the reported `from importlib import import_module as load_module` mutation, `function.__globals__` replacement of `git_run`, direct and `update`-based mutation of `V04_D209_ARCHIVE_REV`, validator-module mutation, and each revision-rebinding form. Parse injected source; never execute the mutation payloads. Avoid general-purpose alias/data-flow analysis and new dependencies. If rejecting all reflective namespace writes in the proof surface is too broad, use a complete finite inventory of proof-sensitive names with one narrow, exact test-only allowance; do not grow a string-key exception list opportunistically.
+
+#### Git environment isolation and inventory-mode CLI
+
+Across the affected immutable-Git checker adapters, preserve the explicit `--no-replace-objects` option and run with a minimal environment that excludes Git variables able to redirect the repository, worktree, common directory, index, object store, alternates, or namespace. Git documents that replacement refs are active by default and that variables such as `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`, `GIT_INDEX_FILE`, and object-directory variables change repository or object selection. Reuse the existing small environment helpers where they fit; do not add a general Git wrapper. Add decoy-repository, alternate-index/object-store, and replacement-ref controls that prove the intended immutable object is read and decoy state remains untouched.
+
+For state-fork inventory controls, make inventory mode exclusive with every other operation and all mode-specific inputs. Reject conflicts before Git access or output creation. Exercise the production CLI with one conflicting-argument negative per operation/input class and a valid inventory positive; keep materialization-only parsing as a positive. This addresses argument combinations without altering the admitted manifest set or running excluded diagnostic cases.
+
+#### Recovery, validation, and CI efficiency
+
+The integrated correction is limited to the six checker files already reviewed in D-218: `verify-dense-input.py`, `verify-diagnostic-evidence.py`, `verify-no-phase-paths.py`, `verify-planning-hygiene.py`, `verify-state-forks.py`, and `verify-workflow-policy-coverage.py`. Keep all seven existing focused CTests, their identities, ordering, deadlines, control floors, and required branch-protection contexts. Add causal controls in the existing self-test/CTest seams. Run cheap syntax, immutable-input, source-scope, and direct controls first; then run only the focused seven CTests. Do not run the broad suite, Acid2, any other ROM, or excluded gbmicrotest case. Keep Task 7, FIXT-01, D-103, requirement dispositions, release assets, and milestone closure unchanged.
+
+After the current D-218 NO-GO, allow up to two scoped correction/review passes in this recovery. The first corrected exact-head review is pass one; one in-scope correction and re-review may be pass two. Local diagnosis and targeted retesting may iterate within these findings before review. Stop for any out-of-scope or unresolved correctness/security blocker after pass two. Allow at most one protected PR matrix, and only after a clean final exact-head review. Once that matrix starts, any failed, skipped, stale, or missing required context ends the recovery without a matrix retry. Merge only the identical reviewed head after all required contexts pass under existing branch protection.
+
+The D-218 run did not reach CI and provides no new timing evidence. Apply `.planning/context/WORKFLOW.md#cicd-efficiency` if the authorized matrix runs: capture measured queue, job/step, dependency-wait, package-step, and timeout-headroom data while retaining all required coverage. Make a CI efficiency change only when current measurements prove a safe improvement; do not change triggers, required jobs, timeouts, caches, or concurrency speculatively. Keep the D-211 package-waiter redesign separate.
+
 ### the agent's Discretion (verbatim)
 
 ### the agent's Discretion
@@ -75,9 +99,9 @@ This discussion authorizes planning only; a separate owner authorization is requ
 
 ## Summary
 
-D-215 is a planning-only rescope of Phase 24 after the exact candidate review found four blockers and two warnings. The planner should revise the existing Plan 24-01 into one integrated correction for CR-01 through CR-04 and WR-01/WR-02, plus the still-in-scope stale path-count and immutable-route work already recorded in the same plan. Do not add a phase, plan, dependency, or CTest identity. D-215's latest authorization is the planning boundary; a separate owner authorization is required before executing the replanned scope. [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:57-70]
+D-219 is the current recovery authority after D-218's exact-head NO-GO. Replan the sole existing Plan 24-01 across the six already reviewed checkers, preserving prior blocked candidates and every earlier result as history. The current worktree had no source changes at research start; the only pre-existing local modification was generated `.planning/state.json`, which is outside the authorized planning commit. No new plan, dependency, CTest identity, fixture, production-admission change, or CI topology change is authorized. [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:383-405; `git status --short` at research start]
 
-**Primary recommendation:** Keep the generic tracked-file lexical scan. Replace only the planning-hygiene file's count-based allowance with a narrow fail-closed AST contract that checks decoded string values, safe constant construction, direct local helper argument-to-parameter flow, and actual containment beneath the verified disposable root. Make current-versus-historical validation an explicit full-revision decision. Parse admission pins from raw bytes and run temporary Git operations under a sanitized environment, then assert the selected repository and candidate HEAD. Use the existing positive/negative self-test seams and focused CTests, with cheap identity and syntax checks first. This follows the approved D-215 implementation recommendations and the Python/Git APIs already in the toolchain. [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:65-70]
+**Primary recommendation:** Keep a small, closed AST proof for the fixed runtime bindings and revision path; fail closed on unsupported reflection rather than inventing general alias analysis. Audit all six Git-backed checkers for replacement refs and repository/index/object/namespace redirection, using explicit `--no-replace-objects` plus minimal child environments. Make `--inventory-controls` exclusive with every other state-fork operation/input before side effects. Preserve approved positives and add causal negatives in current seams. After plan check/commit and within the existing extend-and-execute authorization, run cheap identity/syntax/source-scope/direct checks before only the seven existing focused CTests; spend one protected matrix only after a clean final exact-head review. [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:383-405]
 
 An earlier Phase 24 context draft said “the four requirements remain Pending.” The D-215 context update corrects that stale sentence: the authoritative D-209 tracker has seven complete and one pending. Preserve the tracker and D-215 direction: **FIXT-01 remains Pending; do not change original requirement ownership or status.** The archived table states:
 
@@ -94,7 +118,7 @@ An earlier Phase 24 context draft said “the four requirements remain Pending.�
 
 The tracked milestone closeout also says “FIXT-01 remains Pending and deferred,” and that the D-103 gate and Phase 24 Task 7 remain incomplete. The Acid2 DMG-on-CGB mismatch stays failed and unreplayed; a Phase 24 checker pass is point-in-time closeout evidence, not requirement completion, a refreshed Phase 20/21 verification, or milestone closure. [VERIFIED: .planning/milestones/v0.4-REQUIREMENTS.md:67-71; .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:61-63]
 
-The current 24-01-PLAN.md, 24-VALIDATION.md, 24-PATTERNS.md, STATE.md, and root roadmap still describe D-214's earlier route. They must be reconciled to D-215 by the planning workflow before execution; this research updates only 24-RESEARCH.md. The phase roadmap has **Requirements: []**, so this phase has no new requirement IDs to map. [VERIFIED: .planning/ROADMAP.md:16-32; .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md:12-33]
+The sole plan, validation strategy, pattern map, and root roadmap still contain D-218 scope and need reconciliation to D-219 before execution. The phase roadmap has **Requirements: []**, so no phase requirement IDs should be invented. D-219's current authority covers execution only after the revised sole plan is independently checked and committed; this planning workflow does not itself run implementation, local tests, review, push, CI, or merge. [VERIFIED: .planning/ROADMAP.md:12-32; .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md:12-33; 24-CONTEXT.md:383-405]
 
 ## Architectural Responsibility Map
 
@@ -190,7 +214,7 @@ decoded AST   path containment   raw Git pin bytes
        conditional protected merge/reconcile
 ~~~
 
-This is a planning architecture only. D-215 does not authorize execution; a separate owner authorization is required. No task before the freeze may start the hosted matrix, and any failed/skipped/stale/missing required context stops the qualification path. [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:59-63]
+This is a planning architecture only. D-219 already authorizes the integrated execution after the revised sole plan is independently checked and committed. Local source work and focused tests must converge before the final candidate freeze; only a clean final review permits one protected matrix. A failed, skipped, stale, or missing required context ends the matrix route without retry. Phase and milestone closure remain separate. [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:383-405]
 
 ### Recommended Project Structure
 
@@ -351,15 +375,15 @@ No new package or framework is indicated. The standard-library approach is suffi
 
 | # | Claim | Section | Risk if wrong |
 |---|---|---|---|
-| A1 | Removed: runtime symlink creation/resolution is outside the selected CR-03 finite static-analysis seam. [RESOLVED] | Pattern 1, validation | No symlink portability or platform-permission assumption is needed; an actual symlink-based read escape revealed during execution stops as a new out-of-scope issue. |
+| A1 | Runtime symlink creation/resolution remains outside the finite static-analysis seam inherited from prior locked decisions. [RESOLVED; historical D-215 scope, retained only where still applicable] | Pattern 1, validation | No symlink portability or platform-permission assumption is needed; an actual symlink-based read escape revealed during execution stops as a new out-of-scope issue. |
 | A2 | The configured CMake Python interpreter may differ from shell python3 3.14.4. [ASSUMED] | Standard Stack, Environment | A source check can pass under a different interpreter than CTest uses; inspect CMakeCache after configure as directed by workflow policy. |
 
 ## Open Questions
 
-1. **RESOLVED — Review-fix pass accounting:** After local convergence, run one initial fresh exact-head independent review. If it identifies scoped findings/direct corrections, permit up to two post-correction fix-and-re-review passes, each with affected local checks and a fresh review of that corrected candidate. Local diagnosis/retesting is uncapped within scope. Stop on an unavailable review, new out-of-scope trust/correctness issue or anything unresolved after those two passes. Run one protected matrix only after a clean final review; no matrix retry is authorized.
+1. **RESOLVED — Review-fix pass accounting (supersedes the D-215 count):** Following D-218's NO-GO, D-219 allows at most two scoped correction/review passes total: the first corrected exact-head review is pass one; one in-scope correction and fresh review is pass two. Local diagnosis and targeted retesting within the authorized scope may iterate before a candidate is frozen. Stop on an out-of-scope finding or unresolved correctness/security issue after pass two. A single protected matrix is allowed only after a clean final review; any failed, skipped, stale, or missing context stops without retry. [VERIFIED: 24-CONTEXT.md:399-405]
 2. **RESOLVED — CR-03 containment scope and symlink portability:** The approved seam proves lexical component containment in the source AST by rejecting absolute, parent, unproven dynamic and root-rebinding escapes. Runtime filesystem symlink resolution is outside these six findings and this finite seam. Claim no symlink containment, add no symlink test/platform dependency, and stop if execution reveals an actual symlink-based read escape as a new out-of-scope trust/correctness issue. Archive-blob symlink refusal remains part of the distinct current/archive contract.
 
-No additional requirement-status, rights, release, suite, or milestone decision is needed for planning; the exact scope and limits are in the D-215 context. [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:57-70]
+No additional requirement-status, rights, release, suite, or milestone decision is needed for planning; D-219 and D-209 already define those boundaries. Preserve FIXT-01 as Pending, Task 7 and D-103 as separate, Acid2 failed and unreplayed, and v0.4 dispositions unchanged. [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:399-405; .planning/milestones/v0.4-REQUIREMENTS.md:56-71]
 
 ## Environment Availability
 
@@ -368,13 +392,13 @@ No additional requirement-status, rights, release, suite, or milestone decision 
 | Python 3 | Syntax, AST, and checker controls | Yes | 3.14.4 | Use the CMake-configured interpreter during later CTest validation. |
 | Git | Immutable snapshots and temporary repo controls | Yes | 2.41.0 | None for Git-backed contracts. |
 | CMake / CTest | Existing focused validation | Yes | 4.4.3 | None for registered project targets. |
-| GitHub protected PR checks | Final exact-head matrix | Not probed; no CI was started | D-215 requires one complete protected matrix after a clean exact-head review | No local result substitutes for protected checks. |
+| GitHub protected PR checks | Final exact-head matrix | Not probed; no CI was started | D-219 permits one complete protected matrix after a clean final exact-head review | No local result substitutes for protected checks. |
 
 Versions are read-only environment probes; no configure, build, CTest, source execution, GitHub query, review, push, or CI run occurred during this research.
 
 ## Validation Architecture
 
-> Planning guidance for regenerating 24-VALIDATION.md. D-215 authorizes planning only; this section does not authorize implementation, tests, CI, review, push, or merge.
+> Planning guidance for regenerating 24-VALIDATION.md under D-219. This plan command does not itself start implementation, local tests, review, push, CI, or merge. The prior extend-and-execute authorization becomes actionable after the revised plan passes independent checking and is committed.
 
 ### Test Framework
 
@@ -385,34 +409,36 @@ Versions are read-only environment probes; no configure, build, CTest, source ex
 | Quick run command | The current validation document's syntax-only command over the six affected Python checkers: python3 -I -c 'import ast,pathlib; paths=("tests/scripts/verify-dense-input.py","tests/scripts/verify-diagnostic-evidence.py","tests/scripts/verify-planning-hygiene.py","tests/scripts/verify-state-forks.py","tests/scripts/verify-no-phase-paths.py","tests/scripts/verify-workflow-policy-coverage.py"); [ast.parse(pathlib.Path(p).read_text(encoding="utf-8"), filename=p) for p in paths]'. This is only a proposed post-authorization cheap gate, not run here. [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md:16-23] |
 | Focused run command | Inspect exact registered commands using CTest's --show-only=json-v1; run only existing targets mapped below, after source revision, route/archive, candidate ancestry, and non-ROM identity checks pass. |
 | Full suite | Excluded from this scope; D-103 remains separate. |
-| Phase verification | Separate boundary after recovery gates; not authorized by D-215. |
+| Phase verification | Separate boundary outside D-219; do not run it as part of this recovery. |
 
 The phase has no requirement IDs: root roadmap says “**Requirements:** []”. There is no phase requirement-to-test table to fabricate. [VERIFIED: .planning/ROADMAP.md:20]
 
 ### Finding-to-Validation Map
 
-| D-215 finding / contract | Existing control surface | Purpose |
+| Earlier finding / current contract | Existing control surface | Purpose |
 |---|---|---|
 | CR-01 decoded/escaped path strings; CR-02 helper argument flow; CR-03 complete path containment | no_phase_paths_controls and no_phase_paths | Self-test causal negatives plus the complete tracked-file scan and must-scan floor. Existing registration lines quote the names exactly: add_test(NAME no_phase_paths_controls ...) and add_test(NAME no_phase_paths ...). [VERIFIED: tests/CMakeLists.txt:3004-3020] |
 | CR-04 current/archive selection | phase22_evidence_controls and phase22_evidence_contract | Paired archive-removal negative and current-route positive in existing immutable evidence checker controls/contract. [VERIFIED: tests/CMakeLists.txt:3785-3799] |
 | WR-01 raw byte pin parsing; WR-02 Git environment redirection | Existing non-ROM candidate Git-context controls in the dense-input harness; full fixture-bearing behavior stays in the protected matrix | Controls must mutate pin bytes/environment and assert exact rejection before any fixture execution. Do not invent a CTest target or run the fixture-bearing self-test locally. [VERIFIED: tests/scripts/verify-dense-input.py:134-202; .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md:30] |
-| Stale lexical allowance and full prior-route/trust checks | plan_cap, phase22_evidence_controls, phase22_evidence_contract, no_phase_paths_controls, no_phase_paths, workflow_policy_coverage_controls, and planning_hygiene_controls | Reuse the previously selected existing set; retain the plan-cap first and hygiene-control last order, 30-second hygiene timeout, and 125-control floor unless the later measured diagnosis justifies a same-coverage change. [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md:20-31; tests/cmake/hygiene.cmake:73-85; tests/cmake/ci-lanes.cmake:144-148] |
+| D-218 Python binding and revision proof | no_phase_paths_controls and planning_hygiene_controls, with the approved exact adapter/runtime read positive | Parse injected mutations only; reject aliased dynamic import, `__globals__` replacement, proof-global mutation, match-capture/revision rebinding, changed helper arguments, weak/missing reader guard, and changed D-209 pin. Do not execute mutation payloads. |
+| D-219 Git object integrity and inventory CLI | Existing controls in all six named checkers, selected through the same seven CTests | Add replacement-ref and hostile repository/index/object-store/namespace cases, checking both selected original objects and untouched decoys. Production CLI conflict negatives must refuse before Git operations or output effects; retain valid inventory and materialization-only positives. |
+| Full current trust/route contract | `plan_cap`, `phase22_evidence_controls`, `phase22_evidence_contract`, `no_phase_paths_controls`, `no_phase_paths`, `workflow_policy_coverage_controls`, and `planning_hygiene_controls` | Keep the existing identities and qualified order, with `plan_cap` first and `planning_hygiene_controls` last. Preserve each registered deadline/floor, including the 30-second hygiene timeout and 125-control floor; do not increase timeout or weaken scan/control floors. [VERIFIED: tests/cmake/hygiene.cmake:73-85; tests/CMakeLists.txt:3004-3020,3785-3799; tests/cmake/ci-lanes.cmake:144-148] |
 
 The exact existing registered CTest identifiers are `plan_cap`, `phase22_evidence_controls`, `phase22_evidence_contract`, `no_phase_paths_controls`, `no_phase_paths`, `workflow_policy_coverage_controls`, and `planning_hygiene_controls`. The source-of-truth registrations quote `gbb_add_hygiene_test(plan_cap ...)` and `gbb_add_hygiene_test(planning_hygiene_controls ...)`, `add_test(NAME no_phase_paths_controls ...)` and `add_test(NAME no_phase_paths ...)`, `add_test(NAME phase22_evidence_contract ...)` and `add_test(NAME phase22_evidence_controls ...)`, plus `gbb_add_ci_lane_test(workflow_policy_coverage_controls ...)`. [VERIFIED: tests/cmake/hygiene.cmake:73-84; tests/CMakeLists.txt:3004-3020,3785-3791; tests/cmake/ci-lanes.cmake:147-148]
 
-**Order:** First verify exact candidate/revision identity, syntax, current route/archive blobs, no unexpected source changes, candidate ancestry, and direct non-executing controls. Then inspect configured CTest JSON. Run the cheap plan-cap check first, the relevant focused controls/contracts next, the path tree scan as needed, and the 30-second planning_hygiene_controls last. Keep failure causes, test identities, environment, candidate SHA/tree, and any timeout stage in evidence. No test was run during this research. [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md:20-23,35-49; .planning/context/WORKFLOW.md:41-49]
+**Order:** First verify exact candidate/revision identity, syntax for all six files, current route/archive blobs, no unexpected source changes, candidate ancestry, and changed-seam direct controls. Inspect configured CTest JSON before execution. Run the seven existing focused tests in the approved order, with the cheap `plan_cap` first and `planning_hygiene_controls` last. Preserve test membership and registered limits. Keep failure causes, test identities, environment, candidate SHA/tree, and any timeout stage in evidence. No test was run during this research. [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md:20-23,35-49; .planning/context/WORKFLOW.md:41-49]
 
 ### Sampling Rate
 
 - **Before each task's focused tests:** cheap syntax/identity checks and direct positive/negative controls for the specific changed seam.
 - **Before CTest:** full candidate preflight from immutable Git objects, then --show-only=json-v1 inspection; no ROM-bearing local command.
-- **Before remote qualification:** freeze the complete candidate SHA/tree, obtain a clean independent exact-head review, and only then run one full protected matrix with all current required contexts.
-- **Stop:** any unresolved out-of-scope trust/correctness issue, blocker after the authorized review-fix passes, unavailable review, or failed/skipped/stale/missing required CI context. No extra review or matrix is implied.
+- **Before remote qualification:** after local convergence freeze the complete candidate SHA/tree; allow at most two scoped correction/review passes total after D-218 NO-GO (the first corrected exact-head review is pass one, one correction/re-review is pass two); run one full protected matrix only after a clean final exact-head review, with all current required contexts.
+- **Stop:** any out-of-scope trust/correctness issue, unresolved blocker after pass two, unavailable review, or failed/skipped/stale/missing required CI context. No review or matrix retry is implied.
 - **Timeout policy:** preserve current limits until measured stage evidence identifies the cause; do not raise timeout to hide the failed step.
 
 ### Wave 0 Gaps
 
-None. Existing standard-library controls and registered CTests are the intended implementation seams. No dependency, checker, CTest identity, phase, or plan is needed.
+None. Existing standard-library controls and registered CTests are the intended implementation seams. No dependency, checker, CTest identity, phase, or second plan is needed. The six checker paths and exact seven-test inventory are already established.
 
 ### Manual-Only Verifications
 
@@ -446,30 +472,36 @@ These are a threat-oriented mapping to current ASVS chapter names, not a claim t
 | Both archive blobs removed to trigger legacy branch | Tampering | Historical mode requires an explicit full revision; current mode requires pair and route. |
 | CR-normalized pin accepted as exact identity | Tampering | Capture raw bytes and validate exact byte forms. |
 | GIT_DIR/GIT_WORK_TREE redirects temporary operations | Tampering | Sanitize child environment and assert Git root/HEAD. |
+| A namespace or aliased-import write replaces the checked runtime adapter, regex validator, or D-209 pin | Tampering / elevation of privilege | Use a closed source-only AST contract over the fixed proof surface; reject unsupported reflective forms and preserve exact accepted binding positives. |
+| A full SHA is validated and then rebound, or Git substitutes another object through refs/replace | Tampering | Recheck the full commit at the Git reader, prove the finite caller-to-reader value flow, disable replacement refs on every trusted Git call, and retain replacement-object negatives. |
+| Inherited Git variables redirect a candidate read to a decoy repository/index/object store | Tampering | Use the existing narrow Git environment helper, remove redirection selectors, and assert that the expected repository and untouched decoy are observed. |
+| `--inventory-controls` is combined with a runner, materialization, or mode-specific path and still reports success | Tampering / denial of service | Refuse every conflicting mode and input before Git or filesystem effects; test the real CLI with side-effect sentinels and valid-mode positives. |
 | Stale/missing CI context treated as green | Tampering / repudiation | Bind check runs to exact reviewed head and require all protected contexts to pass. |
 
 Security claims about ASVS category applicability are task-domain mapping, not certification or a claim of completed security verification.
 
 ## CI and CD Efficiency
 
-D-211's recorded 37-minute Linux stream with 44 failures and three preview consumers waiting roughly 70 minutes each is historical, not a current run measurement. The immediate safe improvement is faster feedback before the hosted matrix: syntax/identity checks, direct causal controls, immutable boundary checks, then only the existing focused CTests. The matrix itself stays complete and protected. [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md:142; .planning/context/WORKFLOW.md:41-49]
+D-211's recorded 37-minute Linux stream with 44 failures and three preview consumers waiting roughly 70 minutes each is historical, not a current D-218 run measurement; D-218 never reached CI. The immediate safe improvement is shorter feedback before the one D-219 hosted matrix: syntax/identity checks, immutable boundary/source-scope checks, direct causal controls, then only the existing seven focused CTests. The matrix itself remains complete and protected. [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:399-405; .planning/context/WORKFLOW.md:41-49]
 
-For the next authorized PR matrix, record candidate SHA/tree, each job and step duration, queue time, dependency wait, timeout headroom, and whether package steps actually executed or were skipped. Assess whether the expensive root failure could have been detected before downstream waiters, but do not redesign cross-workflow waiters here, change triggers, add speculative cache/concurrency, or reduce required contexts. The D-211 package-waiter redesign is a separate measured follow-up. [VERIFIED: .planning/context/WORKFLOW.md:39-49; .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:61-70]
+For the sole authorized PR matrix, record candidate SHA/tree, each job and step duration, queue time, dependency wait, timeout headroom, and whether package steps actually executed or were skipped. Recommend a safe workflow change only if that run provides evidence; otherwise record “no justified safe change.” Do not redesign cross-workflow waiters here, change triggers, add speculative cache/concurrency, or reduce required contexts. The D-211 package-waiter redesign is a separate measured follow-up. [VERIFIED: .planning/context/WORKFLOW.md:39-49; .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:399-405]
 
 ## Sources
 
 ### Primary repository sources
 
-- [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:57-76] — D-215 six-finding scope, implementation recommendations, discretion, and planning-only authority.
+- [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:383-405] — Current D-219 scope, limits, role synthesis, and extend-and-execute authorization boundary.
 - [VERIFIED: /private/tmp/24-D214-REVIEW.md:17-67] — Exact D-214 review text for CR-01–CR-04 and WR-01–WR-02; no tests or CI were run for that review.
 - [VERIFIED: .planning/milestones/v0.4-REQUIREMENTS.md:56-71] — Authoritative archived requirement ownership/status and D-209 closeout.
-- [VERIFIED: tests/scripts/verify-no-phase-paths.py:216-265,292-306,394-509] — Existing AST/token/source-site and path-reader implementation with the reviewed gaps.
+- [VERIFIED: tests/scripts/verify-no-phase-paths.py:216-265,292-306,394-509] — Existing AST/token/source-site and path-reader implementation with reviewed gaps and runtime-binding proof surface.
 - [VERIFIED: tests/scripts/verify-diagnostic-evidence.py:277-289,630-655] — Archive-pair fallback and current route conditional.
 - [VERIFIED: tests/scripts/verify-dense-input.py:134-202] — Text-mode Git helper, pin validation, and temporary candidate repository setup.
-- [VERIFIED: tests/scripts/verify-planning-hygiene.py:220-224] — Existing sanitized Git environment helper.
+- [VERIFIED: tests/scripts/verify-planning-hygiene.py:221-268,271-281,320-406,514-526,4529-4558] — Existing small sanitized Git environment, immutable blob reader, exact D-209 pin, revision helpers, and production CLI.
+- [VERIFIED: tests/scripts/verify-state-forks.py:73-86,1467-1527] — Existing Git environment, `--no-replace-objects` adapter, inventory CLI mode and pre-side-effect conflict check.
+- [VERIFIED: tests/scripts/verify-workflow-policy-coverage.py:25-41] — Pinned workflow-policy source/revision contract in the sixth affected checker.
 - [VERIFIED: .planning/context/WORKFLOW.md:37-49] — CI efficiency rules.
 - [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md:142] — Historical D-211 duration and waiter evidence.
-- [VERIFIED: tests/cmake/hygiene.cmake:73-85; tests/CMakeLists.txt:3004-3020,3785-3799; tests/cmake/ci-lanes.cmake:144-148] — Current existing CTest identities and local floors/timeouts.
+- [VERIFIED: tests/cmake/hygiene.cmake:73-85; tests/CMakeLists.txt:3004-3020,3785-3799; tests/cmake/ci-lanes.cmake:144-148] — Existing focused CTest identities and local floors/timeouts.
 
 ### Official documentation
 
@@ -477,7 +509,12 @@ For the next authorized PR matrix, record candidate SHA/tree, each job and step 
 - Python lexical rules: [Lexical analysis](https://docs.python.org/3/reference/lexical_analysis.html)
 - Python paths: [pathlib](https://docs.python.org/3/library/pathlib.html)
 - Python subprocess behavior: [subprocess](https://docs.python.org/3/library/subprocess.html)
+- Python function-global namespace: [data model — function `__globals__`](https://docs.python.org/3/reference/datamodel.html#function.__globals__)
+- Python mutual exclusion for CLI arguments: [argparse — mutually exclusive groups](https://docs.python.org/3/library/argparse.html#mutual-exclusion)
 - Git environment behavior: [git documentation](https://git-scm.com/docs/git)
+- Git original-object behavior: [git-replace](https://git-scm.com/docs/git-replace)
+- Git byte-safe tree paths: [git-ls-tree](https://git-scm.com/docs/git-ls-tree)
+- Protected status-check behavior: [GitHub protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
 - OWASP ASVS 5.0.0 taxonomy: [official ASVS overview](https://asvs.owasp.org/); [official OWASP ASVS 5.0.0 CSV](https://github.com/OWASP/ASVS/blob/master/5.0/docs_en/OWASP_Application_Security_Verification_Standard_5.0.0_en.csv)
 
 ### Sources not used
@@ -492,8 +529,8 @@ No external package, product recommendation, or third-party fixture research was
 - CI efficiency opportunities: MEDIUM — the D-211 data is a recorded historical run; measure the next authorized exact-head matrix before claiming a current bottleneck or savings.
 
 **Research date:** 2026-11-18
-**Valid until:** Revisit if Python/Git version requirements, D-215 authority, phase requirements, or CI matrix membership change.
-**Research execution boundary:** The original D-215 research did not authorize implementation. The additive D-216 research below records the owner's later authorization only for the four exact findings and focused local execution; protected review/matrix, merge and phase/milestone boundaries remain governed by current decisions.
+**Valid until:** Revisit if Python/Git version requirements, D-219 authority, phase requirements, or CI matrix membership change.
+**Historical note:** D-215 through D-218 statements retain earlier decisions, review history, and technical findings. Any earlier scope, pass-count, or execution-boundary statement not reaffirmed by D-219 is historical, not current authority. The current scope, pass count, CI gate, and merge condition are stated in the D-219 addendum below, which supersedes contradictory earlier statements.
 
 ## D-216 Review Addendum — Escaped Paths, Git Isolation and Exact Tree Census
 
@@ -574,3 +611,51 @@ The best fit is a small closed AST contract for the named checker functions, not
 Add reason-specific static negative controls for direct and builtin dictionary namespace mutation, reflective `re.compile`/module-dictionary mutation, each relevant match capture form, and an archive-helper revision reassignment. Retain positive controls for the exact approved adapter, standard-library validator, full validated revision, and D-209 pin. Mutated source must be parsed and checked without executing the injected operations.
 
 For qualification, preserve the seven existing focused CTests and their established order, deadlines, and floors; run the cheap syntax/boundary/control checks first. A clean independent exact-head review is the only entry to the already authorized single protected PR matrix. Measure hosted efficiency from that run without reducing required coverage or making unmeasured workflow changes.
+
+## D-219 Research Addendum — Integrated Runtime and Git Trust Boundary
+
+D-218's focused local CTests passed, but its frozen exact-head review returned NO-GO for two critical Python proof gaps. No D-218 protected matrix ran. The review receipt remains historical evidence; D-219 is the current recovery authority and does not turn the D-218 candidate into an accepted candidate. [VERIFIED: 24-CONTEXT.md:3-4; .planning/STATE.md:24-27]
+
+### Findings that matter to the plan
+
+| Surface | Current evidence | Planning consequence |
+|---|---|---|
+| `verify-no-phase-paths.py` | The checker already uses AST/runtime literal reasoning and has `_reflectively_writes_binding`; its approved Git adapter uses `--no-replace-objects`. The same fixed source proof is the narrow seam for `git_run`, the regex/validator, and protected globals. [VERIFIED: tests/scripts/verify-no-phase-paths.py:158-160,398-421,501-560,650-663] | Keep a closed source contract: prove the accepted runtime binding, reject demonstrated alias/reflection forms, and make reason-specific static controls. Do not execute injected source or expand this into general Python taint analysis. |
+| `verify-planning-hygiene.py` | `git_run` already filters the child environment and adds `--no-replace-objects`; `immutable_blob` has a full-commit guard; `validate_v04_archive_and_recovery` reads both current archive blobs and the pinned D-209 pair. The D-209 revision is a module-level exact pin. [VERIFIED: tests/scripts/verify-planning-hygiene.py:221-268,271-281,400-413] | Add a reader-level full-SHA guard and static provenance checks that prevent revision or pin rebinding through each reader/caller edge. Preserve the precise D-209 pin, accepted immutable reads, and the valid exact archive path. |
+| `verify-dense-input.py` | `git_bytes` uses a standard-library subprocess with `--no-replace-objects` and `_git_environment`; several direct fixture-comparison reads intentionally use ordinary Git to demonstrate default behavior. [VERIFIED: tests/scripts/verify-dense-input.py:39-57,154-172,329-335] | Audit the production candidate readers and only those synthetic reads that are expected to represent the trusted adapter. Retain the ordinary-Git comparison as a negative demonstration; do not mechanically add flags to every Git command in fixture setup. |
+| `verify-diagnostic-evidence.py` | Its `git_environment` allowlist is used by the `git` helper and archive command. It also uses direct subprocesses for synthetic Git comparisons. [VERIFIED: tests/scripts/verify-diagnostic-evidence.py:158-183,245-248,951-953,1308-1312] | Keep generic non-Git `run()` behavior; constrain Git-bound reads with the existing Git-specific helper, and test hostile repository selectors against a decoy. Distinguish trusted candidate reads from fixture setup/comparison. |
+| `verify-state-forks.py` | Its `git_environment` / `git_read` helper already uses `--no-replace-objects`; the CLI exposes inventory, matrix, report, output, and mode-specific options. It checks conflicts before the inventory's Git calls, and has an existing mixed-mode negative. [VERIFIED: tests/scripts/verify-state-forks.py:68-86,1467-1527,854-862] | Exercise every mode and input class through the production CLI, including no Git/output side effect for a conflict, not just the existing materialization conflict. Keep valid inventory and materialization-only positives and the real manifest set unchanged. |
+| `verify-workflow-policy-coverage.py` | `git_environment` and `git_read` already provide an isolated no-replace reader, while source/fixture controls also spawn synthetic Git subprocesses. [VERIFIED: tests/scripts/verify-workflow-policy-coverage.py:176-187,258-270] | Audit immutable candidate reads and add a replacement/reflection control using existing seams; preserve test-fixture Git commands whose expected role is to set up disposable histories. |
+
+**Key Git footgun:** A full commit ID does not by itself guarantee original-object reads because replacement refs are active by default; Git supports `--no-replace-objects` after `git`. Separate environment risk also remains: `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, and `GIT_ALTERNATE_OBJECT_DIRECTORIES` can change the repository/index/object context. Use an explicit option and a narrow environment allowlist on trusted readers, then prove behavior with both replacement refs and a hostile decoy/index/object store. This is an inference from Git's documented mechanisms and the reviewed project seams, not a claim that every `GIT_*` variable has the same effect. [CITED: [Git replacement refs](https://git-scm.com/docs/git-replace); [Git environment variables](https://git-scm.com/docs/git)]
+
+**Key Python footgun:** `function.__globals__` is the dictionary of the function's defining module. Import aliases, namespace dictionary mutations, and structural pattern captures can change runtime bindings without the `ast.Name(Store)` shape a naïve scanner expects. The AST documentation represents `MatchAs`, `MatchStar`, and `MatchMapping.rest` captures in node fields; therefore those fields must be enumerated explicitly in the finite revision-binding proof. [CITED: [Python function globals](https://docs.python.org/3/reference/datamodel.html#function.__globals__); [Python AST](https://docs.python.org/3/library/ast.html); [Python match statement](https://docs.python.org/3/reference/compound_stmts.html#match)]
+
+**CLI footgun:** The state-fork CLI currently checks `--inventory-controls` conflicts in `main` against all operation flags and a tuple of mode-specific inputs, but the check must be proven complete for the current parser surface. `argparse.add_mutually_exclusive_group()` can enforce mutually exclusive flags, but that alone cannot reject every optional input supplied alongside inventory mode. Use an explicit pre-dispatch validator (or equivalent) that also covers mode-specific inputs, then exercise the production CLI with per-class negatives and output sentinels. Check before Git access/output creation; where possible, perform this validation before path resolution as well. [VERIFIED: tests/scripts/verify-state-forks.py:1467-1527; CITED: [Python argparse mutual exclusion](https://docs.python.org/3/library/argparse.html#mutual-exclusion)]
+
+### Recommended plan sequence and stopping logic
+
+1. **One scoped source-correction task:** cover the six named checker files. First establish the runtime binding/revision proof and its causal mutants. Audit the existing Git readers and apply `--no-replace-objects` plus minimal environments where they select immutable source/candidate objects. Add decoy, replacement-ref, alternate-index/object-store and namespace negatives while retaining exact-original-object positives. Make inventory mode exclusive across the complete parser surface before Git/output side effects. Use only standard-library and current self-test seams; do not add dependencies, general wrappers/analyzers, fixture bytes, CTest identities, or production admission behavior.
+2. **One qualification/evidence task:** run cheap syntax, candidate/route/archive identity, source-scope, ancestry and changed-contract controls first. Then inspect CTest `--show-only=json-v1`, and run only the existing set in the validated order: `plan_cap`, `phase22_evidence_controls`, `phase22_evidence_contract`, `no_phase_paths_controls`, `no_phase_paths`, `workflow_policy_coverage_controls`, `planning_hygiene_controls`. Preserve original deadlines and floors, including the 30-second planning-hygiene timeout and 125-control floor; add factual D-219 evidence to `24-CLOSEOUT.md` without erasing earlier failed results. The root roadmap has no Phase 24 requirements, so no new requirements trace is needed.
+3. **Freeze, review, remote gate:** after local convergence, freeze full candidate SHA/tree and obtain an independent review. D-219 permits two correction/review passes total after D-218 NO-GO: the first corrected exact-head review is pass one, followed by at most one in-scope correction and fresh review as pass two. Stop on an out-of-scope or unresolved correctness/security issue after pass two. Only a clean final review permits the one full protected matrix. Any failed, skipped, stale or missing required context stops without a matrix retry. Merge only the same reviewed/passing head under existing protection. GitHub documents branch-protection status checks as merge conditions; preserve the required contexts and read them from current protection/run evidence rather than assuming a static list. [CITED: [GitHub protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)]
+
+### Adversarial and maintainability review
+
+- **Security:** Exact object identity must survive both runtime-binding mutation and Git's replace/selector mechanisms. Test the real adapters and CLI; helper-only coverage is insufficient.
+- **Python/static analysis:** Fail closed only on the fixed, documented proof surface. Retain source-only mutation checking and direct positive controls; reject alias forms if their provenance is not fully modeled. Avoid a general analyzer and avoid broad exceptions for self-tests; pass fixture inputs explicitly where practical.
+- **Git/repository integrity:** The `--no-replace-objects` option does not clear repository redirection variables. Keep object-selection policy and environment isolation as separate, tested invariants. Synthetic tests must prove intended bytes and untouched decoys.
+- **QA/operations:** Keep cheap consistency and changed-contract controls ahead of the seven registered tests. Preserve timeouts/floors; diagnose local failures before review. Hosted qualification stays behind clean review.
+- **Maintainability:** Reuse existing Git environment builders and CTest self-test entry points. Do not duplicate broad wrapper abstractions or add dependencies; do not change unrelated fixture/admission behavior.
+- **CI efficiency:** D-218 yielded no hosted timings. Measure the one D-219 matrix if it occurs; recommend a workflow change only when current timings establish a safe improvement. Keep the D-211 package-waiter redesign separate.
+
+### D-219 primary sources
+
+- [Python AST](https://docs.python.org/3/library/ast.html) documents AST structure and capture fields used for finite static proof.
+- [Python data model](https://docs.python.org/3/reference/datamodel.html#function.__globals__) documents function/module namespace relationships.
+- [Python argparse](https://docs.python.org/3/library/argparse.html#mutual-exclusion) documents option mutual exclusion; project-specific mode/input validation remains necessary.
+- [Git replacement refs](https://git-scm.com/docs/git-replace) documents default replacement behavior and `--no-replace-objects`.
+- [Git environment](https://git-scm.com/docs/git) documents selectors for repository, worktree, index, and object storage.
+- [Git `ls-tree`](https://git-scm.com/docs/git-ls-tree) documents `-z` NUL-delimited path output, preserving newline-bearing names.
+- [GitHub protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches) describes required check gates and strict/loose head requirements.
+
+**Research execution boundary:** This refresh only informs planning. No source was edited, no test was run, and no protected review, push, matrix, or merge was started. D-219 execution authority becomes active after the sole plan is independently checked and committed; this plan command stops at that boundary.

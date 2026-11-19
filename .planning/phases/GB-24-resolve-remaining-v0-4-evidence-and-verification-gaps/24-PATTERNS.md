@@ -1,166 +1,118 @@
 # Phase 24: Resolve remaining v0.4 evidence and verification gaps — Pattern Map
 
-**Mapped:** 2026-11-18 (D-215 recovery scope)
-**Files analyzed:** 3 directly reviewed checker/harness targets plus 3 existing analogs and their test wiring
-**Analogs found:** 3 / 3 target files; no direct analog for bounded AST call-flow and complete derived-path containment
-
-## Scope and authority
-
-This map supports replanning only. D-215 selects one correction in the existing Phase 24 plan for CR-01–CR-04 and WR-01/WR-02. It does not authorize implementation, tests, configure/build, review, CI, push, or merge. Keep the D-209 dispositions (seven complete, FIXT-01 Pending), failed unreplayed Acid2 result, D-103 stop, required matrix coverage, and all later closure boundaries unchanged. Use the standard library and existing self-test/CTest identities; add no dependency or test identity.
+**Mapped:** 2026-11-19 (D-219 refresh)
+**Files analyzed:** 9 existing checker, test, and CMake files
+**Analogs found:** 6 / 6 modified source files
 
 ## File Classification
 
-| Existing target | Role | Data flow | Closest analog | Match quality |
-|-----------------|------|-----------|----------------|---------------|
-| `tests/scripts/verify-no-phase-paths.py` | utility / policy checker | tracked-file batch scan and AST transform | Same file's `SPELLINGS`, token-to-AST site mapping, and source-control self-tests; `verify-planning-hygiene.py` supplies immutable-source roles | Partial: scanner and causal-control seams exist; escapes, helper-parameter flow, and decoded values are not proven |
-| `tests/scripts/verify-diagnostic-evidence.py` | utility / evidence validator | immutable Git object read and report transform | Same file's byte-returning `git`, `load_snapshot`, and `boundary_history_control` | Strong for immutable bytes and point-in-time histories; current/historical selection still infers mode from archive presence |
-| `tests/scripts/verify-dense-input.py` | test harness / candidate validator | subprocess request-response and temporary Git/file I/O | `verify-fixture-admission.py` raw pin validation plus `verify-planning-hygiene.py:git_run` environment isolation | Partial: candidate identity and ancestry controls exist, but the helper uses text mode and inherits Git redirection variables |
+| Modified file | Role | Data flow | Closest analog | Match quality |
+|---|---|---|---|---|
+| `tests/scripts/verify-dense-input.py` | test utility / candidate validator | batch Git object reads and disposable repo controls | `verify-state-forks.py` Git reader and replacement-ref controls | strong |
+| `tests/scripts/verify-diagnostic-evidence.py` | evidence validator | immutable snapshot reads, report validation, bounded child processes | `verify-workflow-policy-coverage.py` immutable source reader | strong |
+| `tests/scripts/verify-no-phase-paths.py` | static source checker | tracked-tree scan plus AST/source-contract validation | `verify-planning-hygiene.py` finite AST and causal-control seam | exact role match |
+| `tests/scripts/verify-planning-hygiene.py` | planning contract checker | immutable Git snapshot and planning-file validation | `verify-no-phase-paths.py` path-source contract and self-test seam | exact role match |
+| `tests/scripts/verify-state-forks.py` | inventory CLI / test harness | immutable tree census, manifest expansion, optional test orchestration | its existing `inventory_controls` and `parse_args` paths | exact local pattern |
+| `tests/scripts/verify-workflow-policy-coverage.py` | CI contract checker | pinned source reads and configured CTest inventory | `verify-diagnostic-evidence.py` Git-only environment and byte reader | strong |
+
+No source files, test identities, or CMake registrations are proposed as new. Each row refers to tracked source; `git ls-files` confirmed the six checkers, `tests/CMakeLists.txt`, `tests/cmake/hygiene.cmake`, and `tests/cmake/ci-lanes.cmake` are tracked.
 
 ## Pattern Assignments
 
-### `tests/scripts/verify-no-phase-paths.py` (utility, tracked-file batch scan)
+### `tests/scripts/verify-dense-input.py`
 
-**Analog:** Existing AST/token/source-span and self-test machinery in the same checker, especially `_source_path_sites`, `_fixture_root_contract`, `_reader_target`, `_validate_path_readers`, and `self_test_planning_hygiene_path_contract` (lines 216–265, 292–386, 394–474, 484–604).
+**Analog:** `tests/scripts/verify-state-forks.py`, lines 68–91.
 
-**AST/source-site pattern** (lines 216–265):
-
-```python
-tree = ast.parse(source, filename=PLANNING_HYGIENE_FILE)
-tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
-...
-for hit in SPELLINGS.finditer(source):
-    ...
-    token = next((item for item in tokens
-                  if item.type in {tokenize.STRING, getattr(tokenize, "FSTRING_MIDDLE", -1)}
-                  and ...), None)
-```
-
-Keep the repository-wide lexical scan, must-scan list, exact historical JSON exception, and count allowlist controls. Extend the structural contract to inspect decoded AST string values and only narrowly supported constant construction. Do not execute source or use `ast.literal_eval` as a general evaluator. Make every current occurrence map to one exact value, source location, binding/callee role, and use; retain same-count substitution negatives.
-
-**Containment and reader pattern** (lines 292–305, 376–474):
+**Git reader pattern:** Keep the object reader byte-oriented, disable replacements at the Git invocation, and pass an explicit child environment. Current analog:
 
 ```python
-def _is_temporary_path(node: ast.AST, roots: set[str]) -> bool:
-    if isinstance(node, ast.Name):
-        return node.id in roots
-    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
-        return _is_temporary_path(node.left, roots)
+return subprocess.run(["git", "--no-replace-objects", "-C", str(repo), *args],
+                      cwd=repo, env=git_environment(), input=input_bytes,
+                      stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                      check=False, timeout=timeout)
 ```
 
-The current helper establishes only that the left side originated at an approved root; it does not inspect all suffix components. Replace that assumption with a bounded static proof over the complete expression: reject absolute components, `..`, unproven dynamic components and root rebinding, then establish lexical component containment beneath the verified disposable root. Track protected values through local call arguments to parameters and into readers; fail closed for unknown consumers instead of accepting a helper by name. Add causal tests for decoded/concatenated values, helper-parameter reads and component/root escape. Runtime filesystem symlink resolution is outside the selected finite AST seam: claim no symlink containment and add no symlink test/platform dependency. An actual symlink-based read escape revealed during execution stops as a new out-of-scope trust/correctness issue.
+`verify-dense-input.py` already has the same base at lines 44–57 (`_git_environment`, `git_bytes`) and a raw-byte admission-pin contract at lines 160–196. Preserve the explicit LF/CRLF/no-terminator allowlist and keep replacement-ref, decoy, and hostile-environment controls causally tied to the actual reader (`candidate_git_context_controls`, lines 298–411). The existing test currently changes `_git_environment` via `globals()` at lines 388–399; D-219 specifically directs refactoring self-test global swaps to explicit inputs where practical, which also makes this proof surface easier to audit.
 
-**Existing self-test pattern** (lines 525–604):
+### `tests/scripts/verify-diagnostic-evidence.py`
+
+**Analog:** `tests/scripts/verify-workflow-policy-coverage.py`, lines 176–208 and 258–262.
+
+**Git-only subprocess boundary:** `verify-diagnostic-evidence.py` deliberately has a generic bounded `run()` at lines 175–242 and a separate `git()` that supplies `git_environment()` at lines 245–251. Keep Git-specific sanitization at that call seam; do not silently change the environment policy for unrelated child programs. The source analog uses the same direct shape:
 
 ```python
-try:
-    validate_planning_hygiene_source(source)
-except LintError as error:
-    raise LintError("planning-hygiene path self-test: production source was rejected: %s" % error) from None
-...
-def expect_rejected(label: str, candidate: str, reason: str, same_count: bool = False) -> None:
-    ...
-    if str(error).startswith(reason):
-        ...
+return subprocess.run(["git", "--no-replace-objects", "-C", str(root), *args],
+                      cwd=root, env=git_environment(), capture_output=True,
+                      check=False, timeout=timeout)
 ```
 
-Reuse the production-file positive, reason-specific rejection helper, and same-lexical-count assertion. Extend this seam; do not add a CTest identity or count-only exemption.
+`verify-workflow-policy-coverage.py` then uses one `git_text(root, revision, path)` helper to reject failed immutable reads (lines 185–208, 258–262). In the diagnostic checker, the natural integration point is `git()`; its current `run(["git", "--no-replace-objects", *args], ..., env=git_environment())` is lines 245–251. Keep the bounded output and refusal shape, and add replacement/redirect controls through the synthetic-repository self-test path rather than executing any excluded game/ROM case. D-219 also requires route/archive positives and negatives remain tied to the immutable snapshot (`validate_recovery_route`, lines 656–671).
 
-### `tests/scripts/verify-diagnostic-evidence.py` (immutable evidence validator)
+### `tests/scripts/verify-no-phase-paths.py`
 
-**Analog:** Its existing byte-oriented Git and snapshot flow (lines 223–305), current route contract (603–640), and synthetic boundary controls (1173–1198).
+**Analog:** `tests/scripts/verify-planning-hygiene.py`, lines 2260–2335 and 3058 onward.
 
-**Git-object read pattern** (lines 223–242):
+**Finite AST contract:** Use `ast.parse`, a small enumerated set of relevant AST forms, and stable reason codes. The existing checker already has `_reflectively_writes_binding(tree, names)` (lines 501–536), `_approved_git_object_adapters(tree)` (638–695), `_validate_immutable_revision_proof(tree)` (981–1017), and `validate_planning_hygiene_source(source)` (2260–2299). These are the closest project-local patterns for binding proof and should be extended narrowly. For example, the current revision guard checks that a full-match guard precedes a Git read and rejects revision rebinding with a semantic reason:
 
 ```python
-def git(root: pathlib.Path, *args: str, limit: int = MAX_OUTPUT) -> bytes:
-    code, out, err = run(["git", *args], root, limit=limit)
-    if code:
-        ...
-    return out
+if not guard_lines or not git_read_lines or min(guard_lines) >= min(git_read_lines):
+    raise LintError("REJECT planning-path-git-command: %s lost its pre-read full-commit guard" % name)
+if _revision_binding_changed(function, "rev"):
+    raise LintError("REJECT planning-path-git-command: %s rebinds its validated revision" % name)
 ```
+
+The production self-test uses generated source mutations and checks their refusal reasons (`mutated`, `expect_accepted`, `expect_rejected`; lines 3050–3095). Follow this style for static mutants: parse and validate source without importing or executing the injected program. For CLI-level source/scan controls, preserve the existing `argparse` mutually-exclusive `--check` / `--self-test` group and main error reporting at lines 3184–3198.
+
+### `tests/scripts/verify-planning-hygiene.py`
+
+**Analog:** `tests/scripts/verify-no-phase-paths.py`, lines 148–180 and 2260–2335.
+
+**Immutable Git and path proof:** `git_run(repo, *args)` centralizes a narrow environment, `--no-replace-objects`, and the existing bounded immutable-object cache (lines 221–244). `immutable_blob(repo, revision, path)` validates a full SHA before `ls-tree` and rejects non-regular blobs before reading (247–265). `read_rev(repo, rev)` validates the revision before the snapshot and callers use that same revision (320–342). Preserve these direct helpers; do not add a general Git wrapper or broaden the accepted revision shape. For D-219, make the static proof cover the runtime binding and all supported revision bindings through the caller chain, including the pinned archive identity.
+
+**Test seam:** The direct source-only contract in `verify-no-phase-paths.py` validates the production source and then mutates in-memory source strings for causal acceptance/refusal (lines 2302–2335). Prefer explicit fixture parameters over mutating the module namespace in self-tests, as required by D-219.
+
+### `tests/scripts/verify-state-forks.py`
+
+**Analog:** Its own production parser and pre-effect inventory branch (`parse_args`, lines 1467–1507; `main`, 1510–1527) plus `inventory_cli_controls`, lines 848–871.
+
+**CLI ordering pattern:** Parse, normalize `Path` inputs, then reject inventory-mode conflicts before `checked_rev`, Git reads, or output creation. The current production guard first checks every conflicting mode and input:
 
 ```python
-content = git(root, "show", f"{revision}:{path}", limit=MAX_BYTES + 1)
+if any(conflicting_modes) or any(value is not None for value in conflicting_inputs):
+    raise ForkError("--inventory-controls is exclusive with every other mode and mode-specific input")
 ```
 
-Retain full-revision Git reads and raw blob bytes. Make current recovery validation require both archived v0.4 blobs and the active root route. Historical validation should be selected only by an explicit full-revision/boundary contract, never by absence of archive files.
+Its production-CLI negative invokes the script as a child and proves the requested output does not exist; it also retains a materialization-only positive (`inventory_cli_controls`, lines 848–870). Expand this contract to one negative per conflicting operation/input class while keeping the valid `--inventory-controls --rev ... --repo ...` positive. Use this seam rather than a helper-only assertion. Keep the current NUL-delimited, strictly decoded manifest census at lines 116–134 and its expected 153-case/exclusion controls at 780–845.
 
-**Mode-selection seam:** `selected_snapshot_paths` (lines 277–289) currently branches on whether the archive pair exists. `validate_recovery_route` (630–640) also returns early when both archives are absent. Do not copy this inference into the correction: reject a missing archive pair for current candidates, while keeping explicit historical-boundary checks available.
+### `tests/scripts/verify-workflow-policy-coverage.py`
 
-**Reason-specific synthetic history pattern** (lines 1173–1198):
+**Analog:** `tests/scripts/verify-diagnostic-evidence.py`, lines 158–172 and 245–262.
 
-```python
-def expect_reject(fn, reason: str, label: str) -> None:
-    try:
-        fn()
-    except Reject as error:
-        if str(error).startswith(reason):
-            return
-        raise Reject(f"control-wrong-reason:{label}:{error}") from None
-    raise Reject(f"control-accepted-mutant:{label}")
-```
-
-`boundary_history_control` creates and commits a `TemporaryDirectory` Git repository, tests a historical boundary, then verifies a later route fails for the specific reason. Extend the existing `phase22_evidence_controls` contract with paired archive-removal and current-route negatives; preserve the genuine pinned historical boundary positive.
-
-### `tests/scripts/verify-dense-input.py` (temporary candidate-Git harness)
-
-**Analog:** Use the established sanitization in `tests/scripts/verify-planning-hygiene.py:220–223` and raw-pin validation in `tests/scripts/verify-fixture-admission.py:771–787`. Do not reuse this file's text-mode helper for integrity bytes.
-
-**Current helper to replace or split** (`verify-dense-input.py:134–137`):
-
-```python
-def git(repo: Path, *args: str, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["git", "-C", str(repo), *args], cwd=repo, text=True,
-                          input=input_text, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                          check=False)
-```
-
-This helper decodes and normalizes output and inherits ambient Git variables. Preserve its human-readable call sites where suitable, but isolate the temporary Git commands from `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, and other repository-redirection variables; assert `--absolute-git-dir` and candidate `HEAD` identify the disposable subject.
-
-**Sanitized environment pattern** (`verify-planning-hygiene.py:220–223`):
-
-```python
-def git_run(repo: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
-    env = {k: v for k, v in os.environ.items()
-           if k in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")}
-    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull)
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True,
-                          check=False, env=env, timeout=60)
-```
-
-Use a narrow allowlisted child environment for all temporary-repository operations, adding only required fixture configuration. Keep output binary for pins and validate raw ASCII bytes as exactly 40 lowercase hex characters, optionally no terminator, LF, or CRLF; reject bare CR and all extra bytes. `verify-fixture-admission.py:771–787` already reads the pin as bytes, decodes strict ASCII, and applies the exact `(?:\n|\r\n)?` terminator grammar before commit/ancestry checks.
-
-The existing `active_admission_pins`, `validate_candidate_git_context`, and `candidate_git_context_controls` (lines 140–217) are the right fixture seam. Add the malformed-byte and hostile-environment cases there, asserting refusal/subject identity before configure. Preserve the separate baseline object store, Gitless negatives, and any later matrix-only execution boundary.
-
-## Existing Test Wiring (preserve)
-
-- `tests/CMakeLists.txt:3004–3020` registers `no_phase_paths_controls` (self-test with a 16-control floor) and `no_phase_paths` (tracked-tree scan with a 380-file floor). Reuse both names and keep the existing pass/failure contracts.
-- `tests/CMakeLists.txt:3785–3799` registers `phase22_evidence_contract` and `phase22_evidence_controls`; the controls already create isolated Git history and verify exact refusal reasons.
-- `tests/cmake/hygiene.cmake:73–85` registers `plan_cap` and `planning_hygiene_controls` with existing bounds; preserve the 125-control floor and 30-second timeout unless measured diagnosis justifies an in-scope same-coverage change.
-- `tests/cmake/ci-lanes.cmake:147–148` registers `workflow_policy_coverage_controls`; retain its existing control identity.
-- `tests/scripts/verify-planning-hygiene.py:220–223` and `tests/scripts/verify-fixture-admission.py:771–787` are analog/reference files, not new change targets for the six D-214 findings.
+**Pinned source and CTest inventory pattern:** Keep immutable Git reads in a single byte-returning helper and decode only at the documented text boundary. `git_environment()` retains a small allowlist and neutralizes system/global config; `git_read()` uses `--no-replace-objects` (lines 176–188). `baseline_source`, `reviewed_policy_source`, and `git_text` verify process success and exact content digest/identity (191–218, 258–262). `_check` binds these reads to a resolved candidate, reads the configured CTest JSON inventory, and rejects missing CMake/Python cache values (3280–3320). Preserve the candidate-bound validation and don't change required test membership as part of D-219.
 
 ## Shared Patterns
 
-### Immutable input and output
+### Immutable Git readers
 
-Use validated full commit identities and `git show <revision>:<path>`/`git cat-file` for facts. Keep Git blobs as bytes until a strict decoding boundary. Report specific rejection causes through the existing `Reject`/`LintError` types and prove each negative fails for the intended reason.
+**Sources:** `verify-state-forks.py:68–91`, `verify-dense-input.py:44–57`, `verify-diagnostic-evidence.py:158–172,245–251`, `verify-planning-hygiene.py:221–244`, `verify-workflow-policy-coverage.py:176–188`.
 
-### Temporary Git repositories
+Use direct existing helpers with explicit `--no-replace-objects`, byte capture for immutable blobs, a minimal environment that does not inherit Git repository/index/object/namespace selectors, explicit cwd/repository, and bounded timeouts. Preserve each checker's existing output/error conventions. Test hostile redirection with a decoy and assert the intended candidate data plus untouched decoy state; avoid introducing a shared generalized wrapper.
 
-Build fixture repositories only inside existing `TemporaryDirectory` self-tests. Remove inherited repository redirection variables, disable global/system Git config, and assert the disposable repository's Git directory and `HEAD` before trusting object or ancestry results.
+### Static proof and causal controls
 
-### Test efficiency and scope
+**Sources:** `verify-no-phase-paths.py:501–536,638–695,981–1017,2302–2335`; `verify-state-forks.py:780–871`.
 
-Run syntax, identity, and direct causal controls before focused CTests. Reuse existing controls and CTest registration; do not add dependencies or permanent checks without repeat value. Keep all required protected PR contexts; record measured queue, dependency, job/step durations and timeout headroom in Phase 24 evidence. A CI-waiter redesign remains out of scope.
+Follow finite standard-library AST checks: identify the exact binding/call shapes the proof accepts, refuse unmodeled reflection/rebinding with a reason specific enough for the control to assert, and keep a valid source positive. Static mutants are parsed, not executed. CLI mutants run only the production command with disposable inputs and assert refusal occurs before Git or filesystem effects.
 
-## No Direct Analog Found
+### CTest wiring and fast feedback
 
-There is no existing source analyzer that proves (a) decoded path-value flow from local callers to helper parameters and readers and (b) containment of every dynamically composed path beneath a temporary root. Implement this as a finite, fail-closed extension of `verify-no-phase-paths.py` using Python's existing `ast`, `tokenize`, and `pathlib` machinery. Do not add an analyzer framework or dependency.
+The existing seven focused tests are: `plan_cap` and `planning_hygiene_controls` in `tests/cmake/hygiene.cmake:71–85`; `phase22_evidence_controls` and `phase22_evidence_contract` in `tests/CMakeLists.txt:3784–3799`; `no_phase_paths_controls` and `no_phase_paths` in `tests/CMakeLists.txt:3001–3020`; and `workflow_policy_coverage_controls` in `tests/cmake/ci-lanes.cmake:144–148`. The controls go through `expect_exit.cmake` with expected status/output and explicit floors. The diagnostic control is `RUN_SERIAL` with its existing 60-second timeout; hygiene retains its 30-second limit and 125-control floor. Preserve identities, ordering, deadlines, floors and required protected contexts. Run cheap syntax, source/commit identity, and direct causal controls before these registered tests.
+
+## No Analog Found
+
+None for the six existing checker files. D-219 reuses existing AST, Git, argparse, self-test, and CTest patterns; it does not call for a new subsystem or dependency.
 
 ## Metadata
 
-**Analog search scope:** `tests/scripts/`, relevant CMake test registrations, and existing planning-hygiene / fixture-admission Git helpers.
-**Files read:** the three D-214 review targets, two existing Git/pin analogs, and four existing CTest registration points.
-**Source tracking:** each named analog is a tracked source file (`git ls-files` returned it).
-**Planning boundary:** D-215 context only; no source or test file was modified and no check was run here.
+**Analog search scope:** the six D-219 checker sources, their existing test seams, and CTest/CMake registrations named above.
+**Pattern extraction date:** 2026-11-19.

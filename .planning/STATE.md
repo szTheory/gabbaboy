@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: Phase 24 D-219 discussion complete; next command is $gsd-plan-phase 24
-last_updated: "2026-11-19T03:54:23.671Z"
-state_head: ba5afae5cb5c53a04c859fa9e94c3b422d995ad6
+stopped_at: Phase 24 D-219 plan independently checked and planning boundary committed; next command is $gsd-execute-phase 24
+last_updated: "2026-11-19T04:39:10.269Z"
+state_head: 3c4521f408dcb83f9892c9e5b3b54c1903d0f2a2
 progress:
   total_phases: 6
   completed_phases: 5
@@ -12,9 +12,9 @@ progress:
   completed_plans: 32
 milestone_name: Evidence Floor
 last_activity: 2026-11-18
-current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: Phase 24 Plan 24-01 D-219 integrated recovery; update and independently check the sole plan before scoped execution
+current_phase: 24
+current_plan: Phase 24 Plan 24-01 D-219 integrated recovery; T15/T16/T17 planned, independently checked, and committed as the planning boundary
 ---
 
 # Project State
@@ -24,7 +24,7 @@ current_plan: Phase 24 Plan 24-01 D-219 integrated recovery; update and independ
 **Milestone stage:** v0.4 remains administratively closed with D-209 gaps; no phase or milestone closure is authorized by this stop.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
 **Phase state:** Phase 24 remains incomplete. D-218 focused CTests passed at source candidate 0b4387091b5148b35af420daf3b6743aa27d8fbb; the frozen reviewed head ba5afae5cb5c53a04c859fa9e94c3b422d995ad6 received a NO-GO for two critical Python proof gaps. No push, CI matrix, or merge followed. D-219 authorizes an integrated recovery through the sole plan, with up to two scoped correction/review passes and one protected matrix after a clean final review. FIXT-01 remains Pending; Task 7, D-103, Acid2 failure/non-replay, and milestone closure remain unchanged.
-**Next route:** The next command is $gsd-plan-phase 24 to update and independently check the sole plan. After that committed plan passes, execute only the D-219 scoped recovery and focused checks; current worktree remains in use. Phase 24 and v0.4 stay open.
+**Next route:** The independent plan check passed with no remaining issues, and the documentation-only D-219 planning boundary is committed. The next stage is Phase 24 execution: run T15, T16 then T17 in Resolve remaining v0.4 evidence and verification gaps with `$gsd-execute-phase 24`. D-219 already covers that execution within its limits; this plan-phase invocation stops at the execute handoff. Keep this worktree. Phase 24 remains incomplete and v0.4 remains administratively closed with D-209 gaps.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -52,11 +52,11 @@ Two items had already been acknowledged by an earlier closeout; the audit record
 
 FIXT-01 remains Pending: neither Potion Panic nor µCity has a complete source/build/ROM/header/mode/runtime chain. Do not introduce a third game candidate under the v0.4 requirement. Do not replay the Acid2 comparison or claim its cause. The v0.4.0 tag/assets and published claims remain unchanged. No hardware, perception, mode-3 timing, general compatibility, Linux player, Steam Deck, or live Playstead claim is established by this closeout.
 
-The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 verification is stale; Phase 24 Task 7 is incomplete. These remain gaps, not passes. D-211's failed matrix and the D-214 through D-218 blocked reviews remain preserved. D-218's single final review found two critical gaps; its allowance is spent and its one-matrix gate was not entered. Only a new owner-authorized discussion can define another recovery scope. No Acid2 replay, excluded gbmicrotest replay, candidate expansion, release/tag/asset change, broad local suite, canonical summary, worktree cleanup, Task 7, phase verification, or milestone archive. Both automatic-advance flags remain false.
+The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 verification is stale; Phase 24 Task 7 is incomplete. These remain gaps, not passes. D-211's failed matrix and the D-214 through D-218 blocked reviews remain preserved. D-218's final review found two critical gaps; its allowance is spent and its matrix gate was not entered. D-219 alone authorizes the six-checker integrated recovery after independent plan check/commit: at most two correction/review passes total, one matrix only after clean final review, no matrix retry, and conditional merge of the same passing head under protection. No Acid2 replay, excluded gbmicrotest replay, candidate expansion, release/tag/asset change, broad local suite, canonical summary, worktree cleanup, Task 7, phase verification, or milestone archive. Both automatic-advance flags remain false.
 
 ## Owner Handoff
 
-Current stage: Phase 24 D-219 discussion is complete; D-218 remains a historical NO-GO at frozen head ba5afae5cb5c53a04c859fa9e94c3b422d995ad6. The next command is $gsd-plan-phase 24. After the sole plan is independently checked and committed, continue under the bounded D-219 authorization; no phase or milestone closure is included.
+Current stage: Phase 24 D-219 sole plan, research, pattern map and validation strategy are updated, independently checked with no remaining issues, and committed as the documentation-only planning boundary. The next stage is scoped Phase 24 execution with `$gsd-execute-phase 24` for T15/T16/T17. D-218 stays NO-GO history. No user decision is needed for routine in-scope execution; no phase or milestone closure is included.
 
 ## Accumulated Context
 
@@ -114,9 +114,9 @@ Current stage: Phase 24 D-219 discussion is complete; D-218 remains a historical
 ## Session
 
 **Last session:** 2026-11-19T03:53:08.990Z
-**Stopped at:** Phase 24 D-219 discussion complete; next command is $gsd-plan-phase 24
-**Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md
+**Stopped at:** Phase 24 D-219 plan independently checked and planning boundary committed; next command is $gsd-execute-phase 24
+**Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md
 
 ### Blockers
 
-- D-219 supersedes the prior owner-next-discuss handoff. The current next command is $gsd-plan-phase 24; after the sole plan is updated, independently checked, and committed, proceed under the D-219 authorization within its exact limits.
+- D-219 supersedes the prior owner-next-discuss stop. The documentation-only planning boundary is committed. Invoke `$gsd-execute-phase 24` for the authorized T15/T16/T17 scope. Python proof, Git isolation and CLI contracts are planned but unimplemented; no D-219 local/remote qualification has run. Preserve the exact two-pass total, single-matrix and separate closure boundaries.
