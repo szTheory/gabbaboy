@@ -243,7 +243,8 @@ def run(argv: list[str], root: pathlib.Path, *, timeout: int = 30,
 
 
 def git(root: pathlib.Path, *args: str, limit: int = MAX_OUTPUT) -> bytes:
-    code, out, err = run(["git", *args], root, limit=limit, env=git_environment())
+    code, out, err = run(["git", "--no-replace-objects", *args], root,
+                         limit=limit, env=git_environment())
     if code:
         detail = err.decode("utf-8", "replace")[-350:].strip()
         raise Reject(f"git-failed:{args[0]}:{detail}")
@@ -947,7 +948,7 @@ def added_paths(root: pathlib.Path, revision: str) -> list[dict[str, Any]]:
 def write_bounded_git_archive(root: pathlib.Path, revision: str, destination: pathlib.Path) -> None:
     try:
         process = subprocess.Popen(
-            ["git", "archive", "--format=tar", revision], cwd=root,
+            ["git", "--no-replace-objects", "archive", "--format=tar", revision], cwd=root,
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             env=git_environment())
     except OSError as error:
@@ -1277,6 +1278,46 @@ def boundary_history_control(source_root: pathlib.Path) -> None:
                 raise Reject("self-test-historical-boundary-invalid")
             validate_historical_requirements(boundary_snapshot, source_root, boundary,
                                              test_fixture_revision=boundary)
+
+            # Install a same-type replacement commit that changes both a boundary
+            # blob and the tree. Ordinary Git must select it; the production reader
+            # must return the original commit's bytes and inventory.
+            state_path = ".planning/STATE.md"
+            original_state = boundary_snapshot[state_path]
+            mutant_state = b"synthetic replacement state must not be selected\n"
+            extra_path = ".planning/d217-replacement.md"
+            state_file = root / "replacement-state"
+            extra_file = root / "replacement-tree-entry"
+            state_file.write_bytes(mutant_state)
+            extra_file.write_bytes(b"replacement tree entry\n")
+            state_blob = git(repo, "hash-object", "-w", str(state_file)).decode("ascii").strip()
+            extra_blob = git(repo, "hash-object", "-w", str(extra_file)).decode("ascii").strip()
+            git(repo, "read-tree", boundary)
+            git(repo, "update-index", "--add", "--cacheinfo",
+                "100644," + state_blob + "," + state_path,
+                "--cacheinfo", "100644," + extra_blob + "," + extra_path)
+            replacement_tree = git(repo, "write-tree").decode("ascii").strip()
+            replacement_commit = git(repo, "-c", "user.name=GabbaBoy Replacement Control",
+                                     "-c", "user.email=replacement@example.invalid", "commit-tree",
+                                     replacement_tree, "-p", boundary, "-m", "replacement control").decode(
+                                         "ascii").strip()
+            git(repo, "read-tree", boundary)
+            state_file.unlink()
+            extra_file.unlink()
+            git(repo, "replace", boundary, replacement_commit)
+            ordinary_blob = subprocess.run(["git", "-C", str(repo), "show", f"{boundary}:{state_path}"],
+                                           cwd=repo, env=git_environment(), stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE, check=False)
+            ordinary_tree = subprocess.run(["git", "-C", str(repo), "ls-tree", "-rz", "-r", boundary],
+                                           cwd=repo, env=git_environment(), stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE, check=False)
+            if (ordinary_blob.returncode != 0 or ordinary_blob.stdout != mutant_state
+                    or ordinary_tree.returncode != 0 or extra_path.encode() not in ordinary_tree.stdout):
+                raise Reject("replacement-ref control did not prove ordinary Git selected mutant boundary data")
+            if (git(repo, "show", f"{boundary}:{state_path}") != original_state
+                    or extra_path in tree_entries(repo, boundary)
+                    or load_boundary(repo, boundary) != boundary_snapshot):
+                raise Reject("production diagnostic Git readers followed a replacement commit")
             state = repo / ".planning/STATE.md"
             state.write_text("Phase 23 is complete.\n", encoding="utf-8")
             git(repo, "add", ".planning/STATE.md")

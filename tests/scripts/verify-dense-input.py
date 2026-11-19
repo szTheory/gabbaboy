@@ -52,7 +52,7 @@ def _git_environment() -> dict[str, str]:
 
 def git_bytes(repo: Path, *args: str, input_bytes: bytes | None = None,
               timeout: int = 60) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(["git", "-C", str(repo), *args], cwd=repo, input=input_bytes,
+    return subprocess.run(["git", "--no-replace-objects", "-C", str(repo), *args], cwd=repo, input=input_bytes,
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
                           env=_git_environment(), timeout=timeout)
 
@@ -153,7 +153,7 @@ def create_baseline_object_store(destination: Path) -> None:
 
 def git(repo: Path, *args: str, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
     raw = git_bytes(repo, *args, input_bytes=input_text.encode("utf-8") if input_text is not None else None)
-    return subprocess.CompletedProcess(["git", "-C", str(repo), *args], raw.returncode,
+    return subprocess.CompletedProcess(["git", "--no-replace-objects", "-C", str(repo), *args], raw.returncode,
                                        (raw.stdout + raw.stderr).decode("utf-8", "replace"), "")
 
 
@@ -304,6 +304,43 @@ def candidate_git_context_controls(source_revision: str) -> int:
         candidate.mkdir()
         installed = install_candidate_git_context(candidate, source_revision)
         require(installed == pins, "candidate subject changed the enumerated admission pin set")
+
+        pin_path, _pin_value = pins[0]
+        original_pin = git_blob(candidate, source_revision, pin_path)
+        mutant_pin = b"0" * 40 + b"\n"
+        mutant_blob = git(candidate, "hash-object", "-w", "--stdin", input_text=mutant_pin.decode("ascii"))
+        require(mutant_blob.returncode == 0, "replacement-ref mutant pin blob could not be written")
+        added_path = "fixtures/d217-replacement/manifest.json"
+        added_blob = git(candidate, "hash-object", "-w", "--stdin", input_text="{}\n")
+        require(added_blob.returncode == 0, "replacement-ref extra manifest blob could not be written")
+        staged = git(candidate, "update-index", "--add", "--cacheinfo",
+                     "100644," + mutant_blob.stdout.strip() + "," + pin_path,
+                     "--cacheinfo", "100644," + added_blob.stdout.strip() + "," + added_path)
+        require(staged.returncode == 0, f"replacement-ref mutant tree could not be staged: {staged.stdout.strip()}")
+        mutant_tree = git(candidate, "write-tree")
+        require(mutant_tree.returncode == 0, "replacement-ref mutant tree could not be written")
+        mutant_commit = git(candidate, "-c", "user.name=Fixture Control", "-c",
+                            "user.email=fixture-control@example.invalid", "commit-tree",
+                            mutant_tree.stdout.strip(), "-p", source_revision, "-m", "replacement-ref mutant")
+        require(mutant_commit.returncode == 0, f"replacement-ref mutant commit failed: {mutant_commit.stdout.strip()}")
+        mutant_revision = mutant_commit.stdout.strip()
+        require(git(candidate, "replace", source_revision, mutant_revision).returncode == 0,
+                "replacement-ref control could not install the synthetic commit replacement")
+        ordinary_pin = subprocess.run(["git", "-C", str(candidate), "show",
+                                       f"{source_revision}:{pin_path}"], cwd=candidate,
+                                      env=_git_environment(), stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE, check=False)
+        ordinary_tree = subprocess.run(["git", "-C", str(candidate), "ls-tree", "-rz",
+                                        "--name-only", source_revision, "--", "fixtures"],
+                                       cwd=candidate, env=_git_environment(), stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE, check=False)
+        ordinary_paths = set(ordinary_tree.stdout.split(b"\0"))
+        require(ordinary_pin.returncode == 0 and ordinary_pin.stdout == mutant_pin
+                and added_path.encode("ascii") in ordinary_paths,
+                "ordinary Git did not prove replacement commit changed both pin and fixture tree")
+        require(git_blob(candidate, source_revision, pin_path) == original_pin
+                and active_admission_pins(candidate, source_revision) == pins,
+                "hardened admission reads followed a replacement ref instead of original objects")
 
         decoy = temp / "decoy"
         decoy.mkdir()

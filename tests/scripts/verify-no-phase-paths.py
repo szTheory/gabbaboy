@@ -67,8 +67,8 @@ ALLOWLIST = (
      "temp-fixture layout strings built inside a throwaway repository, not reads of the live tree"),
     ("tests/data/closeout-scan-14-uat-review.md", 6,
      "byte copy of the archived 14-UAT-REVIEW.md seed for verify-closeout-scan.py, D-08"),
-    ("tests/scripts/verify-no-phase-paths.py", 17,
-     "the lint's spelling patterns, exact historical-path exception and positive/negative self-test fixtures"),
+    ("tests/scripts/verify-no-phase-paths.py", 18,
+     "the lint's spelling patterns, exact historical-path exception and positive/negative/alternate-index self-test fixtures"),
 )
 
 HISTORICAL_V04_EVIDENCE_FILE = "tests/data/v04-closeout.json"
@@ -145,8 +145,23 @@ def need(condition: bool, message: str) -> None:
         raise LintError(message)
 
 
+def _git_environment() -> dict[str, str]:
+    allowed = ("PATH", "SYSTEMROOT", "SystemRoot", "WINDIR", "PATHEXT", "COMSPEC",
+               "TMPDIR", "TMP", "TEMP", "HOME")
+    env = {key: os.environ[key] for key in allowed if key in os.environ}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull,
+               GIT_CONFIG_NOSYSTEM="1", GIT_TERMINAL_PROMPT="0", LC_ALL="C")
+    return env
+
+
+def _git(root: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(["git", "--no-replace-objects", "-C", str(root), *args],
+                          check=False, capture_output=True,
+                          env=env if env is not None else _git_environment())
+
+
 def tracked_files(root: Path) -> list[str]:
-    result = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], check=False, capture_output=True)
+    result = _git(root, "ls-files", "-z")
     need(result.returncode == 0, "REJECT git-ls-files: %s" % result.stderr.decode("utf-8", "replace").strip())
     return sorted(name for name in result.stdout.decode("utf-8", "surrogateescape").split("\0") if name)
 
@@ -483,6 +498,83 @@ def _merge_path_facts(*facts: _PathFact) -> _PathFact:
                                       all(item.callable_target is facts[0].callable_target for item in facts) else None))
 
 
+def _reflectively_writes_binding(tree: ast.Module, names: set[str]) -> bool:
+    """Fail closed on dynamic namespace writes that can replace a protected global binding."""
+    parents = _parents(tree)
+
+    def literal_key(node: ast.AST) -> str | None:
+        try:
+            value = ast.literal_eval(node)
+        except (ValueError, TypeError):
+            return None
+        return value if isinstance(value, str) else None
+
+    def dict_keys(node: ast.AST) -> set[str] | None:
+        if not isinstance(node, ast.Dict):
+            return None
+        keys = set()
+        for key in node.keys:
+            if key is None:
+                return None
+            value = literal_key(key)
+            if value is None:
+                return None
+            keys.add(value)
+        return keys
+
+    namespace_calls = {"globals", "locals", "vars"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id in {"eval", "__import__"}:
+                return True
+            if node.func.id == "exec":
+                scope = next((parent for parent in _ancestor_chain(node, parents)
+                              if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
+                isolated_fixture_exec = (scope is not None and scope.name == "self_test_v04_reconciliation"
+                                         and len(node.args) >= 2 and isinstance(node.args[1], ast.Name)
+                                         and node.args[1].id == "d202_namespace")
+                if not isolated_fixture_exec:
+                    return True
+            if node.func.id in namespace_calls:
+                parent = parents.get(node)
+                if isinstance(parent, ast.Subscript) and parent.value is node:
+                    key = literal_key(parent.slice)
+                    if key is None and isinstance(parent.ctx, (ast.Store, ast.Del)):
+                        return True
+                    if key in names and isinstance(parent.ctx, (ast.Store, ast.Del)):
+                        return True
+                elif isinstance(parent, ast.Attribute) and parent.value is node:
+                    operation = parent.attr
+                    operation_call = parents.get(parent)
+                    if isinstance(operation_call, ast.Call) and operation_call.func is parent:
+                        if operation in {"update", "pop", "popitem", "clear", "setdefault"}:
+                            keys = set(keyword.arg for keyword in operation_call.keywords if keyword.arg is not None)
+                            known = all(keyword.arg is not None for keyword in operation_call.keywords)
+                            for argument in operation_call.args:
+                                parsed = dict_keys(argument)
+                                if parsed is None:
+                                    known = False
+                                else:
+                                    keys.update(parsed)
+                            if not known or keys.intersection(names):
+                                return True
+                elif isinstance(parent, (ast.Assign, ast.AnnAssign, ast.NamedExpr)):
+                    return True
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id in {"setattr", "delattr"}:
+            key = literal_key(node.args[1]) if len(node.args) > 1 else None
+            if key in names or key is None:
+                return True
+        if isinstance(node, ast.Attribute) and node.attr == "__dict__":
+            parent = parents.get(node)
+            if isinstance(parent, ast.Subscript) and parent.value is node \
+                    and isinstance(parent.ctx, (ast.Store, ast.Del)):
+                key = literal_key(parent.slice)
+                if key in names or key is None:
+                    return True
+    return False
+
+
 def _approved_git_object_adapters(tree: ast.Module) -> set[ast.AST]:
     """Return only the exact reviewed Git subprocess adapter, rejecting body changes."""
     candidates = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -492,10 +584,61 @@ def _approved_git_object_adapters(tree: ast.Module) -> set[ast.AST]:
 
     expected = ast.parse("""def _expected_git_run(repo, *args):
     env = {k: v for k, v in os.environ.items() if k in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")}
-    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull)
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, check=False, env=env, timeout=60)
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull, GIT_CONFIG_NOSYSTEM="1", GIT_TERMINAL_PROMPT="0")
+    command = args[0] if args else ""
+    cache_revision = ""
+    if command == "show" and len(args) > 1:
+        cache_revision = args[1].split(":", 1)[0]
+    elif command == "ls-tree":
+        cache_revision = next((item for item in args[1:] if FULL_COMMIT.fullmatch(item)), "")
+    elif command == "cat-file" and len(args) > 1 and args[1] in ("-e", "-t", "blob", "commit", "tree", "-p"):
+        cache_revision = next((item for item in args[2:] if FULL_COMMIT.fullmatch(item)), "")
+    cache_key = None
+    if FULL_COMMIT.fullmatch(cache_revision):
+        cache_key = (str(repo.resolve()), args, tuple(sorted(env.items())))
+        cached = _GIT_OBJECT_READ_CACHE.get(cache_key)
+        if cached is not None:
+            argv = ["git", "--no-replace-objects", "-C", str(repo), *args]
+            return subprocess.CompletedProcess(argv, 0, cached[0], cached[1])
+    result = subprocess.run(["git", "--no-replace-objects", "-C", str(repo), *args], capture_output=True, check=False, env=env, timeout=60)
+    if cache_key is not None and result.returncode == 0 and len(_GIT_OBJECT_READ_CACHE) < 1024:
+        _GIT_OBJECT_READ_CACHE[cache_key] = (result.stdout, result.stderr)
+    return result
 """).body[0]
     actual = candidates[0]
+    parents = _parents(tree)
+    if _reflectively_writes_binding(tree, {"git_run", "_GIT_OBJECT_READ_CACHE"}):
+        raise LintError("REJECT planning-path-git-adapter: reflective namespace writes make runtime binding unprovable")
+    cache_bindings = [node for node in tree.body if isinstance(node, ast.Assign)
+                      and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+                      and node.targets[0].id == "_GIT_OBJECT_READ_CACHE"]
+    if (len(cache_bindings) != 1 or not isinstance(cache_bindings[0].value, ast.Dict)
+            or cache_bindings[0].value.keys or cache_bindings[0].value.values):
+        raise LintError("REJECT planning-path-git-adapter: immutable read cache binding is not the approved empty dictionary")
+    cache_target = cache_bindings[0].targets[0]
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == "_GIT_OBJECT_READ_CACHE" \
+                and isinstance(node.ctx, (ast.Store, ast.Del)) and node is not cache_target:
+            if not (_is_descendant(node, actual, parents)):
+                raise LintError("REJECT planning-path-git-adapter: immutable read cache is rebound outside git_run")
+        if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name) \
+                and node.value.id == "_GIT_OBJECT_READ_CACHE" and isinstance(node.ctx, (ast.Store, ast.Del)) \
+                and not _is_descendant(node, actual, parents):
+            raise LintError("REJECT planning-path-git-adapter: immutable read cache is mutated outside git_run")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == "git_run" and isinstance(node.ctx, (ast.Store, ast.Del)):
+            raise LintError("REJECT planning-path-git-adapter: runtime binding of git_run is reassigned or deleted")
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node is not actual and node.name == "git_run":
+            raise LintError("REJECT planning-path-git-adapter: runtime binding of git_run is shadowed")
+        if isinstance(node, ast.alias) and (node.asname == "git_run" or
+                                            (node.asname is None and node.name.split(".", 1)[-1] == "git_run")):
+            raise LintError("REJECT planning-path-git-adapter: runtime binding of git_run is imported")
+        if isinstance(node, ast.arg) and node.arg == "git_run":
+            raise LintError("REJECT planning-path-git-adapter: runtime binding of git_run is shadowed by a parameter")
+        if isinstance(node, ast.ExceptHandler) and node.name == "git_run":
+            raise LintError("REJECT planning-path-git-adapter: runtime binding of git_run is shadowed")
+        if isinstance(node, (ast.Global, ast.Nonlocal)) and "git_run" in node.names:
+            raise LintError("REJECT planning-path-git-adapter: dynamic scope can replace git_run")
     def argument_shape(arguments: ast.arguments) -> tuple[object, ...]:
         return (
             tuple(item.arg for item in arguments.posonlyargs),
@@ -534,6 +677,8 @@ def _has_chr_binding(tree: ast.Module) -> bool:
 
 
 def _has_stdlib_re_import(tree: ast.Module) -> bool:
+    if _reflectively_writes_binding(tree, {"re", "FULL_COMMIT"}):
+        return False
     imports = [(statement, alias) for statement in tree.body if isinstance(statement, ast.Import)
                for alias in statement.names if alias.name == "re" or alias.asname == "re"]
     if (len(imports) != 1 or len(imports[0][0].names) != 1 or imports[0][1].name != "re"
@@ -687,18 +832,147 @@ def _approved_git_path_read(call: ast.Call, actual_facts: list[_PathFact],
                 return not any(fact.protected for fact in actual_facts[:-1])
         if isinstance(expression, ast.JoinedStr):
             parts = expression.values
-            if (len(parts) >= 3 and isinstance(parts[0], ast.FormattedValue)
+            if (len(parts) == 3 and isinstance(parts[0], ast.FormattedValue)
                     and isinstance(parts[0].value, ast.Name)
                     and parts[0].value.id in validated_names
-                    and isinstance(parts[1], ast.Constant) and parts[1].value == ":"):
+                    and parts[0].conversion == -1 and parts[0].format_spec is None
+                    and isinstance(parts[1], ast.Constant) and parts[1].value == ":"
+                    and isinstance(parts[2], ast.FormattedValue)
+                    and parts[2].conversion == -1 and parts[2].format_spec is None
+                    and isinstance(parts[2].value, ast.Name)
+                    and actual_facts[-1].protected):
                 return not any(fact.protected for fact in actual_facts[:-1])
     return False
+
+
+def _validate_immutable_revision_proof(tree: ast.Module) -> None:
+    """Keep the planning reader's full-commit proof bound to unmodified Git operands."""
+    if not _has_full_commit_pattern(tree):
+        raise LintError("REJECT planning-path-git-command: full-commit validator binding changed")
+
+    top_functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)]
+    top_level = {node.name: node for node in top_functions}
+    guarded = ("read_rev", "commit_snapshot")
+    for name in guarded:
+        function = top_level.get(name)
+        if function is None or sum(node.name == name for node in top_functions) != 1:
+            raise LintError("REJECT planning-path-git-command: %s lost its full-commit guard" % name)
+        guard_lines = [node.lineno for node in ast.walk(function)
+                       if isinstance(node, ast.If)
+                       and isinstance(node.test, ast.UnaryOp) and isinstance(node.test.op, ast.Not)
+                       and isinstance(node.test.operand, ast.Call)
+                       and isinstance(node.test.operand.func, ast.Attribute)
+                       and node.test.operand.func.attr == "fullmatch"
+                       and isinstance(node.test.operand.func.value, ast.Name)
+                       and node.test.operand.func.value.id == "FULL_COMMIT"
+                       and len(node.test.operand.args) == 1
+                       and isinstance(node.test.operand.args[0], ast.Name)
+                       and node.test.operand.args[0].id == "rev"
+                       and not node.test.operand.keywords and not node.orelse
+                       and node.body and isinstance(node.body[0], (ast.Return, ast.Raise))]
+        git_read_lines = [node.lineno for node in ast.walk(function)
+                          if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                          and node.func.id == "git_run"]
+        if not guard_lines or not git_read_lines or min(guard_lines) >= min(git_read_lines):
+            raise LintError("REJECT planning-path-git-command: %s lost its pre-read full-commit guard" % name)
+        parameters = [*function.args.posonlyargs, *function.args.args,
+                      *function.args.kwonlyargs]
+        if sum(parameter.arg == "rev" for parameter in parameters) != 1:
+            raise LintError("REJECT planning-path-git-command: %s revision parameter changed" % name)
+        if any(isinstance(node, ast.Name) and node.id == "rev"
+               and isinstance(node.ctx, (ast.Store, ast.Del)) for node in ast.walk(function)):
+            raise LintError("REJECT planning-path-git-command: %s rebinds its validated revision" % name)
+        if any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node is not function
+               and any(parameter.arg == "rev" for parameter in
+                       [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs])
+               for node in ast.walk(function)):
+            raise LintError("REJECT planning-path-git-command: nested helper shadows validated revision")
+
+    def exact_revision_path(expression: ast.AST, revision_name: str) -> bool:
+        return (isinstance(expression, ast.JoinedStr) and len(expression.values) == 3
+                and isinstance(expression.values[0], ast.FormattedValue)
+                and isinstance(expression.values[0].value, ast.Name)
+                and expression.values[0].value.id == revision_name
+                and expression.values[0].conversion == -1
+                and expression.values[0].format_spec is None
+                and isinstance(expression.values[1], ast.Constant)
+                and expression.values[1].value == ":"
+                and isinstance(expression.values[2], ast.FormattedValue)
+                and isinstance(expression.values[2].value, ast.Name)
+                and expression.values[2].value.id != revision_name
+                and expression.values[2].conversion == -1
+                and expression.values[2].format_spec is None)
+
+    def exact_git_reader(function: ast.FunctionDef, revision_name: str,
+                         allowed_commands: set[str]) -> None:
+        for call in ast.walk(function):
+            if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+                    and call.func.id == "git_run"):
+                continue
+            if (call.keywords or len(call.args) < 3
+                    or any(isinstance(argument, ast.Starred) for argument in call.args)
+                    or not isinstance(call.args[1], ast.Constant)
+                    or not isinstance(call.args[1].value, str)):
+                raise LintError("REJECT planning-path-git-command: %s has a dynamic Git read" % function.name)
+            command = call.args[1].value
+            if command not in allowed_commands:
+                raise LintError("REJECT planning-path-git-command: %s uses an unapproved Git read" % function.name)
+            if command == "show":
+                if len(call.args) != 3 or not exact_revision_path(call.args[2], revision_name):
+                    raise LintError("REJECT planning-path-git-command: show revision/path operand changed")
+            elif command == "ls-tree":
+                separator = next((index for index, item in enumerate(call.args[2:], start=2)
+                                  if isinstance(item, ast.Constant) and item.value == "--"), None)
+                if (separator is None or separator < 3 or separator + 2 != len(call.args)
+                        or not isinstance(call.args[separator - 1], ast.Name)
+                        or call.args[separator - 1].id != revision_name):
+                    raise LintError("REJECT planning-path-git-command: ls-tree revision operand changed")
+            elif command == "cat-file":
+                if not isinstance(call.args[-1], ast.Name) or call.args[-1].id != revision_name:
+                    raise LintError("REJECT planning-path-git-command: cat-file revision operand changed")
+            elif command == "archive":
+                if len(call.args) < 4 or not isinstance(call.args[3], ast.Name) \
+                        or call.args[3].id != revision_name:
+                    raise LintError("REJECT planning-path-git-command: archive revision operand changed")
+
+    exact_git_reader(top_level["read_rev"], "rev", {"show", "ls-tree", "cat-file"})
+    exact_git_reader(top_level["commit_snapshot"], "rev", {"cat-file", "archive"})
+
+    immutable_blob = top_level.get("immutable_blob")
+    validate_archive = top_level.get("validate_v04_archive_and_recovery")
+    if (immutable_blob is None or validate_archive is None
+            or sum(node.name == "immutable_blob" for node in top_functions) != 1
+            or sum(node.name == "validate_v04_archive_and_recovery" for node in top_functions) != 1):
+        raise LintError("REJECT planning-path-git-command: immutable archive readers are missing")
+    immutable_parameters = [*immutable_blob.args.posonlyargs, *immutable_blob.args.args,
+                            *immutable_blob.args.kwonlyargs]
+    if sum(parameter.arg == "revision" for parameter in immutable_parameters) != 1:
+        raise LintError("REJECT planning-path-git-command: immutable archive revision parameter changed")
+    exact_git_reader(immutable_blob, "revision", {"show", "ls-tree"})
+
+    archive_revision_calls = [node for node in ast.walk(tree)
+                              if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                              and node.func.id == "immutable_blob"]
+    parents = _parents(tree)
+    if not archive_revision_calls or any(
+            not _is_descendant(call, validate_archive, parents) or len(call.args) < 2
+            or not isinstance(call.args[1], ast.Name)
+            or call.args[1].id not in {"revision", "V04_D209_ARCHIVE_REV"}
+            for call in archive_revision_calls):
+        raise LintError("REJECT planning-path-git-command: immutable archive revision call changed")
+    archive_pin = next((node.value.value for node in tree.body if isinstance(node, ast.Assign)
+                        and any(isinstance(target, ast.Name) and target.id == "V04_D209_ARCHIVE_REV"
+                                for target in node.targets)
+                        and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)), None)
+    if not isinstance(archive_pin, str) or not re.fullmatch(r"[0-9a-f]{40}", archive_pin):
+        raise LintError("REJECT planning-path-git-command: immutable archive revision pin changed")
 
 
 def _validate_decoded_path_flow(source: str, tree: ast.Module,
                                 roots_by_function: dict[str, set[str]]) -> None:
     """Check decoded values and bounded helper calls without importing or executing source."""
     trusted_git_adapters = _approved_git_object_adapters(tree)
+    _validate_immutable_revision_proof(tree)
     parents = _parents(tree)
     functions = [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
     chr_shadowed = _has_chr_binding(tree)
@@ -732,6 +1006,26 @@ def _validate_decoded_path_flow(source: str, tree: ast.Module,
             if (isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef))
                     and current.name == "read_rev" and _has_full_commit_pattern(tree)
                     and _has_full_commit_guard(current)):
+                parameters = [*current.args.posonlyargs, *current.args.args,
+                              *current.args.kwonlyargs]
+                if sum(parameter.arg == "rev" for parameter in parameters) != 1:
+                    return set()
+                if any(isinstance(node, ast.Name) and node.id == "rev"
+                       and isinstance(node.ctx, (ast.Store, ast.Del))
+                       for node in nodes_by_scope.get(current, ())):
+                    return set()
+                nested = scope
+                while nested is not current and nested is not None:
+                    nested_parameters = []
+                    if isinstance(nested, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        nested_parameters = [*nested.args.posonlyargs, *nested.args.args,
+                                             *nested.args.kwonlyargs]
+                    if (any(parameter.arg == "rev" for parameter in nested_parameters)
+                            or any(isinstance(node, ast.Name) and node.id == "rev"
+                                   and isinstance(node.ctx, (ast.Store, ast.Del))
+                                   for node in nodes_by_scope.get(nested, ()))):
+                        return set()
+                    nested = function_parent.get(nested)
                 return {"rev"}
             current = function_parent.get(current)
         return set()
@@ -954,6 +1248,14 @@ def _validate_decoded_path_flow(source: str, tree: ast.Module,
 
     def needs_decoded_flow() -> bool:
         protected_names = {name for name, fact in module_env.items() if fact.protected}
+        # Revision validation is part of the immutable-read contract even when a
+        # path is already spelled literally and therefore needs no decoding.
+        # Without this trigger, an ordinary `read_rev` Git read could bypass
+        # revision-flow and f-string-format checks through the fast path below.
+        if any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+               and node.name == "read_rev" and _has_full_commit_guard(node)
+               for node in tree.body):
+            return True
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -2085,8 +2387,7 @@ def injected_rebound_root_reader():
             reason = "REJECT live-phase-path-reader"
         expect_flow_rejected(label, source + addition, reason, same_count=True)
 
-    git_run_line = ('    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, '
-                     'check=False, env=env, timeout=60)')
+    git_run_line = '    result = subprocess.run(["git", "--no-replace-objects", "-C", str(repo), *args],'
     need(git_run_line in source, "git_run adapter mutation did not find its approved body")
     git_run_mutant = source.replace(git_run_line,
                                     "    (repo / args[-1]).iterdir()\n" + git_run_line, 1)
@@ -2098,6 +2399,12 @@ def injected_rebound_root_reader():
                                               "@injected_wrapper\n" + git_run_definition, 1)
     expect_flow_rejected("git_run wrapper mutation", git_run_decorator_mutant,
                          "REJECT planning-path-git-adapter", same_count=True)
+    for label, candidate in (
+        ("later lambda replaces git_run", source + "\ngit_run = lambda repo, *args: None\n"),
+        ("conditional binding replaces git_run", source + "\nif True:\n    git_run = lambda repo, *args: None\n"),
+        ("reflective namespace replaces git_run", source + "\nglobals()[\"git_run\"] = lambda repo, *args: None\n"),
+    ):
+        expect_flow_rejected(label, candidate, "REJECT planning-path-git-adapter", same_count=True)
 
     git_hash = "a" * 40
     git_argument_mutant = source + r'''
@@ -2131,8 +2438,35 @@ def injected_unvalidated_git_revision_reader(repo, rev):
     )
     for label, candidate in full_commit_rebindings:
         expect_flow_rejected(label, candidate, "REJECT planning-path-git-command", same_count=True)
+    expect_flow_rejected("reflective FULL_COMMIT replacement",
+                         source + "\nglobals()[\"FULL_COMMIT\"] = re.compile(\".*\")\n",
+                         "REJECT planning-path-git-command", same_count=True)
+    expect_flow_rejected("reflective re replacement",
+                         source + "\nglobals()[\"re\"] = object()\n",
+                         "REJECT planning-path-git-command", same_count=True)
     re_binding_mutant = source + "\nre = object()\n"
     expect_flow_rejected("re binding shadows the standard-library import", re_binding_mutant,
+                         "REJECT planning-path-git-command", same_count=True)
+    post_guard_rebind = source.replace(
+        '    found = git_run(repo, "cat-file", "-t", rev)',
+        '    rev = rev[:39]\n    found = git_run(repo, "cat-file", "-t", rev)', 1)
+    need(post_guard_rebind != source, "post-guard revision mutation did not find read_rev")
+    expect_flow_rejected("post-guard local revision rebind", post_guard_rebind,
+                         "REJECT planning-path-git-command", same_count=True)
+    for label, replacement in (
+        ("truncating revision format", 'f"{rev:.39}:{path}"'),
+        ("converted revision format", 'f"{rev!r}:{path}"'),
+        ("formatted revision alignment", 'f"{rev:>40}:{path}"'),
+    ):
+        changed_format = source.replace('f"{rev}:{path}"', replacement, 1)
+        need(changed_format != source, "%s mutation did not find the approved revision f-string" % label)
+        expect_flow_rejected(label, changed_format, "REJECT planning-path-git-command", same_count=True)
+    transformed_revision_operand = source.replace(
+        'git_run(repo, "cat-file", "-t", rev)',
+        'git_run(repo, "cat-file", "-t", rev[:39])', 1)
+    need(transformed_revision_operand != source,
+         "transformed revision operand mutation did not find the checked Git call")
+    expect_flow_rejected("transformed full-commit Git operand", transformed_revision_operand,
                          "REJECT planning-path-git-command", same_count=True)
 
     git_read_positives = (
@@ -2308,8 +2642,82 @@ def make_fixture(root: Path, files: dict[str, str], binary: bool = True) -> None
         blob.parent.mkdir(parents=True, exist_ok=True)
         blob.write_bytes(BINARY_BODY)
     for command in (["init", "-q"], ["add", "-A", "-f"]):
-        done = subprocess.run(["git", "-C", str(root)] + command, check=False, capture_output=True)
+        done = _git(root, *command)
         need(done.returncode == 0, "fixture git %s failed" % command[0])
+
+
+def tracked_inventory_controls() -> int:
+    """Prove alternate Git indexes and decoy selectors cannot hide a protected reader."""
+    controls = 0
+    with tempfile.TemporaryDirectory(prefix="gbb-tracked-inventory-") as directory:
+        base = Path(directory)
+        repo = base / "repo"
+        repo.mkdir()
+        source = "tests/scripts/outside-must-scan.py"
+        make_fixture(repo, {source: "from pathlib import Path\nPath('.planning/phases/private.md').read_text()\n"},
+                     binary=False)
+        baseline = tracked_files(repo)
+        need(source in baseline, "inventory control fixture source is not normally tracked")
+        controls += 1
+
+        empty_index = base / "filtered-index"
+        environment = {**_git_environment(), "GIT_INDEX_FILE": str(empty_index)}
+        initialized = _git(repo, "read-tree", "--empty", env=environment)
+        need(initialized.returncode == 0, "alternate empty index could not be prepared")
+        ordinary = subprocess.run(["git", "-C", str(repo), "ls-files", "-z"], cwd=repo,
+                                  env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                  check=False)
+        need(ordinary.returncode == 0 and source.encode() not in ordinary.stdout.split(b"\0"),
+             "ordinary Git did not demonstrate alternate-index suppression")
+        controls += 1
+
+        decoy = base / "decoy"
+        decoy.mkdir()
+        (decoy / "sentinel.txt").write_text("stable\n", encoding="utf-8")
+        need(_git(decoy, "init", "-q").returncode == 0, "decoy repository init failed")
+        need(_git(decoy, "add", "sentinel.txt").returncode == 0, "decoy sentinel add failed")
+        committed = subprocess.run(["git", "-C", str(decoy), "-c", "user.name=fixture",
+                                    "-c", "user.email=fixture@example.invalid", "commit", "-qm", "decoy"],
+                                   env=_git_environment(), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   check=False)
+        need(committed.returncode == 0, "decoy repository commit failed")
+        decoy_head = _git(decoy, "rev-parse", "--verify", "HEAD^{commit}").stdout.strip()
+        decoy_refs = _git(decoy, "for-each-ref", "--format=%(refname) %(objectname)").stdout
+        decoy_index = hashlib.sha256((decoy / ".git/index").read_bytes()).hexdigest()
+        hostile = {"GIT_INDEX_FILE": str(empty_index), "GIT_DIR": str(decoy / ".git"),
+                   "GIT_WORK_TREE": str(decoy), "GIT_COMMON_DIR": str(decoy / ".git"),
+                   "GIT_OBJECT_DIRECTORY": str(decoy / ".git/objects"),
+                   "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(decoy / ".git/objects"),
+                   "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.bare",
+                   "GIT_CONFIG_VALUE_0": "true", "GIT_NAMESPACE": "redirected"}
+        previous = {key: os.environ.get(key) for key in hostile}
+        present = set(hostile).intersection(os.environ)
+        try:
+            os.environ.update(hostile)
+            observed = tracked_files(repo)
+            need(observed == baseline and source in observed,
+                 "selector-isolated inventory omitted protected reader source")
+            controls += 1
+            try:
+                check(repo, allowlist=(), must_scan=())
+            except LintError as error:
+                need(str(error).startswith("REJECT phase-path: " + source),
+                     "protected reader under hostile selectors refused for the wrong reason: %s" % error)
+            else:
+                raise LintError("alternate-index inventory control accepted a live phase reader")
+            controls += 1
+        finally:
+            for key in hostile:
+                if key in present:
+                    os.environ[key] = previous[key] or ""
+                else:
+                    os.environ.pop(key, None)
+        need(_git(decoy, "rev-parse", "--verify", "HEAD^{commit}").stdout.strip() == decoy_head
+             and _git(decoy, "for-each-ref", "--format=%(refname) %(objectname)").stdout == decoy_refs
+             and hashlib.sha256((decoy / ".git/index").read_bytes()).hexdigest() == decoy_index,
+             "alternate-index/decoy control changed the decoy repository")
+        controls += 1
+    return controls
 
 
 def expect_rejected(label: str, prefix: str, files: dict[str, str], allowlist=(), must_scan=()) -> None:
@@ -2344,6 +2752,7 @@ def mutated(files: dict[str, str], name: str, old: str, new: str) -> dict[str, s
 
 def self_test() -> int:
     controls = self_test_planning_hygiene_path_contract()
+    controls += tracked_inventory_controls()
     expect_accepted("clean tree", CLEAN_FILES)
     controls += 1
     expect_accepted("exact archived v0.4 evidence paths", CLEAN_FILES)

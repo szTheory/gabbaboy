@@ -173,9 +173,23 @@ def reject(message: str) -> None:
     raise CoverageError(message)
 
 
+def git_environment() -> dict[str, str]:
+    allowed = ("PATH", "SYSTEMROOT", "SystemRoot", "WINDIR", "PATHEXT", "COMSPEC",
+               "TMPDIR", "TMP", "TEMP", "HOME")
+    env = {key: os.environ[key] for key in allowed if key in os.environ}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull,
+               GIT_CONFIG_NOSYSTEM="1", GIT_TERMINAL_PROMPT="0", LC_ALL="C")
+    return env
+
+
+def git_read(root: Path, *args: str, timeout: int = 15) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(["git", "--no-replace-objects", "-C", str(root), *args],
+                          cwd=root, env=git_environment(), capture_output=True,
+                          check=False, timeout=timeout)
+
+
 def baseline_source(root: Path) -> bytes:
-    result = subprocess.run(["git", "show", f"{BASELINE_COMMIT}:{POLICY_PATH}"], cwd=root,
-                            capture_output=True, check=False, timeout=15)
+    result = git_read(root, "show", f"{BASELINE_COMMIT}:{POLICY_PATH}")
     if result.returncode != 0:
         reject(f"immutable workflow-policy source is unavailable: {result.stderr.decode(errors='replace').strip()}")
     digest = hashlib.sha256(result.stdout).hexdigest()
@@ -185,8 +199,7 @@ def baseline_source(root: Path) -> bytes:
 
 
 def reviewed_policy_source(root: Path) -> bytes:
-    result = subprocess.run(["git", "show", f"{REVIEWED_POLICY_COMMIT}:{POLICY_PATH}"], cwd=root,
-                            capture_output=True, check=False, timeout=15)
+    result = git_read(root, "show", f"{REVIEWED_POLICY_COMMIT}:{POLICY_PATH}")
     if result.returncode != 0:
         reject(f"reviewed workflow-policy source is unavailable: {result.stderr.decode(errors='replace').strip()}")
     digest = hashlib.sha256(result.stdout).hexdigest()
@@ -196,8 +209,7 @@ def reviewed_policy_source(root: Path) -> bytes:
 
 
 def reviewed_archive_helper_source(root: Path) -> bytes:
-    result = subprocess.run(["git", "show", f"{REVIEWED_ARCHIVE_HELPER_COMMIT}:{ARCHIVE_HELPER_PATH}"], cwd=root,
-                            capture_output=True, check=False, timeout=15)
+    result = git_read(root, "show", f"{REVIEWED_ARCHIVE_HELPER_COMMIT}:{ARCHIVE_HELPER_PATH}")
     if result.returncode != 0:
         reject(f"reviewed bounded archive helper is unavailable: {result.stderr.decode(errors='replace').strip()}")
     digest = hashlib.sha256(result.stdout).hexdigest()
@@ -244,8 +256,7 @@ def verify_reviewed_policy_identity(candidate: bytes, reviewed: bytes | None) ->
 
 
 def git_text(root: Path, revision: str, path: str) -> bytes:
-    result = subprocess.run(["git", "show", f"{revision}:{path}"], cwd=root,
-                            capture_output=True, check=False, timeout=15)
+    result = git_read(root, "show", f"{revision}:{path}")
     if result.returncode != 0:
         reject(f"immutable candidate source is unavailable: {revision}:{path}")
     return result.stdout
@@ -680,9 +691,11 @@ def validate_phase23_timeout_profile(ci_workflow: str, preview_workflow: str,
 
 
 def resolve_commit(root: Path, revision: str) -> str:
-    result = subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}"], cwd=root,
-                            capture_output=True, text=True, check=False, timeout=15)
-    commit = result.stdout.strip()
+    result = git_read(root, "rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}")
+    try:
+        commit = result.stdout.decode("ascii", "strict").strip()
+    except UnicodeDecodeError:
+        commit = ""
     if result.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40,64}", commit):
         reject(f"candidate revision is not an immutable commit: {revision}")
     return commit
@@ -1643,6 +1656,7 @@ def _self_test(root: Path, revision: str) -> int:
     expected_tests = sorted(POLICY_TEST_NAMES | PROCESSOR_RESERVED_TESTS)
     ci_lanes = "\n".join(f"gbb_add_ci_lane_test({name} 0 marker 60 \"\")" for name in expected_tests)
     controls = 0
+    controls += original_object_read_controls()
 
     def rejected(label: str, operation) -> None:
         nonlocal controls
@@ -2270,14 +2284,17 @@ def _self_test(root: Path, revision: str) -> int:
 
     candidate_namespace = {"__name__": "candidate_workflow_policy", "__file__": str(root / POLICY_PATH)}
     exec(compile(candidate_source, POLICY_PATH, "exec"), candidate_namespace)
-    workflow_listing = subprocess.run(
-        ["git", "ls-tree", "-r", "--name-only", candidate, "--", ".github/workflows"],
-        cwd=root, capture_output=True, text=True, check=False, timeout=15,
-    )
+    workflow_listing = git_read(
+        root, "ls-tree", "-rz", "--name-only", candidate, "--", ".github/workflows")
     if workflow_listing.returncode != 0:
-        reject(f"candidate workflow inventory is unavailable: {workflow_listing.stderr.strip()}")
-    candidate_workflows = [path for path in workflow_listing.stdout.splitlines()
-                           if path.startswith(".github/workflows/") and path.endswith(".yml")]
+        reject("candidate workflow inventory is unavailable: " +
+               workflow_listing.stderr.decode("utf-8", "replace").strip())
+    try:
+        candidate_workflows = [path.decode("utf-8", "strict")
+                               for path in workflow_listing.stdout.split(b"\0") if path
+                               if path.startswith(b".github/workflows/") and path.endswith(b".yml")]
+    except UnicodeError:
+        reject("candidate workflow inventory contains a non-UTF-8 path")
     if ".github/workflows/ci.yml" not in candidate_workflows:
         reject("candidate workflow inventory is missing ci.yml")
     required_workflows = {".github/workflows/ci.yml", ".github/workflows/preview.yml",
@@ -3172,6 +3189,91 @@ def _self_test(root: Path, revision: str) -> int:
                     if path.exists():
                         git_run("worktree", "remove", "--force", str(path))
     return controls
+
+
+def original_object_read_controls() -> int:
+    """Prove workflow Git readers ignore replacement refs and hostile repository selectors."""
+    with tempfile.TemporaryDirectory(prefix="workflow-policy-original-objects-") as directory:
+        base = Path(directory)
+        repo = base / "repo"
+        decoy = base / "decoy"
+        repo.mkdir()
+        decoy.mkdir()
+
+        def setup_git(target: Path, *args: str) -> bytes:
+            result = subprocess.run(["git", "-C", str(target), *args], cwd=target,
+                                    env=git_environment(), stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, check=False, timeout=15)
+            if result.returncode:
+                reject("original-object control Git setup failed: " +
+                       result.stderr.decode("utf-8", "replace").strip())
+            return result.stdout
+
+        def commit_control(target: Path, message: str) -> str:
+            setup_git(target, "add", "--all")
+            setup_git(target, "-c", "user.name=Workflow Policy Control", "-c",
+                      "user.email=workflow-control@example.invalid", "commit", "-qm", message)
+            return setup_git(target, "rev-parse", "--verify", "HEAD^{commit}").decode("ascii").strip()
+
+        setup_git(repo, "init", "-q")
+        (repo / "evidence.txt").write_bytes(b"original immutable bytes\n")
+        original = (repo / "evidence.txt").read_bytes()
+        base_revision = commit_control(repo, "original boundary")
+        (repo / "evidence.txt").write_bytes(b"mutant replacement bytes\n")
+        (repo / "extra.txt").write_bytes(b"replacement tree entry\n")
+        mutant = commit_control(repo, "replacement boundary")
+        setup_git(repo, "replace", base_revision, mutant)
+
+        ordinary_blob = setup_git(repo, "show", f"{base_revision}:evidence.txt")
+        ordinary_tree = setup_git(repo, "ls-tree", "-rz", "--name-only", base_revision)
+        if ordinary_blob != b"mutant replacement bytes\n" or b"extra.txt\0" not in ordinary_tree:
+            reject("replacement-ref control did not prove ordinary Git selected mutant blob and tree")
+
+        expected_tree = git_read(repo, "ls-tree", "-rz", "--name-only", base_revision)
+        if (git_text(repo, base_revision, "evidence.txt") != original
+                or expected_tree.returncode != 0 or b"extra.txt\0" in expected_tree.stdout
+                or resolve_commit(repo, base_revision) != base_revision):
+            reject("workflow-policy immutable readers followed replacement objects")
+
+        setup_git(decoy, "init", "-q")
+        (decoy / "evidence.txt").write_bytes(b"decoy bytes\n")
+        decoy_head = commit_control(decoy, "decoy")
+        decoy_refs = setup_git(decoy, "for-each-ref", "--format=%(refname) %(objectname)")
+        decoy_index = hashlib.sha256((decoy / ".git/index").read_bytes()).hexdigest()
+        hostile = {
+            "GIT_DIR": str(decoy / ".git"),
+            "GIT_WORK_TREE": str(decoy),
+            "GIT_COMMON_DIR": str(decoy / ".git"),
+            "GIT_INDEX_FILE": str(decoy / ".git/index"),
+            "GIT_OBJECT_DIRECTORY": str(decoy / ".git/objects"),
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(decoy / ".git/objects"),
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.bare",
+            "GIT_CONFIG_VALUE_0": "true",
+            "GIT_NAMESPACE": "redirected",
+        }
+        previous = {key: os.environ.get(key) for key in hostile}
+        present = set(hostile).intersection(os.environ)
+        try:
+            os.environ.update(hostile)
+            git_dir = git_read(repo, "rev-parse", "--absolute-git-dir").stdout.decode("utf-8", "strict").strip()
+            worktree = git_read(repo, "rev-parse", "--show-toplevel").stdout.decode("utf-8", "strict").strip()
+            if (Path(git_dir).resolve() != (repo / ".git").resolve()
+                    or Path(worktree).resolve() != repo.resolve()
+                    or git_text(repo, base_revision, "evidence.txt") != original
+                    or b"extra.txt\0" in git_read(repo, "ls-tree", "-rz", "--name-only", base_revision).stdout):
+                reject("hostile Git selectors redirected workflow-policy source reads")
+        finally:
+            for key in hostile:
+                if key in present:
+                    os.environ[key] = previous[key] or ""
+                else:
+                    os.environ.pop(key, None)
+        if (setup_git(decoy, "rev-parse", "--verify", "HEAD^{commit}").decode("ascii").strip() != decoy_head
+                or setup_git(decoy, "for-each-ref", "--format=%(refname) %(objectname)") != decoy_refs
+                or hashlib.sha256((decoy / ".git/index").read_bytes()).hexdigest() != decoy_index):
+            reject("hostile Git selectors changed the workflow-policy decoy repository")
+    return 6
 
 
 def _check(root: Path, build_dir: Path, revision: str) -> None:

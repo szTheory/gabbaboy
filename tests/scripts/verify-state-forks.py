@@ -65,12 +65,27 @@ def fixture_git_path(manifest_dir: PurePosixPath, filename: str) -> str:
     return (manifest_dir / path).as_posix()
 
 
+def git_environment() -> dict[str, str]:
+    """Keep immutable reads on the requested repository with replacement refs disabled."""
+    allowed = ("PATH", "SYSTEMROOT", "SystemRoot", "WINDIR", "PATHEXT", "COMSPEC",
+               "TMPDIR", "TMP", "TEMP", "HOME")
+    env = {key: os.environ[key] for key in allowed if key in os.environ}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull,
+               GIT_CONFIG_NOSYSTEM="1", GIT_TERMINAL_PROMPT="0", LC_ALL="C")
+    return env
+
+
+def git_read(repo: Path, *args: str, input_bytes: bytes | None = None,
+             timeout: int = 60) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(["git", "--no-replace-objects", "-C", str(repo), *args],
+                          cwd=repo, env=git_environment(), input=input_bytes,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          check=False, timeout=timeout)
+
+
 def git_blob(rev: str, path: str, repo: Path) -> bytes:
     immutable = git_path(path).as_posix()
-    result = subprocess.run(
-        ["git", "show", f"{rev}:{immutable}"], cwd=repo,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
-    )
+    result = git_read(repo, "show", f"{rev}:{immutable}")
     if result.returncode:
         raise ForkError(f"immutable revision {rev} has no readable {immutable}: {result.stderr.decode(errors='replace').strip()}")
     return result.stdout
@@ -79,8 +94,7 @@ def git_blob(rev: str, path: str, repo: Path) -> bytes:
 def checked_rev(value: str, repo: Path) -> str:
     if not REVISION.fullmatch(value):
         raise ForkError("--rev must be a resolved immutable 40-character lowercase commit")
-    result = subprocess.run(["git", "cat-file", "-e", f"{value}^{{commit}}"], cwd=repo,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
+    result = git_read(repo, "cat-file", "-e", f"{value}^{{commit}}")
     if result.returncode:
         raise ForkError(f"--rev is not an available commit: {value}")
     return value
@@ -101,10 +115,7 @@ def load_spec(rev: str, repo: Path) -> tuple[dict, bytes]:
 
 def immutable_fixture_manifests(rev: str, repo: Path) -> set[str]:
     """Enumerate fixture manifests without Git's quoted or line-based path format."""
-    tree = subprocess.run(
-        ["git", "ls-tree", "-rz", "--name-only", rev, "--", "fixtures"],
-        cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
-    )
+    tree = git_read(repo, "ls-tree", "-rz", "--name-only", rev, "--", "fixtures")
     if tree.returncode:
         detail = tree.stderr.decode("utf-8", errors="replace").strip()
         raise ForkError(f"cannot enumerate immutable fixture tree: {detail}")
@@ -830,7 +841,34 @@ def inventory_controls(rev: str, repo: Path, spec: dict) -> tuple[int, int]:
            "diagnostic fixture manifest cannot be active")
     controls += 1
     controls += synthetic_path_controls(rev, repo, spec)
+    controls += inventory_cli_controls(rev, repo)
     return len(positive), controls
+
+
+def inventory_cli_controls(rev: str, repo: Path) -> int:
+    """Prove inventory mode rejects every conflicting operation before Git or output effects."""
+    controls = 0
+    with tempfile.TemporaryDirectory(prefix="state-fork-cli-controls-") as temp_dir:
+        output = Path(temp_dir) / "mutant.c"
+        command = [sys.executable, "-I", str(Path(__file__).resolve()),
+                   "--inventory-controls", "--materialize-mutant-core", "--rev", rev,
+                   "--repo", str(repo), "--output", str(output)]
+        result = subprocess.run(command, cwd=repo, env=git_environment(),
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, check=False, timeout=10)
+        combined = result.stdout + result.stderr
+        if (result.returncode != 1 or "inventory-controls is exclusive" not in combined
+                or "inventory-controls pass" in combined or output.exists()):
+            raise ForkError("inventory/materialization CLI conflict was not refused before Git/output effects")
+        controls += 1
+
+        parsed = parse_args(["--materialize-mutant-core", "--rev", rev,
+                             "--repo", str(repo), "--output", str(output)])
+        if (not parsed.materialize_mutant_core or parsed.rev != rev
+                or parsed.output != output.resolve()):
+            raise ForkError("materialization-only argument parsing positive changed")
+    controls += 1
+    return controls
 
 
 def synthetic_path_controls(rev: str, repo: Path, spec: dict) -> int:
@@ -849,7 +887,7 @@ def synthetic_path_controls(rev: str, repo: Path, spec: dict) -> int:
 
         def git(*args: str, input_bytes: bytes | None = None) -> bytes:
             result = subprocess.run(
-                ["git", *args], cwd=synthetic_repo, env=git_env,
+                ["git", "--no-replace-objects", *args], cwd=synthetic_repo, env=git_env,
                 input=input_bytes, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 check=False,
             )
@@ -883,6 +921,102 @@ def synthetic_path_controls(rev: str, repo: Path, spec: dict) -> int:
 
         base_rev = commit_tree("base manifest inventory")
         validate_manifest_census(base_rev, synthetic_repo, spec)
+        base_manifests = immutable_fixture_manifests(base_rev, synthetic_repo)
+        probe_path = source_manifests[0]
+        base_blob = git_blob(base_rev, probe_path, synthetic_repo)
+
+        # A same-type commit replacement is visible to ordinary Git but must not
+        # redirect either the raw blob reader or the NUL-delimited manifest census.
+        changed_probe = synthetic_repo.joinpath(*PurePosixPath(probe_path).parts)
+        changed_probe.write_bytes(b'{"replacement":"mutant"}\n')
+        added_manifest = synthetic_repo / "fixtures/replacement/manifest.json"
+        added_manifest.parent.mkdir(parents=True, exist_ok=True)
+        added_manifest.write_bytes(b'{"fixtures":[]}\n')
+        mutant_rev = commit_tree("replacement mutant manifest inventory")
+        git("replace", base_rev, mutant_rev)
+        ordinary_blob = subprocess.run(
+            ["git", "-C", str(synthetic_repo), "show", f"{base_rev}:{probe_path}"],
+            cwd=synthetic_repo, env=git_env, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=False,
+        )
+        ordinary_tree = subprocess.run(
+            ["git", "-C", str(synthetic_repo), "ls-tree", "-rz", "--name-only",
+             base_rev, "--", "fixtures"],
+            cwd=synthetic_repo, env=git_env, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=False,
+        )
+        ordinary_manifests = {item.decode("utf-8", "strict")
+                              for item in ordinary_tree.stdout.split(b"\0")
+                              if item.endswith(b"/manifest.json")}
+        if (ordinary_blob.returncode != 0 or ordinary_blob.stdout != b'{"replacement":"mutant"}\n'
+                or added_manifest.relative_to(synthetic_repo).as_posix() not in ordinary_manifests):
+            raise ForkError("replacement-ref control did not prove ordinary Git selected mutant commit data")
+        if (git_blob(base_rev, probe_path, synthetic_repo) != base_blob
+                or immutable_fixture_manifests(base_rev, synthetic_repo) != base_manifests
+                or checked_rev(base_rev, synthetic_repo) != base_rev):
+            raise ForkError("replacement-ref control changed original immutable blob, census, or commit identity")
+        changed_probe.write_bytes(base_blob)
+        added_manifest.unlink()
+        git("read-tree", base_rev)
+
+        # Hostile inherited repository/index selectors must not redirect reads to a
+        # distinguishable decoy or modify its refs/index.
+        decoy = Path(temp_dir) / "decoy"
+        decoy.mkdir()
+        (decoy / "sentinel.txt").write_text("unchanged decoy\n", encoding="utf-8")
+
+        def decoy_git(*args: str) -> bytes:
+            result = subprocess.run(["git", "-C", str(decoy), *args], cwd=decoy,
+                                    env=git_env, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, check=False)
+            if result.returncode:
+                raise ForkError("decoy Git setup failed: " + result.stderr.decode("utf-8", "replace"))
+            return result.stdout
+
+        decoy_git("init", "-q")
+        decoy_git("config", "user.name", "state-fork-decoy")
+        decoy_git("config", "user.email", "state-fork-decoy@example.invalid")
+        decoy_git("add", "sentinel.txt")
+        decoy_git("commit", "-q", "-m", "decoy")
+        decoy_head = decoy_git("rev-parse", "--verify", "HEAD^{commit}").strip()
+        decoy_refs = decoy_git("for-each-ref", "--format=%(refname) %(objectname)")
+        decoy_index = digest((decoy / ".git/index").read_bytes())
+        hostile = {
+            "GIT_DIR": str(decoy / ".git"),
+            "GIT_WORK_TREE": str(decoy),
+            "GIT_COMMON_DIR": str(decoy / ".git"),
+            "GIT_INDEX_FILE": str(decoy / ".git/index"),
+            "GIT_OBJECT_DIRECTORY": str(decoy / ".git/objects"),
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(decoy / ".git/objects"),
+            "GIT_NAMESPACE": "redirected",
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.bare",
+            "GIT_CONFIG_VALUE_0": "true",
+        }
+        previous = {key: os.environ.get(key) for key in hostile}
+        present = set(hostile).intersection(os.environ)
+        try:
+            os.environ.update(hostile)
+            git_dir = git_read(synthetic_repo, "rev-parse", "--absolute-git-dir").stdout.decode(
+                "utf-8", "strict").strip()
+            worktree = git_read(synthetic_repo, "rev-parse", "--show-toplevel").stdout.decode(
+                "utf-8", "strict").strip()
+            if (Path(git_dir).resolve() != (synthetic_repo / ".git").resolve()
+                    or Path(worktree).resolve() != synthetic_repo.resolve()
+                    or git_blob(base_rev, probe_path, synthetic_repo) != base_blob
+                    or immutable_fixture_manifests(base_rev, synthetic_repo) != base_manifests
+                    or checked_rev(base_rev, synthetic_repo) != base_rev):
+                raise ForkError("hostile Git selectors redirected immutable state-fork reads")
+        finally:
+            for key in hostile:
+                if key in present:
+                    os.environ[key] = previous[key] or ""
+                else:
+                    os.environ.pop(key, None)
+        if (decoy_git("rev-parse", "--verify", "HEAD^{commit}").strip() != decoy_head
+                or decoy_git("for-each-ref", "--format=%(refname) %(objectname)") != decoy_refs
+                or digest((decoy / ".git/index").read_bytes()) != decoy_index):
+            raise ForkError("hostile Git selector control modified the decoy repository")
 
         harmless_path = "fixtures/odd\nname/readme.txt"
         harmless = synthetic_repo.joinpath(*PurePosixPath(harmless_path).parts)
@@ -946,7 +1080,7 @@ def synthetic_path_controls(rev: str, repo: Path, spec: dict) -> int:
         else:
             raise ForkError("invalid UTF-8 manifest path was not rejected deterministically")
 
-    return 4
+    return 8
 
 
 def self_test(report: dict, spec: dict, source: str, rev: str, repo: Path) -> None:
@@ -1330,7 +1464,7 @@ def mutant_summary(args: argparse.Namespace) -> None:
     print(f"state-fork mutant summary pass rev={rev} fields={len(combined)} proof_classes={proof_class_counts}")
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rev")
     parser.add_argument("--repo", type=Path, default=ROOT)
@@ -1340,8 +1474,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--test-exe", type=Path)
     parser.add_argument("--control-exe", type=Path)
     parser.add_argument("--mutant-core", type=Path)
-    parser.add_argument("--shard", type=int, default=0)
-    parser.add_argument("--shards", type=int, default=16)
+    parser.add_argument("--shard", type=int)
+    parser.add_argument("--shards", type=int)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--report-dir", type=Path)
     parser.add_argument("--check", type=Path)
@@ -1352,7 +1486,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--materialize-mutant-core", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--build-dir", type=Path)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     args.repo = args.repo.resolve()
     if args.test_exe:
         args.test_exe = args.test_exe.resolve()
@@ -1377,12 +1511,27 @@ def main() -> int:
     args = parse_args()
     try:
         if args.inventory_controls:
-            if not args.rev or args.check or args.report or args.report_dir or args.test_exe:
-                raise ForkError("--inventory-controls needs --rev and cannot use report/build/runner inputs")
+            conflicting_modes = (args.matrix_shard, args.matrix_summary, args.self_test,
+                                 args.mutants, args.mutant_controls, args.mutant_summary,
+                                 args.materialize_mutant_core)
+            conflicting_inputs = (args.test_exe, args.control_exe, args.mutant_core,
+                                  args.shard, args.shards, args.report, args.report_dir,
+                                  args.check, args.output, args.build_dir)
+            if any(conflicting_modes) or any(value is not None for value in conflicting_inputs):
+                raise ForkError("--inventory-controls is exclusive with every other mode and mode-specific input")
+            if not args.rev:
+                raise ForkError("--inventory-controls needs --rev")
             rev = checked_rev(args.rev, args.repo)
             spec, _ = load_spec(rev, args.repo)
             cases, controls = inventory_controls(rev, args.repo, spec)
             print(f"state-fork inventory-controls pass rev={rev} cases={cases} controls={controls} runner=0 build=0 configure=0")
+        else:
+            if args.shard is None:
+                args.shard = 0
+            if args.shards is None:
+                args.shards = 16
+        if args.inventory_controls:
+            pass
         elif args.matrix_shard:
             if not args.test_exe or not args.report or not args.rev:
                 raise ForkError("--matrix-shard needs --rev, --test-exe and --report")

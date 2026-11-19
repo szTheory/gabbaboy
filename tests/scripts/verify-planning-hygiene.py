@@ -111,6 +111,7 @@ V04_GAP_HANDOFF_SUMMARY_KEYS = frozenset((
     "patterns-established", "requirements-completed", "coverage", "duration", "completed", "status",
 ))
 FULL_COMMIT = re.compile(r"[0-9a-f]{40}")
+_GIT_OBJECT_READ_CACHE = {}
 PHASE_DIR = re.compile(r"^GB-(\d+(?:\.\d+)?)-")
 LESSON_HEADING = re.compile(r"^### ([A-Z0-9]+(?:-[A-Z0-9]+)+) / ")
 
@@ -219,8 +220,28 @@ def tree_from_dir(phases_dir: Path) -> PlanTree | None:
 
 def git_run(repo: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
     env = {k: v for k, v in os.environ.items() if k in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")}
-    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull)
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, check=False, env=env, timeout=60)
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull,
+               GIT_CONFIG_NOSYSTEM="1", GIT_TERMINAL_PROMPT="0")
+    command = args[0] if args else ""
+    cache_revision = ""
+    if command == "show" and len(args) > 1:
+        cache_revision = args[1].split(":", 1)[0]
+    elif command == "ls-tree":
+        cache_revision = next((item for item in args[1:] if FULL_COMMIT.fullmatch(item)), "")
+    elif command == "cat-file" and len(args) > 1 and args[1] in ("-e", "-t", "blob", "commit", "tree", "-p"):
+        cache_revision = next((item for item in args[2:] if FULL_COMMIT.fullmatch(item)), "")
+    cache_key = None
+    if FULL_COMMIT.fullmatch(cache_revision):
+        cache_key = (str(repo.resolve()), args, tuple(sorted(env.items())))
+        cached = _GIT_OBJECT_READ_CACHE.get(cache_key)
+        if cached is not None:
+            argv = ["git", "--no-replace-objects", "-C", str(repo), *args]
+            return subprocess.CompletedProcess(argv, 0, cached[0], cached[1])
+    result = subprocess.run(["git", "--no-replace-objects", "-C", str(repo), *args],
+                            capture_output=True, check=False, env=env, timeout=60)
+    if cache_key is not None and result.returncode == 0 and len(_GIT_OBJECT_READ_CACHE) < 1024:
+        _GIT_OBJECT_READ_CACHE[cache_key] = (result.stdout, result.stderr)
+    return result
 
 
 def immutable_blob(repo: Path, revision: str, path: str) -> bytes:
@@ -3035,15 +3056,6 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
 def self_test_v04_reconciliation(base: Path, source_repo: Path) -> int:
     """Exercise report/handoff contracts through the real CLI in a disposable Git repository."""
     controls = 0
-    git_read_cache: dict[tuple[str, tuple[str, ...]], subprocess.CompletedProcess[bytes]] = {}
-    source_git_run = git_run
-
-    def cached_git_run(repo: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
-        key = (str(repo.resolve()), args)
-        if key not in git_read_cache:
-            git_read_cache[key] = source_git_run(repo, *args)
-        return git_read_cache[key]
-
     line_cases = (
         ("", []),
         ("one", ["one"]),
@@ -3287,14 +3299,9 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
                   check_baseline: str | None = None) -> None:
         nonlocal controls
         output, error = io.StringIO(), io.StringIO()
-        original_git_run = globals()["git_run"]
-        globals()["git_run"] = cached_git_run
-        try:
-            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
-                result = main(["--check", "v04-reconciliation", "--stage", stage, "--rev", rev,
-                               "--baseline-rev", check_baseline or baseline_rev, "--repo", str(repo)])
-        finally:
-            globals()["git_run"] = original_git_run
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+            result = main(["--check", "v04-reconciliation", "--stage", stage, "--rev", rev,
+                           "--baseline-rev", check_baseline or baseline_rev, "--repo", str(repo)])
         if expected_code is None:
             expected_line = f"v04-reconciliation pass stage={stage}"
             if result != 0 or output.getvalue().strip() != expected_line:
