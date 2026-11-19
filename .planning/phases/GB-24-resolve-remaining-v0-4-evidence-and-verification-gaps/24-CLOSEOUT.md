@@ -210,3 +210,35 @@ Against this immutable source candidate, syntax parsing and the path checker's 8
 The seven focused checks passed in the planned order: `plan_cap` in 0.34 seconds; the four evidence/path controls in 43.65 seconds (`phase22_evidence_controls` 17.56s, `no_phase_paths_controls` 21.96s, `no_phase_paths` 1.84s, `phase22_evidence_contract` 2.29s); `workflow_policy_coverage_controls` in 5.35 seconds with the required temporary-worktree metadata access; and `planning_hygiene_controls` last in 22.32 seconds. The hygiene gate retained its minimum of 125 controls and 30-second timeout, leaving 7.68 seconds of observed headroom. The temporary worktree was removed; the existing worktree list, branch, HEAD and source status were unchanged.
 
 Efficiency disposition remains unchanged: the cheap identity/raw-pin/census checks ran before configure; `plan_cap` preceded the focused regressions; and hygiene remained last. No workflow or coverage change is justified by these local timings. This source candidate is ready for the fresh independent exact-head review; post-freeze review and hosted-matrix receipts remain outside the candidate.
+
+### D-217 second/final correction and T12 qualification
+
+**Updated:** 2026-11-18
+
+D-217's remaining scoped correction is committed at `cbef74856ebf2dae1cac7bc802da4d29c4ecaf2c` (tree `2d36b4605e0945b1d17386226c07cf1e33d2991e`), descending from the committed D-217 planning boundary `b9542fe6e4b36a3b2fd41881c354e244808d0147`, the reviewed D-216 candidate `5652e488f7940e00b2b00893cd5dbbea8d620fc8`, the D-216 boundary `ded796c0947fe0da0fb852d9283f99d19c74cde2`, and original D-213 boundary `0ada03f7bfb898242435450df2153b7f9144ccdd`. Relative to the D-217 planning boundary, the source diff contains only the six authorized checker files. The archived v0.4 requirements and roadmap match the D-209 bytes; no fixture, admission, candidate, notice, CTest identity, release, or dependency file changed. The source files are clean; generated `.planning/state.json` is the only local modification and remains uncommitted. The sole Phase 24 plan remains incomplete, with no canonical summary or root requirements tracker.
+
+The correction closes the exact five D-217 findings: runtime Git-adapter rebinding and transformed revision proof, replacement-ref object redirection, alternate-index tracked-scan suppression, and conflicting state-inventory modes/inputs. It preserves the six-file allowlist, the exact 153-case state-fork census, raw path framing, existing admission and ancestry rules, and all no-execution exclusions.
+
+### Final-candidate causal checks
+
+All checks below are bound to or exercised against `cbef748`:
+
+- AST syntax parsing passed for all six checker files.
+- `verify-no-phase-paths.py --self-test` passed 95 controls; the complete tracked scan passed for 612 files and 12 allowlisted paths.
+- Diagnostic evidence controls passed with the immutable-boundary and source-archive positives and all refusal controls.
+- Dense-input Git-context passed 21 controls; configure, build, and runner counts were all zero.
+- State-fork inventory controls passed with exactly 153 cases and 17 controls; configure, build, and runner counts were all zero.
+- Workflow-policy coverage passed 735 controls. Its disposable linked worktree was removed; the pre-existing detached Phase 23 worktree was left untouched.
+- Planning-hygiene self-test passed 637 controls. Its v0.4 reconciliation stage passed 458, and the total run took 25.117 seconds.
+
+The first final-candidate CTest attempt at `43a8f22f62cd8e35448340b48923104eac3d460f` preserved a real test-harness regression: `planning_hygiene_controls` stopped in the synthetic v0.4 reconciliation stage with `NameError` because its D-202 fixture namespace still referenced the removed `cached_git_run` helper. The historical checker defines its own Git reader, making that injected binding unnecessary. Removing the stale dictionary entry was the only follow-up source change; the full hygiene self-test then passed. No timeout, control floor, or coverage was changed. The failure remains recorded here rather than being reported as a pass at the earlier candidate.
+
+### Focused CTest qualification
+
+`cmake --preset phase1` configured the final source candidate in 13.6 seconds and did not build the emulator or runner. The selected `--show-only=json-v1` inventory contained exactly the seven approved tests once each. Five commands carried the full `cbef748` revision; the two lexical path checks ran against the clean candidate checkout. Existing timeouts and control floors remained unchanged. CTest used `/opt/homebrew/opt/python@3.14/bin/python3.14` from `CMakeCache.txt`; no selected test ran fixture setup, a ROM, or an emulator runner.
+
+The seven CTests passed in the planned order: `plan_cap` in 0.36 seconds; the five middle trust/evidence tests in 55.77 seconds (`phase22_evidence_controls` 18.13s, `no_phase_paths_controls` 27.57s, `no_phase_paths` 1.98s, `phase22_evidence_contract` 2.37s, and `workflow_policy_coverage_controls` 5.69s); and `planning_hygiene_controls` last in 25.01 seconds. Hygiene retained its 30-second timeout and 125-control floor, with 4.99 seconds of observed headroom. The workflow-policy control used the minimum Git metadata write access needed to create and remove its disposable worktree.
+
+Efficiency disposition: candidate identity, syntax, direct causal controls, the cheap plan-cap check, and the medium focused tests ran before the slower hygiene gate. The measured local timings justify no safe reduction in coverage, timeout, workflow trigger, cache, or concurrency change. Keep the hygiene test last and retain the existing limits. Hosted queue and step timings, dependency waits, timeout headroom, and package-step behavior remain unmeasured until the authorized protected PR matrix; assess them from that run under [WORKFLOW.md § CI/CD efficiency](../../context/WORKFLOW.md#cicd-efficiency), without weakening required checks.
+
+The remaining one-time independent review must cover the frozen final T12 candidate and cumulative source diff from the D-209 boundary, using the earlier review findings as acceptance inputs. Only a clean review permits the already-authorized single protected PR matrix and conditional protected merge of the identical qualified revision. No review, push, CI run, merge, Task 7, summary/UAT closure, phase verification, milestone audit/archive, requirement promotion, Acid2 replay, v0.5 work, or worktree cleanup has occurred in this T12 record. Preserve the D-211 failures, the Acid2 mismatch, FIXT-01 Pending, all D-209 dispositions, and the explicit deferred gates.
