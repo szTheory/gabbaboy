@@ -1033,8 +1033,10 @@ def _revision_binding_changed(function: ast.AST, binding: str) -> bool:
     return False
 
 
-def _validate_immutable_revision_proof(tree: ast.Module) -> None:
+def _validate_immutable_revision_proof(tree: ast.Module, *, on_entry=None) -> None:
     """Keep each Git reader bound to its exact validated full-commit value."""
+    if on_entry is not None:
+        on_entry()
     if _reflectively_writes_binding(
             tree, {"git_run", "_GIT_OBJECT_READ_CACHE", "re", "FULL_COMMIT", "V04_D209_ARCHIVE_REV",
                    "builtins", "__builtins__"}):
@@ -1046,7 +1048,19 @@ def _validate_immutable_revision_proof(tree: ast.Module) -> None:
         "_getframe", "f_globals", "f_locals", "f_builtins", "__dict__",
         "__builtins__", "builtins", "__import__",
     }
+    dynamic_lookup_capabilities = {
+        "getattr", "vars", "attrgetter", "__getattribute__", "__getattr__",
+    }
     for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id in dynamic_lookup_capabilities \
+                and isinstance(node.ctx, ast.Load):
+            raise LintError("REJECT planning-path-git-command: dynamic namespace lookup capability is unprovable")
+        if isinstance(node, ast.Attribute) and node.attr in dynamic_lookup_capabilities:
+            raise LintError("REJECT planning-path-git-command: dynamic namespace lookup capability is unprovable")
+        if isinstance(node, ast.alias) and (
+                node.name.rsplit(".", 1)[-1] in dynamic_lookup_capabilities
+                or node.asname in dynamic_lookup_capabilities):
+            raise LintError("REJECT planning-path-git-command: dynamic namespace lookup capability is unprovable")
         if isinstance(node, ast.Attribute) and node.attr in forbidden_namespace_names:
             raise LintError("REJECT planning-path-git-command: frame or module namespace access makes revision proof unprovable")
         if isinstance(node, ast.Name) and node.id in {"_getframe", "__builtins__", "builtins"}:
@@ -1059,9 +1073,6 @@ def _validate_immutable_revision_proof(tree: ast.Module) -> None:
         if isinstance(node, ast.Constant) and isinstance(node.value, str) \
                 and node.value in forbidden_namespace_names:
             raise LintError("REJECT planning-path-git-command: reflective namespace key makes revision proof unprovable")
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
-                and node.func.id in {"getattr", "vars"}:
-            raise LintError("REJECT planning-path-git-command: dynamic namespace lookup makes revision proof unprovable")
     if not _has_full_commit_pattern(tree):
         raise LintError("REJECT planning-path-git-command: full-commit validator binding changed")
 
@@ -1265,11 +1276,12 @@ def _validate_immutable_revision_proof(tree: ast.Module) -> None:
 
 def _validate_decoded_path_flow(source: str, tree: ast.Module,
                                 roots_by_function: dict[str, set[str]], *,
-                                validate_git_contract: bool = True) -> None:
+                                validate_git_contract: bool = True,
+                                proof_entry=None) -> None:
     """Check decoded values and bounded helper calls without importing or executing source."""
     if validate_git_contract:
         trusted_git_adapters = _approved_git_object_adapters(tree)
-        _validate_immutable_revision_proof(tree)
+        _validate_immutable_revision_proof(tree, on_entry=proof_entry)
     else:
         # Path-flow mutation controls hold the production Git surface constant. Its full
         # runtime proof is checked on the clean source and on each Git-proof mutant below.
@@ -2341,7 +2353,7 @@ def _ancestor_chain(node: ast.AST, parents: dict[ast.AST, ast.AST]):
         yield current
 
 
-def validate_planning_hygiene_source(source: str) -> None:
+def validate_planning_hygiene_source(source: str, *, proof_entry=None) -> None:
     """Enforce the exact finite path-use contract, immutable revision, and fixture roots."""
     try:
         tree = ast.parse(source, filename=PLANNING_HYGIENE_FILE)
@@ -2373,7 +2385,7 @@ def validate_planning_hygiene_source(source: str) -> None:
         raise LintError("REJECT planning-path-site-missing: %s" % missing[0][0])
 
     roots = _fixture_root_contract(tree)
-    _validate_decoded_path_flow(source, tree, roots)
+    _validate_decoded_path_flow(source, tree, roots, proof_entry=proof_entry)
     _validate_path_readers(source, tree, roots)
 
 
@@ -2866,6 +2878,96 @@ def injected_unvalidated_git_revision_reader(repo, rev):
         expect_flow_rejected("frame f_locals rewrites validated %s in %s" %
                              (binding, function_name), candidate,
                              "REJECT planning-path-git-command", same_count=True)
+
+    with tempfile.TemporaryDirectory(prefix="phase24-d220-proof-reader-") as scratch:
+        fixture_repo = Path(scratch) / "repo"
+        fixture_repo.mkdir()
+        fixture_env = _git_environment()
+        fixture_env.update(GIT_AUTHOR_NAME="d220 fixture", GIT_AUTHOR_EMAIL="d220@example.invalid",
+                           GIT_COMMITTER_NAME="d220 fixture", GIT_COMMITTER_EMAIL="d220@example.invalid")
+
+        def fixture_git(*args: str) -> bytes:
+            result = _git(fixture_repo, *args, env=fixture_env)
+            need(result.returncode == 0,
+                 "D-220 immutable-reader fixture Git command failed: %s" % result.stderr.decode("utf-8", "replace"))
+            return result.stdout
+
+        fixture_git("init", "-q")
+        fixture_path = "trusted-proof.txt"
+        fixture_bytes = b"pinned immutable proof fixture\n"
+        (fixture_repo / fixture_path).write_bytes(fixture_bytes)
+        fixture_git("add", "--", fixture_path)
+        fixture_git("commit", "-q", "-m", "D-220 immutable-reader fixture")
+        fixture_revision = fixture_git("rev-parse", "HEAD").decode("ascii").strip()
+        need(re.fullmatch(r"[0-9a-f]{40}", fixture_revision) is not None,
+             "D-220 immutable-reader fixture did not produce a full commit id")
+
+        def run_source_then_reader(candidate: str, state: dict[str, int]) -> bytes:
+            def proof_entry() -> None:
+                state["proof_entries"] += 1
+
+            validate_planning_hygiene_source(candidate, proof_entry=proof_entry)
+            state["protected_reader_calls"] += 1
+            return fixture_git("show", "%s:%s" % (fixture_revision, fixture_path))
+
+        def expect_d220_gate_rejected(label: str, candidate: str) -> None:
+            nonlocal controls
+            need(len(list(SPELLINGS.finditer(candidate))) == original_lexical_count,
+                 "%s: D-220 mutant changed the lexical path count" % label)
+            state = {"proof_entries": 0, "protected_reader_calls": 0}
+            try:
+                run_source_then_reader(candidate, state)
+            except LintError as error:
+                need(str(error).startswith("REJECT planning-path-git-command"),
+                     "%s: full production predicate refused for %r" % (label, str(error)))
+            else:
+                raise LintError("%s: full production predicate accepted the D-220 mutant; "
+                                "predicate_entries=%d protected_reader_calls=%d"
+                                % (label, state["proof_entries"], state["protected_reader_calls"]))
+            need(state["proof_entries"] == 1,
+                 "%s: mutant did not reach the production immutable-revision predicate" % label)
+            need(state["protected_reader_calls"] == 0,
+                 "%s: rejected mutant reached the protected immutable reader" % label)
+            controls += 1
+
+        positive_state = {"proof_entries": 0, "protected_reader_calls": 0}
+        try:
+            positive_bytes = run_source_then_reader(source, positive_state)
+        except LintError as error:
+            raise LintError("D-220 clean immutable-reader positive was refused: %s" % error) from None
+        need(positive_state == {"proof_entries": 1, "protected_reader_calls": 1}
+             and positive_bytes == fixture_bytes,
+             "D-220 clean positive did not reach the same pinned immutable reader with the expected bytes")
+        controls += 1
+
+        aliased_global_mutants = (
+            ("aliased getter replaces git_run through split frame/global names",
+             "\n_dynamic_lookup = getattr\n"
+             "_frame_name = \"_get\" + \"frame\"\n"
+             "_globals_name = \"f_\" + \"globals\"\n"
+             "_frame = _dynamic_lookup(sys, _frame_name)()\n"
+             "_global_map = _dynamic_lookup(_frame, _globals_name)\n"
+             "_binding_name = \"git_\" + \"run\"\n"
+             "_global_map[_binding_name] = lambda repo, *args: None\n"),
+            ("aliased getter replaces the D-209 pin through split frame/global names",
+             "\n_dynamic_lookup = getattr\n"
+             "_frame_name = \"_get\" + \"frame\"\n"
+             "_globals_name = \"f_\" + \"globals\"\n"
+             "_frame = _dynamic_lookup(sys, _frame_name)()\n"
+             "_global_map = _dynamic_lookup(_frame, _globals_name)\n"
+             "_binding_name = \"V04_D209_ARCHIVE_\" + \"REV\"\n"
+             "_global_map[_binding_name] = \"f\" * 40\n"),
+            ("imported attrgetter alias replaces git_run through split frame/global names",
+             "\nfrom operator import attrgetter as _dynamic_lookup\n"
+             "_frame_name = \"_get\" + \"frame\"\n"
+             "_globals_name = \"f_\" + \"globals\"\n"
+             "_frame = _dynamic_lookup(_frame_name)(sys)()\n"
+             "_global_map = _dynamic_lookup(_globals_name)(_frame)\n"
+             "_binding_name = \"git_\" + \"run\"\n"
+             "_global_map[_binding_name] = lambda repo, *args: None\n"),
+        )
+        for label, mutation in aliased_global_mutants:
+            expect_d220_gate_rejected(label, source + mutation)
 
     pattern_rebindings = (
         ("MatchAs revision capture", "    match value:\n        case _ as rev:\n            pass\n"),
