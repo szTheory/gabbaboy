@@ -446,3 +446,18 @@ After local qualification, require a fresh independent exact-head review. Only a
 Preserve the archived D-209 requirement dispositions, FIXT-01 Pending, the failed and unreplayed Acid2 mismatch, all diagnostic exclusions, D-103, Task 7 deferral, published v0.4.0 bytes, and the administrative v0.4 closeout. No broad suite, ROM/fixture replay, UAT/SUMMARY closure, phase verification, milestone audit/archive, v0.5 start, branch switch, or worktree cleanup follows from this discussion.
 
 **Next route:** `$gsd-plan-phase 24` updates the existing sole plan. Phase 24 remains incomplete; v0.4 remains administratively closed with D-209 gaps.
+
+## D-220 exact-head review follow-up — c7a7cc1 (2026-11-19)
+
+This later record supersedes the preceding `$gsd-plan-phase 24` route. Candidate `c7a7cc1bc04665ecbfdc0ffede19875bf65f945a` (tree `596198dc84c6fe93369c803442aa3e755ca563df`) passed all seven focused local CTests after one path-control timeout was diagnosed as host contention and the unchanged test passed on retest. The timeout remains recorded. Fresh exact-head code and security reviews then returned NO-GO; neither push nor the protected matrix ran. See [code review](../../../build/phase24/d220-final-code-review-c7a7cc1.md), [security review](../../../build/phase24/d220-final-security-review-c7a7cc1.md), and the [local qualification receipt](../../../build/phase24/d220-c7a7cc1-final-local-qualification.md).
+
+The confirmed findings remain inside D-220's immutable Git evidence invariant:
+
+1. Mutable Git and commit-snapshot caches can return bytes without the source proof establishing the authorized writer/provenance.
+2. The clean-reader positive validates a string but loads the module from a second filesystem/bytecode decision, and its witness did not record the repository operand.
+3. The archive-route call checks names but does not bind `root_text` and `active_paths` to the immutable producers; the combined structural-pattern negative also accepts a generic refusal.
+4. Dense-input and state-fork inventory accept a 40-character annotated-tag object ID where their interface promises an exact commit identity.
+
+The existing source allowlist already contains all affected files. The owner-selected scope-bounded convergence and existing execution authorization permit local corrections within this fixed six-checker set; the sole plan's current T20 file ownership must be amended and independently checked before source edits. The recommended correction pins the exact raw bytes of the proof-bearing planning checker in the path checker while retaining its AST diagnostics, executes only the exact in-memory clean source already validated, binds the full reader witness and route values, requires the specific structural refusal, and checks unpeeled Git object type for commit IDs. Add causal negatives and exact positives through existing controls; no path, dependency, CTest identity, fixture scope, requirement, timeout, floor, or CI topology is added.
+
+After the checked documentation boundary, rerun cheap exact-candidate controls and the same seven CTests serially with existing deadlines. Fresh independent exact-head code and security reviews of the same frozen candidate SHA/tree both must return clean verdicts before any push or the one protected matrix. Preserve every failed review and timeout; no matrix retry follows any failed, skipped, stale, or missing required context. Local timing differences justify no speculative CI change; measure hosted queue, step, dependency-wait, package, and timeout data during the authorized matrix under the existing CI/CD guidance. FIXT-01, the unreplayed Acid2 mismatch, D-103, Task 7, v0.4 dispositions and all phase/milestone closure stops remain unchanged.
