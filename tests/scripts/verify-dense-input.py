@@ -244,9 +244,18 @@ def active_admission_pins(source: Path, source_revision: str) -> list[tuple[str,
     return result
 
 
+def _require_commit_object(repo: Path, object_id: str,
+                           unavailable_reason: str, wrong_type_reason: str) -> None:
+    object_type = git(repo, "cat-file", "-t", object_id)
+    require(object_type.returncode == 0, f"{unavailable_reason}: {object_id}")
+    require(object_type.stdout.strip() == "commit", f"{wrong_type_reason}: {object_id}")
+
+
 def validate_candidate_git_context(subject: Path, source_revision: str) -> list[tuple[str, str]]:
     require(FULL_COMMIT.fullmatch(source_revision) is not None,
             "candidate revision is not one full lowercase identity")
+    _require_commit_object(subject, source_revision,
+                           "candidate-object-unavailable", "candidate-object-not-commit")
     absolute_git_dir = git(subject, "rev-parse", "--absolute-git-dir")
     require(absolute_git_dir.returncode == 0,
             f"candidate-git-dir-unavailable: {absolute_git_dir.stdout.strip()}")
@@ -254,8 +263,6 @@ def validate_candidate_git_context(subject: Path, source_revision: str) -> list[
     actual_git_dir = Path(absolute_git_dir.stdout.strip()).resolve()
     require(actual_git_dir == expected_git_dir,
             f"candidate-git-dir-mismatch: expected={expected_git_dir} actual={actual_git_dir}")
-    candidate = git(subject, "cat-file", "-e", f"{source_revision}^{{commit}}")
-    require(candidate.returncode == 0, f"candidate-object-unavailable: {source_revision}")
     worktree = git(subject, "rev-parse", "--show-toplevel")
     require(worktree.returncode == 0,
             f"candidate-worktree-unavailable: {worktree.stdout.strip()}")
@@ -270,9 +277,9 @@ def validate_candidate_git_context(subject: Path, source_revision: str) -> list[
             f"candidate-head-mismatch: expected={source_revision} actual={actual_head}")
     pins = active_admission_pins(subject, source_revision)
     for path, pin in pins:
-        present = git(subject, "cat-file", "-e", f"{pin}^{{commit}}")
-        require(present.returncode == 0,
-                f"admission-pin-object-unavailable: {path} {pin}")
+        _require_commit_object(subject, pin,
+                               f"admission-pin-object-unavailable: {path}",
+                               f"admission-pin-not-commit-object: {path}")
         ancestry = git(subject, "merge-base", "--is-ancestor", pin, source_revision)
         require(ancestry.returncode == 0,
                 f"admission-pin-not-in-history: {path} {pin}")
@@ -304,6 +311,9 @@ def candidate_git_context_controls(source_revision: str) -> int:
         candidate.mkdir()
         installed = install_candidate_git_context(candidate, source_revision)
         require(installed == pins, "candidate subject changed the enumerated admission pin set")
+        exact_type = git(candidate, "cat-file", "-t", source_revision)
+        require(exact_type.returncode == 0 and exact_type.stdout.strip() == "commit",
+                "exact candidate commit object positive changed")
 
         pin_path, _pin_value = pins[0]
         original_pin = git_blob(candidate, source_revision, pin_path)
@@ -511,7 +521,54 @@ def candidate_git_context_controls(source_revision: str) -> int:
                     f"unrelated ancestry control refused for wrong cause: {error}")
         else:
             raise RuntimeError("unrelated admission ancestry control was accepted")
-    return len(pins) + 4 + pin_controls + 2
+
+        tag_name = "phase24-annotated-commit-control"
+        created_tag = git(candidate, "-c", "user.name=Fixture Control", "-c",
+                          "user.email=fixture-control@example.invalid", "tag", "-a", tag_name,
+                          source_revision, "-m", "annotated commit identity control")
+        require(created_tag.returncode == 0,
+                f"annotated commit identity tag could not be created: {created_tag.stdout.strip()}")
+        tag_oid = git(candidate, "rev-parse", f"refs/tags/{tag_name}").stdout.strip()
+        tag_type = git(candidate, "cat-file", "-t", tag_oid)
+        require(FULL_COMMIT.fullmatch(tag_oid) is not None and tag_type.returncode == 0
+                and tag_type.stdout.strip() == "tag",
+                "annotated identity control did not produce a raw tag object")
+        try:
+            validate_candidate_git_context(candidate, tag_oid)
+        except RuntimeError as error:
+            require("candidate-object-not-commit" in str(error),
+                    f"annotated candidate tag refused for wrong cause: {error}")
+        else:
+            raise RuntimeError("annotated tag object was accepted as the candidate commit")
+
+        pin_path, _ = pins[0]
+        tag_pin_blob = git(candidate, "hash-object", "-w", "--stdin", input_text=tag_oid + "\n")
+        require(tag_pin_blob.returncode == 0, "annotated tag admission pin blob could not be written")
+        staged_tag_pin = git(candidate, "update-index", "--add", "--cacheinfo",
+                             "100644," + tag_pin_blob.stdout.strip() + "," + pin_path)
+        require(staged_tag_pin.returncode == 0,
+                f"annotated tag admission pin could not be staged: {staged_tag_pin.stdout.strip()}")
+        tag_pin_tree = git(candidate, "write-tree")
+        require(tag_pin_tree.returncode == 0,
+                f"annotated tag admission-pin tree could not be written: {tag_pin_tree.stdout.strip()}")
+        tag_pin_commit = git(candidate, "-c", "user.name=Fixture Control", "-c",
+                             "user.email=fixture-control@example.invalid", "commit-tree",
+                             tag_pin_tree.stdout.strip(), "-p", source_revision,
+                             "-m", "annotated tag admission-pin control")
+        require(tag_pin_commit.returncode == 0,
+                f"annotated tag admission-pin commit failed: {tag_pin_commit.stdout.strip()}")
+        tag_pin_revision = tag_pin_commit.stdout.strip()
+        updated_ref = git(candidate, "update-ref", "refs/heads/phase24-d213-candidate", tag_pin_revision)
+        require(updated_ref.returncode == 0,
+                f"annotated tag admission-pin HEAD update failed: {updated_ref.stdout.strip()}")
+        try:
+            validate_candidate_git_context(candidate, tag_pin_revision)
+        except RuntimeError as error:
+            require("admission-pin-not-commit-object" in str(error),
+                    f"annotated admission pin refused for wrong cause: {error}")
+        else:
+            raise RuntimeError("annotated tag object was accepted as an admission commit pin")
+    return len(pins) + 7 + pin_controls + 2
 
 
 def check_repository(subject: Path, evidence: Path | None, expected: str) -> None:

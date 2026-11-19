@@ -24,7 +24,6 @@ from __future__ import annotations
 import argparse
 import ast
 import collections
-import importlib.util
 from functools import lru_cache
 import ntpath
 import hashlib
@@ -37,6 +36,7 @@ import subprocess
 import sys
 import tempfile
 import tokenize
+import types
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -80,6 +80,7 @@ HISTORICAL_V04_EVIDENCE_LOCATIONS = (
     ("sources", 3, "components", 4, "evidence", 0),
 )
 PLANNING_HYGIENE_FILE = "tests/scripts/verify-planning-hygiene.py"
+PLANNING_HYGIENE_SOURCE_SHA256 = "34f6f6b6620cf0b72c08a7aab4686223f8f0ce6ef60ccd6a227f99c018977e76"
 
 # Files the walk must reach, or the scan is vacuous.
 MUST_SCAN = (
@@ -1728,7 +1729,7 @@ def _validate_immutable_revision_proof(tree: ast.Module, *, on_entry=None) -> No
     archive_parameters = [*validate_archive.args.posonlyargs, *validate_archive.args.args,
                           *validate_archive.args.kwonlyargs]
     expected_archive_function = ast.parse(
-        "def _expected(repo: Path, revision: str, root_roadmap: str, active_paths: list[bytes]) -> str: pass"
+        "def _expected(repo: Path, revision: str, root_roadmap: str, active_paths: tuple[bytes, ...]) -> str: pass"
     ).body[0]
     if (validate_archive.decorator_list
             or ast.dump(validate_archive.args, include_attributes=False)
@@ -1776,6 +1777,69 @@ def _validate_immutable_revision_proof(tree: ast.Module, *, on_entry=None) -> No
             or not isinstance(route_calls[0].args[2], ast.Name) or route_calls[0].args[2].id != "root_text"
             or not isinstance(route_calls[0].args[3], ast.Name) or route_calls[0].args[3].id != "active_paths"):
         raise LintError("REJECT planning-path-git-command: read_rev changed the validated archive-route argument")
+
+    def exact_assignment(function: ast.FunctionDef, name: str, expression: str) -> ast.Assign | None:
+        expected_assignment = ast.parse(expression).body[0]
+        matches = [node for node in ast.walk(function) if isinstance(node, ast.Assign)
+                   and any(isinstance(target, ast.Name) and target.id == name for target in node.targets)]
+        if (len(matches) != 1 or len(matches[0].targets) != 1
+                or ast.dump(matches[0], include_attributes=False)
+                != ast.dump(expected_assignment, include_attributes=False)):
+            return None
+        return matches[0]
+
+    active_paths_assignment = exact_assignment(
+        read_rev, "active_paths",
+        'active_paths = tuple(path for path in listing.stdout.split(b"\\0") if path)')
+    root_text_assignment = exact_assignment(
+        read_rev, "root_text", 'root_text = roadmap_raw.decode("utf-8", errors="strict")')
+    if active_paths_assignment is None or root_text_assignment is None:
+        raise LintError("REJECT planning-path-git-command: immutable archive route inputs changed producer")
+    for binding in ("active_paths", "root_text"):
+        stores = [node for node in ast.walk(read_rev) if isinstance(node, ast.Name)
+                  and node.id == binding and isinstance(node.ctx, (ast.Store, ast.Del))]
+        if len(stores) != 1:
+            raise LintError("REJECT planning-path-git-command: immutable archive route input is rebound")
+
+    roadmap_assignments = [node for node in read_rev.body if isinstance(node, ast.Assign)
+                           and any(isinstance(target, ast.Name) and target.id == "roadmap_raw"
+                                   for target in node.targets)]
+    roadmap_stores = [node for node in ast.walk(read_rev) if isinstance(node, ast.Name)
+                      and node.id == "roadmap_raw" and isinstance(node.ctx, ast.Store)]
+    roadmap_stores.sort(key=lambda node: node.lineno)
+    listing_assignments = [node for node in read_rev.body if isinstance(node, ast.Assign)
+                           and any(isinstance(target, ast.Name) and target.id == "listing"
+                                   for target in node.targets)]
+    if (not roadmap_assignments or not listing_assignments
+            or ast.dump(roadmap_assignments[0], include_attributes=False)
+            != ast.dump(ast.parse("roadmap_raw = read_revision_file(roadmap_path)").body[0],
+                        include_attributes=False)
+            or ast.dump(listing_assignments[0], include_attributes=False)
+            != ast.dump(ast.parse(
+                'listing = git_run(repo, "ls-tree", "-r", "--name-only", "-z", rev, "--", phases_path)'
+            ).body[0], include_attributes=False)
+            or not (read_rev.body.index(roadmap_assignments[0])
+                    < read_rev.body.index(listing_assignments[0])
+                    < read_rev.body.index(active_paths_assignment))
+            or not roadmap_stores or roadmap_stores[0].lineno >= root_text_assignment.lineno):
+        raise LintError("REJECT planning-path-git-command: roadmap or phase inventory source changed")
+
+    route_statement = next((ancestor for ancestor in _ancestor_chain(route_calls[0], parents)
+                            if isinstance(ancestor, ast.stmt)), None)
+    route_container = parents.get(route_statement) if route_statement is not None else None
+    root_container = parents.get(root_text_assignment)
+    if (route_statement is None or route_container is not root_container
+            or not isinstance(route_container, (ast.If, ast.Try, ast.With, ast.For, ast.AsyncFor))
+            or not isinstance(route_statement, ast.Assign)
+            or len(route_statement.targets) != 1
+            or not isinstance(route_statement.targets[0], ast.Name)
+            or route_statement.targets[0].id != "archived_text"
+            or not isinstance(route_statement.value, ast.Call)
+            or route_container.body.index(route_statement) != route_container.body.index(root_text_assignment) + 1):
+        raise LintError("REJECT planning-path-git-command: immutable roadmap text does not directly feed archive validation")
+    if any(store is not roadmap_stores[0] and store.lineno < route_statement.lineno
+           for store in roadmap_stores):
+        raise LintError("REJECT planning-path-git-command: roadmap bytes are rebound before archive validation")
 
     archive_revision_calls = [node for node in ast.walk(tree)
                               if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
@@ -2943,16 +3007,45 @@ def validate_planning_hygiene_source(source: str, *, proof_entry=None) -> None:
     _validate_path_readers(source, tree, roots)
 
 
+def validate_planning_hygiene_source_bytes(source_bytes: bytes, *, proof_entry=None) -> str:
+    """Admit only the separately reviewed raw checker bytes, then validate their decoded source."""
+    digest = hashlib.sha256(source_bytes).hexdigest()
+    if digest != PLANNING_HYGIENE_SOURCE_SHA256:
+        raise LintError("REJECT planning-hygiene-source-pin: exact raw source digest mismatch")
+    try:
+        source = source_bytes.decode("utf-8", "strict")
+    except UnicodeDecodeError:
+        raise LintError("REJECT planning-hygiene-source-encoding: source is not strict UTF-8") from None
+    validate_planning_hygiene_source(source, proof_entry=proof_entry)
+    return source
+
+
 def validate_planning_hygiene_path_contract(root: Path) -> None:
-    source = read_text(root, PLANNING_HYGIENE_FILE)
-    need(source is not None, "REJECT planning-path-must-scan: %s was not read as text" % PLANNING_HYGIENE_FILE)
-    validate_planning_hygiene_source(source)
+    source_path = root / PLANNING_HYGIENE_FILE
+    try:
+        info = os.lstat(source_path)
+    except OSError:
+        raise LintError("REJECT planning-path-must-scan: %s was not read as text" %
+                        PLANNING_HYGIENE_FILE) from None
+    if not stat.S_ISREG(info.st_mode):
+        raise LintError("REJECT planning-path-must-scan: %s was not read as text" %
+                        PLANNING_HYGIENE_FILE)
+    try:
+        source_bytes = source_path.read_bytes()
+    except OSError:
+        raise LintError("REJECT planning-path-must-scan: %s was not read as text" %
+                        PLANNING_HYGIENE_FILE) from None
+    if b"\0" in source_bytes[:SNIFF_BYTES]:
+        raise LintError("REJECT planning-path-must-scan: %s was not read as text" %
+                        PLANNING_HYGIENE_FILE)
+    validate_planning_hygiene_source_bytes(source_bytes)
 
 
 def self_test_planning_hygiene_path_contract() -> int:
     """Exercise the finite source contract and its causal path-reader negatives."""
     source_path = ROOT / PLANNING_HYGIENE_FILE
-    source = source_path.read_text(encoding="utf-8")
+    source_bytes = source_path.read_bytes()
+    source = source_bytes.decode("utf-8", "strict")
     controls = 0
 
     need(_literal_string(ast.parse("chr(46)", mode="eval").body) == "."
@@ -2977,9 +3070,10 @@ def self_test_planning_hygiene_path_contract() -> int:
     controls += 1
 
     try:
-        validate_planning_hygiene_source(source)
+        validate_planning_hygiene_source_bytes(source_bytes)
     except LintError as error:
-        raise LintError("planning-hygiene path self-test: production source was rejected: %s" % error) from None
+        raise LintError("planning-hygiene path self-test: pinned production source was rejected: %s" %
+                        error) from None
     controls += 1
     original_lexical_count = len(list(SPELLINGS.finditer(source)))
 
@@ -3472,18 +3566,31 @@ def injected_unvalidated_git_revision_reader(repo, rev):
 
             validate_planning_hygiene_source(candidate, proof_entry=proof_entry)
             if candidate != source:
-                raise AssertionError("D-220 mutant reached the clean-source-only reader loader")
+                raise LintError("D-220 source mutant reached the clean-source-only reader")
+            return run_pinned_source_then_reader(source_bytes, state)
+
+        def run_pinned_source_then_reader(raw_source: bytes, state: dict[str, object]) -> bytes:
+            def proof_entry() -> None:
+                state["proof_entries"] = int(state["proof_entries"]) + 1
+
+            admitted_source = validate_planning_hygiene_source_bytes(raw_source, proof_entry=proof_entry)
+            if admitted_source != source or raw_source != source_bytes:
+                raise LintError("D-220 clean positive did not retain the exact admitted source bytes")
             target_path = ROOT / PLANNING_HYGIENE_FILE
-            if target_path.read_text(encoding="utf-8") != candidate:
-                raise LintError("D-220 clean positive source changed after predicate validation")
             module_name = "_phase24_d220_planning_hygiene_positive"
-            spec = importlib.util.spec_from_file_location(module_name, target_path)
-            if spec is None or spec.loader is None:
-                raise LintError("D-220 clean positive could not load the admitted source")
-            module = importlib.util.module_from_spec(spec)
+            module = types.ModuleType(module_name)
             sys.modules[module_name] = module
             try:
-                spec.loader.exec_module(module)
+                with tempfile.TemporaryDirectory(prefix=".phase24-d220-pinned-source-",
+                                                 dir=target_path.parent) as scratch:
+                    unavailable_source = Path(scratch) / "verify-planning-hygiene.py"
+                    unavailable_source.write_bytes(raw_source)
+                    unavailable_source.unlink()
+                    need(not unavailable_source.exists(),
+                         "D-220 clean source path remained available before in-memory execution")
+                    module.__file__ = str(unavailable_source)
+                    code = compile(raw_source, module.__file__, "exec")
+                    exec(code, module.__dict__)
                 real_git_run = module.git_run
 
                 def counted_git_run(repo: Path, *args: str):
@@ -3491,13 +3598,42 @@ def injected_unvalidated_git_revision_reader(repo, rev):
                     call_arguments = state["protected_reader_arguments"]
                     if not isinstance(call_arguments, list):
                         raise AssertionError("D-220 protected-reader argument witness is not a list")
-                    call_arguments.append(args)
+                    call_arguments.append((repo.resolve(), args))
                     return real_git_run(repo, *args)
 
                 module.git_run = counted_git_run
                 return module.immutable_blob(fixture_repo, fixture_revision, fixture_path)
             finally:
                 sys.modules.pop(module_name, None)
+
+        def expect_source_pin_rejected(label: str, candidate: bytes) -> None:
+            nonlocal controls
+            state = {"proof_entries": 0, "protected_reader_calls": 0, "protected_reader_arguments": []}
+
+            def proof_entry() -> None:
+                state["proof_entries"] = int(state["proof_entries"]) + 1
+
+            try:
+                validate_planning_hygiene_source_bytes(candidate, proof_entry=proof_entry)
+            except LintError as error:
+                need(str(error).startswith("REJECT planning-hygiene-source-pin: exact raw source digest mismatch"),
+                     "%s: source pin refused for %r" % (label, str(error)))
+            else:
+                raise LintError("%s: mutated source passed the exact raw source pin" % label)
+            need(state == {"proof_entries": 0, "protected_reader_calls": 0,
+                          "protected_reader_arguments": []},
+                 "%s: source-pin rejection entered proof or a protected reader" % label)
+            controls += 1
+
+        cache_source_mutant = source_bytes.replace(
+            b"cached = _GIT_OBJECT_READ_CACHE.get(cache_key)", b"cached = None", 1)
+        need(cache_source_mutant != source_bytes, "source-pin cache mutant did not find its cache read")
+        expect_source_pin_rejected("mutated Git cache source", cache_source_mutant)
+        route_source_mutant = source_bytes.replace(
+            b"active_paths = tuple(path for path in listing.stdout.split(b\"\\0\") if path)",
+            b"active_paths = ()", 1)
+        need(route_source_mutant != source_bytes, "source-pin route mutant did not find its inventory producer")
+        expect_source_pin_rejected("mutated immutable route source", route_source_mutant)
 
         def expect_d220_gate_rejected(label: str, candidate: str,
                                       reason_prefix: str = "REJECT planning-path-git-command") -> None:
@@ -3532,7 +3668,19 @@ def injected_unvalidated_git_revision_reader(repo, rev):
             '            pass\n')
         expect_d220_gate_rejected(
             "combined MatchAs, MatchStar, and MatchMapping captures of protected bindings",
-            pattern_capture_mutant)
+            pattern_capture_mutant,
+            "REJECT planning-path-git-command: structural pattern matching can rebind proof inputs")
+
+        wrong_root_text_producer = replace_in_function(
+            "read_rev", '        root_text = roadmap_raw.decode("utf-8", errors="strict")\n',
+            '        root_text = "unrelated roadmap text"\n')
+        expect_d220_gate_rejected("archive route changes the validated roadmap text producer",
+                                  wrong_root_text_producer)
+        rebound_active_paths = insert_in_function(
+            "read_rev", '        root_text = roadmap_raw.decode("utf-8", errors="strict")\n',
+            '        active_paths = ()\n')
+        expect_d220_gate_rejected("archive route rebinds the immutable phase inventory",
+                                  rebound_active_paths)
 
         wrong_repository_operand = replace_in_function(
             "immutable_blob", '    listed = git_run(repo, "ls-tree", revision, "--", path)\n',
@@ -3553,11 +3701,12 @@ def injected_unvalidated_git_revision_reader(repo, rev):
 
         positive_state = {"proof_entries": 0, "protected_reader_calls": 0, "protected_reader_arguments": []}
         try:
-            positive_bytes = run_source_then_reader(source, positive_state)
+            positive_bytes = run_pinned_source_then_reader(source_bytes, positive_state)
         except LintError as error:
             raise LintError("D-220 clean immutable-reader positive was refused: %s" % error) from None
         expected_reader_arguments = [("ls-tree", fixture_revision, "--", fixture_path),
                                      ("show", "%s:%s" % (fixture_revision, fixture_path))]
+        expected_reader_arguments = [(fixture_repo.resolve(), args) for args in expected_reader_arguments]
         need(positive_state == {"proof_entries": 1, "protected_reader_calls": 2,
                                 "protected_reader_arguments": expected_reader_arguments}
              and positive_bytes == fixture_bytes,

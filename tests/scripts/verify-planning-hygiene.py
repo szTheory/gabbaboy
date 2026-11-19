@@ -270,7 +270,7 @@ def immutable_blob(repo: Path, revision: str, path: str) -> bytes:
 
 
 def validate_v04_archive_and_recovery(repo: Path, revision: str,
-                                      root_roadmap: str, active_paths: list[bytes]) -> str:
+                                      root_roadmap: str, active_paths: tuple[bytes, ...]) -> str:
     """Bind D-209 archive bytes to their frozen candidate and validate the current Phase 24 route."""
     current_requirements = immutable_blob(repo, revision, V04_ARCHIVED_REQUIREMENTS)
     current_archive_roadmap = immutable_blob(repo, revision, V04_ARCHIVED_ROADMAP)
@@ -348,7 +348,7 @@ def read_rev(repo: Path, rev: str) -> tuple[str, PlanTree, str | None]:
         raise SystemExit(f"plan-cap-rev: {phases_path} cannot be listed at {rev}")
     # A collapsed roadmap is legitimate only at the recorded milestone boundary. Never
     # hide an incomplete active roadmap by falling back to a previous archive.
-    active_paths = [path for path in listing.stdout.split(b"\0") if path]
+    active_paths = tuple(path for path in listing.stdout.split(b"\0") if path)
     archived_requirements = git_run(repo, "ls-tree", rev, "--", V04_ARCHIVED_REQUIREMENTS)
     archived_roadmap = git_run(repo, "ls-tree", rev, "--", V04_ARCHIVED_ROADMAP)
     has_archived_requirements = bool(archived_requirements.stdout.strip())
@@ -360,7 +360,7 @@ def read_rev(repo: Path, rev: str) -> tuple[str, PlanTree, str | None]:
         archived_text = validate_v04_archive_and_recovery(repo, rev, root_text, active_paths)
         roadmap_raw = archived_text.encode("utf-8")
     placeholder = (PHASES_AT_REV + "/.gitkeep").encode("utf-8")
-    if phase_details(roadmap_raw.decode("utf-8")) is None and active_paths in ([], [placeholder]):
+    if phase_details(roadmap_raw.decode("utf-8")) is None and active_paths in ((), (placeholder,)):
         state_raw = read_revision_file(".planning/STATE.md")
         requirements = git_run(repo, "ls-tree", "--name-only", rev, "--", ".planning/REQUIREMENTS.md")
         state_text = state_raw.decode("utf-8", errors="strict") if state_raw is not None else ""

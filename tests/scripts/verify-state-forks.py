@@ -94,9 +94,11 @@ def git_blob(rev: str, path: str, repo: Path) -> bytes:
 def checked_rev(value: str, repo: Path) -> str:
     if not REVISION.fullmatch(value):
         raise ForkError("--rev must be a resolved immutable 40-character lowercase commit")
-    result = git_read(repo, "cat-file", "-e", f"{value}^{{commit}}")
+    result = git_read(repo, "cat-file", "-t", value)
     if result.returncode:
         raise ForkError(f"--rev is not an available commit: {value}")
+    if result.stdout.strip() != b"commit":
+        raise ForkError(f"--rev is not an unpeeled commit object: {value}")
     return value
 
 
@@ -974,6 +976,21 @@ def synthetic_path_controls(rev: str, repo: Path, spec: dict) -> int:
         base_rev = commit_tree("base manifest inventory")
         validate_manifest_census(base_rev, synthetic_repo, spec)
         base_manifests = immutable_fixture_manifests(base_rev, synthetic_repo)
+        if checked_rev(base_rev, synthetic_repo) != base_rev:
+            raise ForkError("exact commit identity positive changed")
+        tag_name = "phase24-annotated-commit-control"
+        git("tag", "--annotate", tag_name, base_rev, "--message", "annotated commit identity control")
+        tag_oid = git("rev-parse", f"refs/tags/{tag_name}").decode("ascii").strip()
+        if (not REVISION.fullmatch(tag_oid)
+                or git("cat-file", "-t", tag_oid).strip() != b"tag"):
+            raise ForkError("annotated identity control did not produce a raw tag object")
+        try:
+            checked_rev(tag_oid, synthetic_repo)
+        except ForkError as exc:
+            if "--rev is not an unpeeled commit object" not in str(exc):
+                raise ForkError(f"annotated tag revision refused for wrong cause: {exc}") from exc
+        else:
+            raise ForkError("annotated tag object was accepted as an immutable commit revision")
         probe_path = source_manifests[0]
         base_blob = git_blob(base_rev, probe_path, synthetic_repo)
 
@@ -1139,7 +1156,7 @@ def synthetic_path_controls(rev: str, repo: Path, spec: dict) -> int:
         else:
             raise ForkError("invalid UTF-8 manifest path was not rejected deterministically")
 
-    return 8
+    return 10
 
 
 def self_test(report: dict, spec: dict, source: str, rev: str, repo: Path) -> None:
