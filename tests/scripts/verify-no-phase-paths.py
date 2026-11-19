@@ -184,6 +184,18 @@ def _parents(tree: ast.AST) -> dict[ast.AST, ast.AST]:
     return {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
 
 
+def _function_scope_by_node(tree: ast.AST) -> dict[ast.AST, ast.AST | None]:
+    """Map nodes to their nearest function ancestor in one tree traversal."""
+    scopes: dict[ast.AST, ast.AST | None] = {}
+    pending = [(tree, None)]
+    while pending:
+        node, scope = pending.pop()
+        scopes[node] = scope
+        child_scope = node if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) else scope
+        pending.extend((child, child_scope) for child in ast.iter_child_nodes(node))
+    return scopes
+
+
 def _is_descendant(node: ast.AST, ancestor: ast.AST, parents: dict[ast.AST, ast.AST]) -> bool:
     current = node
     while current in parents:
@@ -1215,12 +1227,10 @@ def _validate_decoded_path_flow(source: str, tree: ast.Module,
                 for item in ast.walk(target)):
             if chr_shadowed:
                 raise LintError("REJECT live-phase-path-reader: chr is shadowed in an unresolved reader path")
-    scope_by_node: dict[ast.AST, ast.AST | None] = {}
+    scope_by_node = _function_scope_by_node(tree)
     nodes_by_scope: dict[ast.AST | None, list[ast.AST]] = {None: []}
     for node in ast.walk(tree):
-        scope = next((ancestor for ancestor in _ancestor_chain(node, parents)
-                      if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
-        scope_by_node[node] = scope
+        scope = scope_by_node[node]
         nodes_by_scope.setdefault(scope, []).append(node)
     function_parent = {node: scope_by_node[node] for node in functions}
     by_parent: dict[tuple[ast.AST | None, str], list[ast.AST]] = {}
@@ -2190,10 +2200,7 @@ def _validate_path_readers(source: str, tree: ast.Module,
     source_lines = source.splitlines(keepends=True)
     functions = [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
     functions.sort(key=lambda item: (len(list(_ancestor_chain(item, parents))), item.lineno))
-    scope_for: dict[ast.AST, ast.AST | None] = {}
-    for node in ast.walk(tree):
-        scope_for[node] = next((ancestor for ancestor in _ancestor_chain(node, parents)
-                                if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
+    scope_for = _function_scope_by_node(tree)
 
     assignments: dict[ast.AST | None, list[tuple[ast.AST, list[ast.AST], set[str], bool]]] = {}
     loops: dict[ast.AST | None, list[ast.For]] = {}
@@ -2220,9 +2227,7 @@ def _validate_path_readers(source: str, tree: ast.Module,
     path_names_by_scope: dict[ast.AST | None, set[str]] = {}
     root_names_by_scope: dict[ast.AST | None, set[str]] = {}
     for scope in [None, *functions]:
-        parent_scope = (next((ancestor for ancestor in _ancestor_chain(scope, parents)
-                              if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
-                        if scope is not None else None)
+        parent_scope = scope_for[scope] if scope is not None else None
         path_names = set(path_names_by_scope.get(parent_scope, set()))
         root_names = set(root_names_by_scope.get(parent_scope, set()))
         root_names.update(roots_by_function.get(scope.name, set()) if scope is not None else ())
