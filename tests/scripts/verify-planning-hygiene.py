@@ -514,11 +514,11 @@ COMMIT_SNAPSHOT_CACHE: dict[tuple[str, str], dict[str, bytes]] = {}
 
 def commit_snapshot(repo: Path, rev: str) -> tuple[dict[str, bytes] | None, str | None]:
     """Read the planning tree from a commit in one Git operation; cache only immutable object ids."""
+    if not FULL_COMMIT.fullmatch(rev):
+        return None, "v04-reconciliation-rev: --rev must be a full 40-hex commit id"
     cache_key = (str(repo.resolve()), rev)
     if cache_key in COMMIT_SNAPSHOT_CACHE:
         return COMMIT_SNAPSHOT_CACHE[cache_key], None
-    if not FULL_COMMIT.fullmatch(rev):
-        return None, "v04-reconciliation-rev: --rev must be a full 40-hex commit id"
     found = git_run(repo, "cat-file", "-t", rev)
     if found.returncode != 0 or found.stdout.strip() != b"commit":
         return None, f"v04-reconciliation-rev: {rev} is not a commit in {repo}"

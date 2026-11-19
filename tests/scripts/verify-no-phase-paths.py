@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import ast
 import collections
+import importlib.util
 from functools import lru_cache
 import ntpath
 import hashlib
@@ -908,7 +909,10 @@ def _has_full_commit_pattern(tree: ast.Module) -> bool:
 
 
 def _has_full_commit_guard(function: ast.AST, revision_name: str = "rev",
-                           required_error: str | None = None) -> bool:
+                           required_error: str | None = None,
+                           failure_kind: str = "raise") -> bool:
+    if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)) or function.decorator_list:
+        return False
     body = function.body
     if (body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant)
             and isinstance(body[0].value.value, str)):
@@ -924,17 +928,30 @@ def _has_full_commit_guard(function: ast.AST, revision_name: str = "rev",
             and isinstance(test.operand.args[0], ast.Name) and test.operand.args[0].id == revision_name
             and not test.operand.keywords and not guard.orelse):
         return False
-    if not guard.body or not isinstance(guard.body[0], ast.Raise):
+    if not guard.body:
         return False
-    raised = guard.body[0].exc
-    if not (isinstance(raised, ast.Call) and isinstance(raised.func, ast.Name)
-            and raised.func.id == "SystemExit"):
-        return False
-    if required_error is None:
-        return True
-    return (len(raised.args) == 1 and not raised.keywords
-            and isinstance(raised.args[0], ast.Constant)
-            and raised.args[0].value == required_error)
+    action = guard.body[0]
+    if failure_kind == "raise":
+        if not isinstance(action, ast.Raise):
+            return False
+        raised = action.exc
+        if not (isinstance(raised, ast.Call) and isinstance(raised.func, ast.Name)
+                and raised.func.id == "SystemExit"):
+            return False
+        return (required_error is None or
+                (len(raised.args) == 1 and not raised.keywords
+                 and isinstance(raised.args[0], ast.Constant)
+                 and raised.args[0].value == required_error))
+    if failure_kind == "return":
+        if (not isinstance(action, ast.Return) or not isinstance(action.value, ast.Tuple)
+                or len(action.value.elts) != 2
+                or not isinstance(action.value.elts[0], ast.Constant)
+                or action.value.elts[0].value is not None):
+            return False
+        message = action.value.elts[1]
+        return (required_error is None or
+                (isinstance(message, ast.Constant) and message.value == required_error))
+    return False
 
 
 def _git_revision_operand(node: ast.AST, names: dict[str, str], validated_names: set[str]) -> bool:
@@ -1064,7 +1081,24 @@ def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
 
     parents = _parents(tree)
     imported_names = {"argparse", "contextlib", "hashlib", "io", "json", "os", "posixpath", "re",
-                      "shutil", "subprocess", "sys", "tarfile", "tempfile", "time", "Callable", "Path"}
+                      "shutil", "subprocess", "sys", "tarfile", "tempfile", "time", "Callable", "Path", "type"}
+    module_attributes = {
+        "argparse": {"ArgumentParser", "RawDescriptionHelpFormatter"},
+        "contextlib": {"redirect_stderr", "redirect_stdout"},
+        "hashlib": {"sha1", "sha256"},
+        "io": {"BytesIO", "StringIO"},
+        "json": {"dumps", "loads"},
+        "os": {"environ", "devnull", "items"},
+        "posixpath": {"dirname", "join", "normpath"},
+        "re": {"DOTALL", "IGNORECASE", "MULTILINE", "compile", "escape", "findall",
+               "finditer", "fullmatch", "match", "search", "sub"},
+        "shutil": {"rmtree"},
+        "subprocess": {"CompletedProcess", "run"},
+        "sys": {"flags", "stderr", "optimize"},
+        "tarfile": {"TarError", "open"},
+        "tempfile": {"TemporaryDirectory"},
+        "time": {"perf_counter"},
+    }
     forbidden_dynamic_names = {"__import__", "__builtins__", "builtins", "getattr", "setattr", "delattr",
                                "globals", "locals", "vars"}
     for node in ast.walk(tree):
@@ -1085,6 +1119,18 @@ def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
         if not isinstance(node, ast.Name) or not isinstance(node.ctx, ast.Load):
             continue
         parent = parents.get(node)
+        if node.id == "type":
+            call = parent
+            attribute = parents.get(call) if isinstance(call, ast.Call) else None
+            function_chain = tuple(ancestor.name for ancestor in _ancestor_chain(node, parents)
+                                   if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef)))
+            if (not isinstance(call, ast.Call) or call.func is not node
+                    or len(call.args) != 1 or not isinstance(call.args[0], ast.Name)
+                    or call.args[0].id != "error" or call.keywords
+                    or not isinstance(attribute, ast.Attribute) or attribute.value is not call
+                    or attribute.attr != "__name__"
+                    or function_chain[:2] != ("measured_stage", "self_test")):
+                raise LintError("REJECT planning-path-git-command: builtin type use is outside the reviewed error label")
         if node.id == "sys":
             if not isinstance(parent, ast.Attribute) or parent.value is not node \
                     or parent.attr not in {"flags", "stderr"}:
@@ -1113,9 +1159,60 @@ def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
                 raise LintError("REJECT planning-path-git-command: pathlib.Path escapes its reviewed constructor/type uses")
 
     environ_reads = 0
+    environ_read_owners: list[str] = []
     devnull_reads = 0
     subprocess_run_writes: list[ast.Attribute] = []
     subprocess_run_calls: list[tuple[str, ...]] = []
+    approved_subprocess_call_nodes: list[ast.Call] = []
+    subprocess_contracts = {
+        ("git_run",): 'subprocess.run(["git", "--no-replace-objects", "-C", str(repo), *args], '
+                         'capture_output=True, check=False, env=env, timeout=60)',
+        ("git", "self_test_plan_cap_rev"):
+            'subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, '
+            'check=True, env=env, timeout=60)',
+        ("d205_git", "self_test_plan_cap_rev"):
+            'subprocess.run(["git", "-C", str(d205_repo), *args], capture_output=True, text=True, '
+            'check=True, env=env, timeout=60)',
+        ("d212_git", "self_test_plan_cap_rev"):
+            'subprocess.run(["git", "-C", str(d212_repo), *args], capture_output=True, check=False, '
+            'env=d212_env, timeout=60, input=input_bytes)',
+        ("git", "self_test_v04_gap_assessment"):
+            'subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, '
+            'check=True, env=env, timeout=60)',
+        ("git", "self_test_v04_reconciliation"):
+            'subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, '
+            'check=True, env=env, timeout=60)',
+        ("cli_pre_fix_accepts", "self_test_v04_reconciliation"):
+            'subprocess.run(["python3", "-I", str(checker or pre_fix_checker), "--check", '
+            '"v04-reconciliation", "--stage", stage, "--rev", rev, "--baseline-rev", '
+            'baseline_rev, "--repo", str(repo)], capture_output=True, text=True, check=False, '
+            'env=env, timeout=60)',
+    }
+    parsed_subprocess_contracts = {
+        chain: ast.parse(expression, mode="eval").body
+        for chain, expression in subprocess_contracts.items()
+    }
+    environment_expressions = {
+        "git_run": '{k: v for k, v in os.environ.items() if k in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")}',
+        "self_test_plan_cap_rev": '{k: v for k, v in os.environ.items() if k in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")}',
+        "self_test_v04_gap_assessment": '{k: v for k, v in os.environ.items() if k in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")}',
+        "self_test_v04_reconciliation": '{key: value for key, value in os.environ.items() if key in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")}',
+    }
+    expected_env_updates = {
+        "git_run": 'env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull, '
+                    'GIT_CONFIG_NOSYSTEM="1", GIT_TERMINAL_PROMPT="0")',
+        "self_test_plan_cap_rev": 'env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull, '
+                                    'GIT_AUTHOR_NAME="fixture", GIT_AUTHOR_EMAIL="fixture@example.invalid", '
+                                    'GIT_COMMITTER_NAME="fixture", GIT_COMMITTER_EMAIL="fixture@example.invalid")',
+        "self_test_v04_gap_assessment": 'env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull, '
+                                         'GIT_AUTHOR_NAME="fixture", GIT_AUTHOR_EMAIL="fixture@example.invalid", '
+                                         'GIT_COMMITTER_NAME="fixture", GIT_COMMITTER_EMAIL="fixture@example.invalid")',
+        "self_test_v04_reconciliation": 'env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull, '
+                                              'GIT_AUTHOR_NAME="fixture", GIT_AUTHOR_EMAIL="fixture@example.invalid", '
+                                              'GIT_COMMITTER_NAME="fixture", GIT_COMMITTER_EMAIL="fixture@example.invalid")',
+    }
+    env_update_calls: dict[str, list[ast.Call]] = collections.defaultdict(list)
+    d212_env_assignments: list[ast.Assign] = []
     subprocess_run_captures: list[ast.Attribute] = []
     completed_process_reads = 0
     for node in ast.walk(tree):
@@ -1131,18 +1228,33 @@ def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
             raise LintError("REJECT planning-path-git-command: dynamic standard-library import is unprovable")
         if root_id == "Path":
             raise LintError("REJECT planning-path-git-command: pathlib.Path class attribute use is unprovable")
+        if root_id in module_attributes and node.attr not in module_attributes[root_id]:
+            raise LintError("REJECT planning-path-git-command: %s namespace member is outside the reviewed import contract"
+                            % root_id)
         if root_id == "sys" and node.attr not in {"flags", "stderr", "optimize"}:
             raise LintError("REJECT planning-path-git-command: sys attribute is outside the reviewed import contract")
         if root_id == "os" and node.attr == "environ":
             items = parent
             call = parents.get(items) if isinstance(items, ast.Attribute) and items.attr == "items" else None
             comp = parents.get(call) if isinstance(call, ast.Call) else None
+            comp_expression = parents.get(comp) if isinstance(comp, ast.comprehension) else None
+            assignment = parents.get(comp_expression) if isinstance(comp_expression, ast.DictComp) else None
+            function = next((ancestor for ancestor in _ancestor_chain(node, parents)
+                             if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
             if (not isinstance(items, ast.Attribute) or items.value is not node
                     or not isinstance(call, ast.Call) or call.func is not items or call.args or call.keywords
                     or not isinstance(comp, ast.comprehension) or comp.iter is not call
-                    or not isinstance(parents.get(comp), ast.DictComp)):
+                    or not isinstance(comp_expression, ast.DictComp) or function is None
+                    or function.name not in environment_expressions
+                    or not isinstance(assignment, ast.Assign) or len(assignment.targets) != 1
+                    or not isinstance(assignment.targets[0], ast.Name) or assignment.targets[0].id != "env"
+                    or assignment.value is not comp_expression
+                    or ast.dump(comp_expression, include_attributes=False) != ast.dump(
+                        ast.parse(environment_expressions[function.name], mode="eval").body,
+                        include_attributes=False)):
                 raise LintError("REJECT planning-path-git-command: os.environ escapes the read-only environment copy")
             environ_reads += 1
+            environ_read_owners.append(function.name)
         elif root_id == "os" and node.attr == "devnull":
             keyword = parent
             call = parents.get(keyword) if isinstance(keyword, ast.keyword) else None
@@ -1177,19 +1289,14 @@ def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
                                      if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
                     function_chain = tuple(ancestor.name for ancestor in _ancestor_chain(node, parents)
                                            if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef)))
-                    allowed_calls = {
-                        ("git_run",),
-                        ("git", "self_test_plan_cap_rev"),
-                        ("d205_git", "self_test_plan_cap_rev"),
-                        ("d212_git", "self_test_plan_cap_rev"),
-                        ("git", "self_test_v04_gap_assessment"),
-                        ("git", "self_test_v04_reconciliation"),
-                        ("cli_pre_fix_accepts", "self_test_v04_reconciliation"),
-                    }
-                    if function_chain in allowed_calls:
+                    expected_call = parsed_subprocess_contracts.get(function_chain)
+                    if expected_call is not None and ast.dump(parent, include_attributes=False) == ast.dump(
+                            expected_call, include_attributes=False):
                         subprocess_run_calls.append(function_chain)
+                        approved_subprocess_call_nodes.append(parent)
                     else:
-                        raise LintError("REJECT planning-path-git-command: subprocess.run call is outside the reviewed Git adapters")
+                        raise LintError("REJECT planning-path-git-command: subprocess.run argv or environment changed in %s"
+                                        % "/".join(function_chain))
                     continue
                 if (not isinstance(node.ctx, ast.Load) or not isinstance(parent, ast.Assign)
                         or len(parent.targets) != 1 or not isinstance(parent.targets[0], ast.Name)
@@ -1215,6 +1322,85 @@ def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
                 raise LintError("REJECT planning-path-git-command: subprocess attribute is outside the reviewed adapter contract")
         if root_id == "Path" and node.attr == "resolve" and isinstance(node.ctx, (ast.Store, ast.Del)):
             raise LintError("REJECT planning-path-git-command: pathlib.Path.resolve is mutated")
+
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "update" and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "env"):
+            function = next((ancestor for ancestor in _ancestor_chain(node, parents)
+                             if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
+            if function is not None:
+                env_update_calls[function.name].append(node)
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 \
+                and isinstance(node.targets[0], ast.Name) and node.targets[0].id == "d212_env":
+            d212_env_assignments.append(node)
+
+    if collections.Counter(environ_read_owners) != collections.Counter({
+            "git_run": 1, "self_test_plan_cap_rev": 1,
+            "self_test_v04_gap_assessment": 1, "self_test_v04_reconciliation": 1}):
+        raise LintError("REJECT planning-path-git-command: filtered environment copy ownership changed")
+    for function_name, expression in expected_env_updates.items():
+        expected_call = ast.parse(expression, mode="eval").body
+        calls = env_update_calls.get(function_name, [])
+        if len(calls) != 1 or ast.dump(calls[0], include_attributes=False) != ast.dump(
+                expected_call, include_attributes=False):
+            raise LintError("REJECT planning-path-git-command: %s Git environment mutation changed" % function_name)
+    if set(env_update_calls) != set(expected_env_updates):
+        raise LintError("REJECT planning-path-git-command: unreviewed environment mutation was added")
+
+    env_assignments = [node for node in ast.walk(tree) if isinstance(node, ast.Assign)
+                       and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+                       and node.targets[0].id == "env"]
+    if len(env_assignments) != 4:
+        raise LintError("REJECT planning-path-git-command: filtered environment binding was reassigned")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id in {"env", "d212_env"}:
+            parent = parents.get(node)
+            if isinstance(node.ctx, (ast.Store, ast.Del)):
+                allowed_target = (node.id == "env" and isinstance(parent, ast.Assign)
+                                  and len(parent.targets) == 1 and parent.targets[0] is node
+                                  and parent in env_assignments)
+                allowed_target = allowed_target or (
+                    node.id == "d212_env" and isinstance(parent, ast.Assign)
+                    and len(parent.targets) == 1 and parent.targets[0] is node
+                    and parent in d212_env_assignments)
+                if not allowed_target:
+                    raise LintError("REJECT planning-path-git-command: filtered environment is rebound")
+            elif isinstance(node.ctx, ast.Load):
+                allowed = False
+                if isinstance(parent, ast.Attribute) and parent.value is node and parent.attr == "update":
+                    call = parents.get(parent)
+                    allowed = (node.id == "env" and isinstance(call, ast.Call) and call.func is parent
+                               and call in sum(env_update_calls.values(), []))
+                elif isinstance(parent, ast.Attribute) and parent.value is node and parent.attr == "items":
+                    call = parents.get(parent)
+                    function = next((ancestor for ancestor in _ancestor_chain(node, parents)
+                                     if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
+                    allowed = (node.id == "env" and isinstance(call, ast.Call) and call.func is parent
+                               and not call.args and not call.keywords
+                               and function is not None and function.name == "git_run")
+                elif isinstance(parent, ast.keyword) and parent.arg == "env" and parent.value is node:
+                    call = parents.get(parent)
+                    allowed = isinstance(call, ast.Call) and call in approved_subprocess_call_nodes
+                elif (node.id == "env" and isinstance(parent, ast.Call)
+                      and isinstance(parent.func, ast.Name) and parent.func.id == "dict"
+                      and len(parent.args) == 1 and parent.args[0] is node and not parent.keywords):
+                    function = next((ancestor for ancestor in _ancestor_chain(node, parents)
+                                     if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
+                    allowed = function is not None and function.name == "self_test_plan_cap_rev"
+                if not allowed:
+                    raise LintError("REJECT planning-path-git-command: filtered environment alias escapes its fixed uses at line %d (%s)"
+                                    % (node.lineno, ast.unparse(parent) if parent is not None else "no parent"))
+        if (isinstance(node, ast.Subscript) and isinstance(node.ctx, (ast.Store, ast.Del))):
+            root = node.value
+            while isinstance(root, (ast.Attribute, ast.Subscript)):
+                root = root.value
+            if isinstance(root, ast.Name) and root.id in {"env", "d212_env"}:
+                raise LintError("REJECT planning-path-git-command: filtered environment contents are mutated")
+
+    if len(d212_env_assignments) != 1 or ast.dump(d212_env_assignments[0], include_attributes=False) != ast.dump(
+            ast.parse("d212_env = dict(env)").body[0], include_attributes=False):
+        raise LintError("REJECT planning-path-git-command: secondary Git environment copy changed")
 
     if (environ_reads != 4 or devnull_reads != 8 or len(subprocess_run_writes) != 2
             or collections.Counter(subprocess_run_calls) != collections.Counter({
@@ -1347,34 +1533,36 @@ def _validate_immutable_revision_proof(tree: ast.Module, *, on_entry=None) -> No
 
     top_functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)]
     top_level = {node.name: node for node in top_functions}
-    guarded = ("read_rev", "commit_snapshot")
-    for name in guarded:
+    expected_headers = {
+        "read_rev": "def _expected(repo: Path, rev: str) -> tuple[str, PlanTree, str | None]: pass",
+        "commit_snapshot": "def _expected(repo: Path, rev: str) -> tuple[dict[str, bytes] | None, str | None]: pass",
+        "immutable_blob": "def _expected(repo: Path, revision: str, path: str) -> bytes: pass",
+    }
+    for name, header in expected_headers.items():
         function = top_level.get(name)
         if function is None or sum(node.name == name for node in top_functions) != 1:
-            raise LintError("REJECT planning-path-git-command: %s lost its full-commit guard" % name)
-        guard_lines = [node.lineno for node in ast.walk(function)
-                       if isinstance(node, ast.If)
-                       and isinstance(node.test, ast.UnaryOp) and isinstance(node.test.op, ast.Not)
-                       and isinstance(node.test.operand, ast.Call)
-                       and isinstance(node.test.operand.func, ast.Attribute)
-                       and node.test.operand.func.attr == "fullmatch"
-                       and isinstance(node.test.operand.func.value, ast.Name)
-                       and node.test.operand.func.value.id == "FULL_COMMIT"
-                       and len(node.test.operand.args) == 1
-                       and isinstance(node.test.operand.args[0], ast.Name)
-                       and node.test.operand.args[0].id == "rev"
-                       and not node.test.operand.keywords and not node.orelse
-                       and node.body and isinstance(node.body[0], (ast.Return, ast.Raise))]
-        git_read_lines = [node.lineno for node in ast.walk(function)
-                          if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                          and node.func.id == "git_run"]
-        if not guard_lines or not git_read_lines or min(guard_lines) >= min(git_read_lines):
-            raise LintError("REJECT planning-path-git-command: %s lost its pre-read full-commit guard" % name)
+            raise LintError("REJECT planning-path-git-command: %s immutable reader is missing" % name)
+        expected = ast.parse(header).body[0]
+        if (function.decorator_list
+                or ast.dump(function.args, include_attributes=False) !=
+                ast.dump(expected.args, include_attributes=False)
+                or ast.dump(function.returns, include_attributes=False) !=
+                ast.dump(expected.returns, include_attributes=False)):
+            raise LintError("REJECT planning-path-git-command: %s immutable reader signature changed" % name)
+        revision_name = "revision" if name == "immutable_blob" else "rev"
+        failure_kind = "return" if name == "commit_snapshot" else "raise"
+        error_text = {
+            "read_rev": "plan-cap-rev: --rev must be a full 40-hex commit id, not a name",
+            "commit_snapshot": "v04-reconciliation-rev: --rev must be a full 40-hex commit id",
+            "immutable_blob": "plan-cap-v04-archive: revision must be a full 40-hex commit id",
+        }[name]
+        if not _has_full_commit_guard(function, revision_name, error_text, failure_kind):
+            raise LintError("REJECT planning-path-git-command: %s lost its dominating full-commit guard" % name)
         parameters = [*function.args.posonlyargs, *function.args.args,
                       *function.args.kwonlyargs]
-        if sum(parameter.arg == "rev" for parameter in parameters) != 1:
+        if sum(parameter.arg == revision_name for parameter in parameters) != 1:
             raise LintError("REJECT planning-path-git-command: %s revision parameter changed" % name)
-        if _revision_binding_changed(function, "rev"):
+        if _revision_binding_changed(function, revision_name):
             raise LintError("REJECT planning-path-git-command: %s rebinds its validated revision" % name)
 
     def exact_revision_path(expression: ast.AST, revision_name: str) -> bool:
@@ -1433,15 +1621,7 @@ def _validate_immutable_revision_proof(tree: ast.Module, *, on_entry=None) -> No
             or sum(node.name == "immutable_blob" for node in top_functions) != 1
             or sum(node.name == "validate_v04_archive_and_recovery" for node in top_functions) != 1):
         raise LintError("REJECT planning-path-git-command: immutable archive readers are missing")
-    immutable_parameters = [*immutable_blob.args.posonlyargs, *immutable_blob.args.args,
-                            *immutable_blob.args.kwonlyargs]
-    if sum(parameter.arg == "revision" for parameter in immutable_parameters) != 1:
-        raise LintError("REJECT planning-path-git-command: immutable archive revision parameter changed")
     archive_error = "plan-cap-v04-archive: revision must be a full 40-hex commit id"
-    if not _has_full_commit_guard(immutable_blob, "revision", archive_error):
-        raise LintError("REJECT planning-path-git-command: immutable archive reader lost its pre-read full-commit guard")
-    if _revision_binding_changed(immutable_blob, "revision"):
-        raise LintError("REJECT planning-path-git-command: immutable archive reader rebinds its validated revision")
     exact_git_reader(immutable_blob, "revision", {"show", "ls-tree"})
 
     archive_parameters = [*validate_archive.args.posonlyargs, *validate_archive.args.args,
@@ -3136,6 +3316,16 @@ def injected_unvalidated_git_revision_reader(repo, rev):
              (function_name, needle.strip()))
         return source[:start] + function_source.replace(needle, insertion + needle, 1) + source[end:]
 
+    def replace_in_function(function_name: str, needle: str, replacement: str) -> str:
+        start = source.index("def " + function_name + "(")
+        end = source.find("\ndef ", start + 1)
+        if end < 0:
+            end = len(source)
+        function_source = source[start:end]
+        need(needle in function_source, "%s mutation could not find its target in %s" %
+             (function_name, needle.strip()))
+        return source[:start] + function_source.replace(needle, replacement, 1) + source[end:]
+
     frame_local_rebindings = (
         ("read_rev", '    found = git_run(repo, "cat-file", "-t", rev)\n', "rev"),
         ("commit_snapshot", '    found = git_run(repo, "cat-file", "-t", rev)\n', "rev"),
@@ -3176,8 +3366,29 @@ def injected_unvalidated_git_revision_reader(repo, rev):
                 state["proof_entries"] += 1
 
             validate_planning_hygiene_source(candidate, proof_entry=proof_entry)
-            state["protected_reader_calls"] += 1
-            return fixture_git("show", "%s:%s" % (fixture_revision, fixture_path))
+            if candidate != source:
+                raise AssertionError("D-220 mutant reached the clean-source-only reader loader")
+            target_path = ROOT / PLANNING_HYGIENE_FILE
+            if target_path.read_text(encoding="utf-8") != candidate:
+                raise LintError("D-220 clean positive source changed after predicate validation")
+            module_name = "_phase24_d220_planning_hygiene_positive"
+            spec = importlib.util.spec_from_file_location(module_name, target_path)
+            if spec is None or spec.loader is None:
+                raise LintError("D-220 clean positive could not load the admitted source")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            try:
+                spec.loader.exec_module(module)
+                real_git_run = module.git_run
+
+                def counted_git_run(repo: Path, *args: str):
+                    state["protected_reader_calls"] += 1
+                    return real_git_run(repo, *args)
+
+                module.git_run = counted_git_run
+                return module.immutable_blob(fixture_repo, fixture_revision, fixture_path)
+            finally:
+                sys.modules.pop(module_name, None)
 
         def expect_d220_gate_rejected(label: str, candidate: str) -> None:
             nonlocal controls
@@ -3204,9 +3415,9 @@ def injected_unvalidated_git_revision_reader(repo, rev):
             positive_bytes = run_source_then_reader(source, positive_state)
         except LintError as error:
             raise LintError("D-220 clean immutable-reader positive was refused: %s" % error) from None
-        need(positive_state == {"proof_entries": 1, "protected_reader_calls": 1}
+        need(positive_state == {"proof_entries": 1, "protected_reader_calls": 2}
              and positive_bytes == fixture_bytes,
-             "D-220 clean positive did not reach the same pinned immutable reader with the expected bytes")
+             "D-220 clean positive did not reach both reads in the pinned immutable reader with expected bytes")
         controls += 1
 
         standard_library_dependency_mutants = (
@@ -3261,6 +3472,12 @@ def injected_unvalidated_git_revision_reader(repo, rev):
              source + '\nos.environ["PATH"] = "/tmp/redirected"\n'),
             ("os.devnull binding is redirected",
              source + '\nos.devnull = "/tmp/git-config"\n'),
+            ("contextlib transitively exposes module bindings",
+             source + '\ncontextlib.sys.modules[__name__].git_run = lambda repo, *args: None\n'),
+            ("contextlib transitively replaces the pinned archive revision",
+             source + '\ncontextlib.sys.modules[__name__].V04_D209_ARCHIVE_REV = "' + git_hash + '"\n'),
+            ("contextlib transitively replaces subprocess.run",
+             source + '\ncontextlib.sys.modules["subprocess"].run = lambda *args, **kwargs: None\n'),
             ("CompletedProcess constructor is replaced with spoofed successful result",
              source + '\nclass SpoofedCompletedProcess:\n'
              '    def __init__(self, *args, **kwargs):\n'
@@ -3273,6 +3490,10 @@ def injected_unvalidated_git_revision_reader(repo, rev):
             ("Path.resolve is mutated through an instance class",
              insert_in_function("self_test_plan_cap_rev", '    repo = base / "rev-repo"\n',
                                 '    repo.__class__.resolve = lambda path: path\n')),
+            ("type call mutates the Path resolver class",
+             source + '\ntype(Path("/tmp")).resolve = lambda path: Path("/")\n'),
+            ("type-derived alias mutates the Path resolver class",
+             source + '\npath_type = type(Path("/tmp"))\npath_type.resolve = lambda path: Path("/")\n'),
             ("saved subprocess.run restoration binding is replaced",
              source.replace("real_subprocess_run = subprocess.run",
                             "real_subprocess_run = forbidden_git_attempt", 1)),
@@ -3286,6 +3507,46 @@ def injected_unvalidated_git_revision_reader(repo, rev):
         )
         for label, candidate in standard_library_dependency_mutants:
             expect_d220_gate_rejected(label, candidate)
+
+        nested_unreachable_guard = replace_in_function(
+            "commit_snapshot",
+            '    if not FULL_COMMIT.fullmatch(rev):\n'
+            '        return None, "v04-reconciliation-rev: --rev must be a full 40-hex commit id"\n',
+            '    if False:\n'
+            '        if not FULL_COMMIT.fullmatch(rev):\n'
+            '            return None, "v04-reconciliation-rev: --rev must be a full 40-hex commit id"\n')
+        expect_d220_gate_rejected("unreachable nested commit_snapshot revision guard", nested_unreachable_guard)
+
+        nested_read_rev_guard = replace_in_function(
+            "read_rev",
+            '    if not FULL_COMMIT.fullmatch(rev):\n'
+            '        raise SystemExit("plan-cap-rev: --rev must be a full 40-hex commit id, not a name")\n',
+            '    if False:\n'
+            '        if not FULL_COMMIT.fullmatch(rev):\n'
+            '            raise SystemExit("plan-cap-rev: --rev must be a full 40-hex commit id, not a name")\n')
+        expect_d220_gate_rejected("unreachable nested read_rev revision guard", nested_read_rev_guard)
+
+        nested_archive_guard = replace_in_function(
+            "immutable_blob",
+            '    if not FULL_COMMIT.fullmatch(revision):\n'
+            '        raise SystemExit("plan-cap-v04-archive: revision must be a full 40-hex commit id")\n',
+            '    if False:\n'
+            '        if not FULL_COMMIT.fullmatch(revision):\n'
+            '            raise SystemExit("plan-cap-v04-archive: revision must be a full 40-hex commit id")\n')
+        expect_d220_gate_rejected("unreachable nested immutable_blob revision guard", nested_archive_guard)
+
+        redirected_fixture_command = replace_in_function(
+            "self_test_plan_cap_rev",
+            'subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True, env=env, timeout=60)',
+            'subprocess.run(["python3", "-C", str(repo), *args], capture_output=True, text=True, check=True, env=env, timeout=60)')
+        expect_d220_gate_rejected("fixture subprocess executable changed from Git", redirected_fixture_command)
+
+        redirected_fixture_path = replace_in_function(
+            "self_test_plan_cap_rev",
+            'env = {k: v for k, v in os.environ.items() if k in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")}',
+            'env = {k: ("/tmp/redirected" if k == "PATH" else v) for k, v in os.environ.items() '
+            'if k in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")}')
+        expect_d220_gate_rejected("fixture environment copy rewrites PATH", redirected_fixture_path)
 
         aliased_global_mutants = (
             ("aliased getter replaces git_run through split frame/global names",
