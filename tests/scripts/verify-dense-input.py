@@ -384,8 +384,16 @@ def candidate_git_context_controls(source_revision: str) -> int:
         try:
             os.environ.update(hostile_values)
             sanitized = _git_environment()
-            require(all(key not in sanitized for key in hostile_values),
-                    "Git environment allowlist retained an inherited selector or config override")
+            neutralized_config = {
+                "GIT_CONFIG_GLOBAL": os.devnull,
+                "GIT_CONFIG_SYSTEM": os.devnull,
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_TERMINAL_PROMPT": "0",
+            }
+            require(all(sanitized.get(key) == value for key, value in neutralized_config.items())
+                    and not any(key in sanitized for key in hostile_values
+                                if key not in neutralized_config),
+                    "Git environment allowlist retained a selector or failed to neutralize config")
             hostile_candidate = temp / "hostile-candidate"
             hostile_candidate.mkdir()
             hostile_pins = install_candidate_git_context(hostile_candidate, source_revision)
