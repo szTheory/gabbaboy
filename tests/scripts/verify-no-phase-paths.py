@@ -1050,8 +1050,14 @@ def _validate_immutable_revision_proof(tree: ast.Module, *, on_entry=None) -> No
     }
     dynamic_lookup_capabilities = {
         "getattr", "vars", "attrgetter", "__getattribute__", "__getattr__",
+        # inspect and its frame enumerators can expose live f_globals/f_locals
+        # mappings without spelling those frame attributes in source.
+        "inspect",
     }
     for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module is not None \
+                and (node.module == "inspect" or node.module.startswith("inspect.")):
+            raise LintError("REJECT planning-path-git-command: inspect frame enumeration is unprovable")
         if isinstance(node, ast.Name) and node.id in dynamic_lookup_capabilities \
                 and isinstance(node.ctx, ast.Load):
             raise LintError("REJECT planning-path-git-command: dynamic namespace lookup capability is unprovable")
@@ -2965,6 +2971,30 @@ def injected_unvalidated_git_revision_reader(repo, rev):
              "_global_map = _dynamic_lookup(_globals_name)(_frame)\n"
              "_binding_name = \"git_\" + \"run\"\n"
              "_global_map[_binding_name] = lambda repo, *args: None\n"),
+            ("inspect members replace git_run through split frame/global names",
+             "\nimport inspect as _frame_inspector\n"
+             "_frame = _frame_inspector.currentframe()\n"
+             "_members = _frame_inspector.getmembers(_frame)\n"
+             "_globals_name = \"f_\" + \"globals\"\n"
+             "_global_map = next(value for name, value in _members if name == _globals_name)\n"
+             "_binding_name = \"git_\" + \"run\"\n"
+             "_global_map[_binding_name] = lambda repo, *args: None\n"),
+            ("inspect members replace the D-209 pin through split frame/global names",
+             "\nimport inspect as _frame_inspector\n"
+             "_frame = _frame_inspector.currentframe()\n"
+             "_members = _frame_inspector.getmembers(_frame)\n"
+             "_globals_name = \"f_\" + \"globals\"\n"
+             "_global_map = next(value for name, value in _members if name == _globals_name)\n"
+             "_binding_name = \"V04_D209_ARCHIVE_\" + \"REV\"\n"
+             "_global_map[_binding_name] = \"f\" * 40\n"),
+            ("imported inspect frame helpers replace git_run through split names",
+             "\nfrom inspect import currentframe as _current_frame, getmembers as _read_members\n"
+             "_frame = _current_frame()\n"
+             "_members = _read_members(_frame)\n"
+             "_globals_name = \"f_\" + \"globals\"\n"
+             "_global_map = next(value for name, value in _members if name == _globals_name)\n"
+             "_binding_name = \"git_\" + \"run\"\n"
+             "_global_map[_binding_name] = lambda repo, *args: None\n"),
         )
         for label, mutation in aliased_global_mutants:
             expect_d220_gate_rejected(label, source + mutation)
@@ -2987,6 +3017,21 @@ def injected_unvalidated_git_revision_reader(repo, rev):
                 expect_d220_gate_rejected(
                     "aliased split-name f_locals %s write in %s" %
                     (replacement_label, function_name), candidate)
+
+        for function_name, needle, binding in frame_local_rebindings:
+            revision_expression = '"r" + "ev"' if binding == "rev" else '"revis" + "ion"'
+            mutation = (
+                "    import inspect as _frame_inspector\n"
+                "    _frame = _frame_inspector.currentframe()\n"
+                "    _members = _frame_inspector.getmembers(_frame)\n"
+                "    _locals_name = \"f_\" + \"locals\"\n"
+                "    _local_map = next(value for name, value in _members if name == _locals_name)\n"
+                "    _revision_name = %s\n"
+                "    _local_map[_revision_name] = \"HEAD\"\n"
+            ) % revision_expression
+            candidate = insert_in_function(function_name, needle, mutation)
+            expect_d220_gate_rejected(
+                "inspect.getmembers f_locals rewrite in %s" % function_name, candidate)
 
     pattern_rebindings = (
         ("MatchAs revision capture", "    match value:\n        case _ as rev:\n            pass\n"),
