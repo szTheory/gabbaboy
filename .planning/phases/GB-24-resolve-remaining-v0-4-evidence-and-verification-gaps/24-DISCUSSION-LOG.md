@@ -334,3 +334,28 @@ The CI/CD efficiency policy is already discoverable from `AGENTS.md` through `.p
 **Deferred:** No broader analyzer, dependency, CTest identity, CI topology change, Task 7, Phase 24 closure, milestone audit/archive, v0.5 start, or worktree cleanup.
 
 **Next route:** Update and independently check the sole Phase 24 plan with D-219's integrated findings, commit the planning boundary without `.planning/state.json`, then execute only the scoped recovery and existing focused qualification. The current handoff is `$gsd-plan-phase 24` in this worktree.
+
+
+## D-220 — Scope-bounded convergence after D-219 pass-two NO-GO
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Scope-bounded convergence | Reuse the same six-checker trust boundary; let local corrections and exact-head review converge on evidence without a numeric pass cap; retain one matrix only after a clean review. | ✓ |
+| One more fixed correction/review cycle | Permit one final attempt, then stop even if the same invariant remains open. | |
+| Keep the NO-GO stop | Make no further recovery proposal. | |
+
+**User's choice:** Scope-bounded convergence.
+**Notes:** The D-219 two-pass allowance is exhausted. This selection authorizes updating context and replanning only, not code changes or CI. Keep each cycle tied to a concrete review finding or failing causal control and a changed candidate; stop for owner discussion if scope expands, a correction makes no concrete progress, or a new dependency/test identity/broader claim is required. A fresh independent exact-head review remains mandatory before the one protected matrix; a failed, skipped, stale, or missing required context ends that matrix route without retry. Conditional merge applies only to the identical reviewed and fully passing head under branch protection.
+
+### Cross-role synthesis
+
+| Lens | Recommendation |
+|---|---|
+| Security / Python runtime | Reject unmodeled dynamic namespace access in the proof-bearing source; do not grow an exact-spelling blacklist. Python documents arbitrary string names for `getattr` and write-through optimized-scope `frame.f_locals` since 3.13 ([`getattr`](https://docs.python.org/3.14/library/functions.html#getattr), [PEP 667](https://peps.python.org/pep-0667/)). |
+| Test design | Add source-only causal mutants for aliased `getattr` plus split names targeting `git_run` and the D-209 pin, and post-guard local mutation in `read_rev`, `commit_snapshot`, and `immutable_blob`; assert the intended refusal before Git access and keep approved positives. |
+| Maintainability | Keep the existing Python standard-library AST contract; avoid a general alias-analysis dependency and preserve all six checker boundaries. |
+| CI / operations | Run cheap source/scope checks before the same seven focused CTests, then review the frozen exact head. Do not spend hosted CI before clean review; measure real job and wait timings if the matrix runs. |
+
+**Retained limits:** one existing Phase 24 plan; same six checker files plus additive closeout evidence; no new dependency, CTest identity, timeout, weakened control floor, broad suite, ROM/fixture/Acid2 replay, Task 7, phase/milestone closure, v0.5, or worktree cleanup. D-209 dispositions remain unchanged; FIXT-01 stays Pending and Acid2 remains failed/unreplayed.
+
+**Next route:** `$gsd-plan-phase 24` updates the existing plan. Execution requires a separately authorized handoff after plan review.
