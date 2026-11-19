@@ -2969,6 +2969,25 @@ def injected_unvalidated_git_revision_reader(repo, rev):
         for label, mutation in aliased_global_mutants:
             expect_d220_gate_rejected(label, source + mutation)
 
+        for function_name, needle, binding in frame_local_rebindings:
+            binding_expression = '"r" + "ev"' if binding == "rev" else '"revis" + "ion"'
+            replacements = (("symbolic revision", '"HEAD"'),
+                            ("different full SHA", '"' + git_hash + '"'))
+            for replacement_label, replacement in replacements:
+                mutation = (
+                    '    _dynamic_lookup = getattr\n'
+                    '    _frame_name = "_get" + "frame"\n'
+                    '    _frame = _dynamic_lookup(sys, _frame_name)()\n'
+                    '    _locals_name = "f_" + "locals"\n'
+                    '    _local_map = _dynamic_lookup(_frame, _locals_name)\n'
+                    '    _revision_name = %s\n'
+                    '    _local_map[_revision_name] = %s\n'
+                ) % (binding_expression, replacement)
+                candidate = insert_in_function(function_name, needle, mutation)
+                expect_d220_gate_rejected(
+                    "aliased split-name f_locals %s write in %s" %
+                    (replacement_label, function_name), candidate)
+
     pattern_rebindings = (
         ("MatchAs revision capture", "    match value:\n        case _ as rev:\n            pass\n"),
         ("MatchStar revision capture", "    match []:\n        case [*rev]:\n            pass\n"),
