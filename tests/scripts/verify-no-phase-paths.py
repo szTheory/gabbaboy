@@ -1240,10 +1240,18 @@ def _validate_immutable_revision_proof(tree: ast.Module) -> None:
 
 
 def _validate_decoded_path_flow(source: str, tree: ast.Module,
-                                roots_by_function: dict[str, set[str]]) -> None:
+                                roots_by_function: dict[str, set[str]], *,
+                                validate_git_contract: bool = True) -> None:
     """Check decoded values and bounded helper calls without importing or executing source."""
-    trusted_git_adapters = _approved_git_object_adapters(tree)
-    _validate_immutable_revision_proof(tree)
+    if validate_git_contract:
+        trusted_git_adapters = _approved_git_object_adapters(tree)
+        _validate_immutable_revision_proof(tree)
+    else:
+        # Path-flow mutation controls hold the production Git surface constant. Its full
+        # runtime proof is checked on the clean source and on each Git-proof mutant below.
+        trusted_git_adapters = {node for node in tree.body
+                                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                                and node.name == "git_run"}
     parents = _parents(tree)
     functions = [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
     chr_shadowed = _has_chr_binding(tree)
@@ -1546,9 +1554,10 @@ def _validate_decoded_path_flow(source: str, tree: ast.Module,
         # deciding that the decoded-flow pass is unnecessary.
         for node in ast.walk(tree):
             folded = _literal_path_string(node, literal_names_by_scope.get(scope_of(node), {}))
-            raw = _source_segment_from_lines(source_lines, node) or ""
-            if folded is not None and _protected_path_text(folded) and not SPELLINGS.search(raw):
-                return True
+            if folded is not None and _protected_path_text(folded):
+                raw = _source_segment_from_lines(source_lines, node) or ""
+                if not SPELLINGS.search(raw):
+                    return True
 
         def names_in(node: ast.AST) -> set[str]:
             return {item.id for item in ast.walk(node) if isinstance(item, ast.Name)}
@@ -2397,21 +2406,58 @@ def self_test_planning_hygiene_path_contract() -> int:
             return
         raise LintError("%s: unsafe path-use mutation was accepted" % label)
 
-    def validate_decoded_flow(candidate: str) -> None:
+    def validate_decoded_flow(candidate: str, *, validate_git_contract: bool = True,
+                               proof_only: str | None = None) -> None:
         try:
             tree = ast.parse(candidate, filename=PLANNING_HYGIENE_FILE)
         except (SyntaxError, IndentationError) as error:
             raise LintError("REJECT planning-path-parse: %s" % error.__class__.__name__) from None
+        if proof_only == "adapter":
+            _approved_git_object_adapters(tree)
+            return
+        if proof_only == "revision":
+            _validate_immutable_revision_proof(tree)
+            return
         roots = _fixture_root_contract(tree)
-        _validate_decoded_path_flow(candidate, tree, roots)
+        _validate_decoded_path_flow(candidate, tree, roots, validate_git_contract=validate_git_contract)
 
-    def expect_flow_rejected(label: str, candidate: str, reason: str, same_count: bool = False) -> None:
+    path_flow_fixture = r'''from pathlib import Path
+import os
+import tempfile
+PHASES_AT_REV = ".planning" + "/phases"
+ROOT = Path("/" + PHASES_AT_REV)
+V04_GAP_REPORT_PATH = PHASES_AT_REV + "/private.md"
+V04_GAP_SOURCE_PATHS = ("safe", "safe", "safe", PHASES_AT_REV + "/source.md")
+DECODED_SENTINEL = "\x2eplanning/phases"
+'''
+
+    def validate_path_flow_fixture(candidate: str) -> None:
+        try:
+            tree = ast.parse(candidate, filename=PLANNING_HYGIENE_FILE)
+        except (SyntaxError, IndentationError) as error:
+            raise LintError("REJECT planning-path-parse: %s" % error.__class__.__name__) from None
+        _validate_decoded_path_flow(candidate, tree, {}, validate_git_contract=False)
+
+    def expect_flow_rejected(label: str, candidate: str, reason: str, same_count: bool = False,
+                             full_analysis: bool = False, isolated_path_flow: bool = False) -> None:
         nonlocal controls
         if same_count:
-            need(len(list(SPELLINGS.finditer(candidate))) == original_lexical_count,
+            baseline = path_flow_fixture if isolated_path_flow else source
+            expected_count = len(list(SPELLINGS.finditer(baseline)))
+            need(len(list(SPELLINGS.finditer(candidate))) == expected_count,
                  "%s: mutation changed the lexical hit count" % label)
+        proof_only = None
+        if reason == "REJECT planning-path-git-adapter":
+            proof_only = "adapter"
+        elif reason == "REJECT planning-path-git-command" and not full_analysis:
+            proof_only = "revision"
         try:
-            validate_decoded_flow(candidate)
+            if isolated_path_flow:
+                validate_path_flow_fixture(candidate)
+            else:
+                validate_decoded_flow(candidate,
+                                      validate_git_contract=reason.startswith("REJECT planning-path-git-"),
+                                      proof_only=proof_only)
         except LintError as error:
             need(str(error).startswith(reason), "%s: refused for %r instead of %s"
                  % (label, str(error), reason))
@@ -2441,7 +2487,7 @@ def self_test_planning_hygiene_path_contract() -> int:
     need(escaped_root != source, "fixture-root mutation did not find its source site")
     expect_rejected("fixture read root escape", escaped_root, "REJECT planning-path-fixture-root")
 
-    contained_helper = source + r'''
+    contained_helper = path_flow_fixture + r'''
 def injected_fixture_builder(root, name):
     child = root / name
     return child / "probe.md"
@@ -2453,7 +2499,7 @@ def injected_contained_fixture_reader():
         return path.read_text(encoding="utf-8")
 '''
     try:
-        validate_decoded_flow(contained_helper)
+        validate_path_flow_fixture(contained_helper)
     except LintError as error:
         raise LintError("contained fixture helper positive: refused: %s" % error) from None
     controls += 1
@@ -2643,13 +2689,14 @@ def injected_rebound_root_reader():
 '''),
     )
     for label, addition in reader_mutations:
+        candidate = path_flow_fixture + addition
         if "temporary root" in label or "rebinding" in label:
             reason = "REJECT temporary-path-containment"
         elif "recursive protected helper" in label:
             reason = "REJECT live-phase-path-flow"
         else:
             reason = "REJECT live-phase-path-reader"
-        expect_flow_rejected(label, source + addition, reason, same_count=True)
+        expect_flow_rejected(label, candidate, reason, same_count=True, isolated_path_flow=True)
 
     git_run_line = '    result = subprocess.run(["git", "--no-replace-objects", "-C", str(repo), *args],'
     need(git_run_line in source, "git_run adapter mutation did not find its approved body")
@@ -2691,13 +2738,13 @@ def injected_live_git_reader(repo):
     return git_run(repo, "hash-object", PHASES_AT_REV + "/private.md")
 '''
     expect_flow_rejected("git_run hash-object path mutation", git_argument_mutant,
-                         "REJECT planning-path-git-command", same_count=True)
+                         "REJECT planning-path-git-command", same_count=True, full_analysis=True)
     unvalidated_revision_mutant = source + r'''
 def injected_unvalidated_git_revision_reader(repo, rev):
     return git_run(repo, "ls-tree", rev, "--", PHASES_AT_REV)
 '''
     expect_flow_rejected("git_run unvalidated revision mutation", unvalidated_revision_mutant,
-                         "REJECT planning-path-git-command", same_count=True)
+                         "REJECT planning-path-git-command", same_count=True, full_analysis=True)
 
     commit_guard_raise = '        raise SystemExit("plan-cap-rev: --rev must be a full 40-hex commit id, not a name")'
     need(commit_guard_raise in source, "nested-raise mutation did not find the full-commit guard")
@@ -2853,16 +2900,16 @@ def injected_unvalidated_git_revision_reader(repo, rev):
             raise LintError("%s positive: refused: %s" % (label, error)) from None
         controls += 1
 
-    module_reader = source + r'''
+    module_reader = path_flow_fixture + r'''
 def injected_module_reader(path):
     return Path(path).read_text(encoding="utf-8")
 
 injected_module_reader(PHASES_AT_REV)
 '''
     expect_flow_rejected("module-scope protected helper flow", module_reader,
-                         "REJECT live-phase-path-reader", same_count=True)
+                         "REJECT live-phase-path-reader", same_count=True, isolated_path_flow=True)
 
-    module_container_reader = source + r'''
+    module_container_reader = path_flow_fixture + r'''
 PATH_ALIAS = V04_GAP_SOURCE_PATHS[3]
 
 def injected_module_container_reader(path):
@@ -2872,15 +2919,15 @@ def injected_module_container_caller():
     return injected_module_container_reader(PATH_ALIAS)
 '''
     expect_flow_rejected("module container subscript helper flow", module_container_reader,
-                         "REJECT live-phase-path-reader", same_count=True)
+                         "REJECT live-phase-path-reader", same_count=True, isolated_path_flow=True)
 
-    module_container_loop = source + r'''
+    module_container_loop = path_flow_fixture + r'''
 def injected_module_container_loop_reader():
     for path in V04_GAP_SOURCE_PATHS:
         Path(path).read_text(encoding="utf-8")
 '''
     expect_flow_rejected("module container loop reader", module_container_loop,
-                         "REJECT live-phase-path-reader", same_count=True)
+                         "REJECT live-phase-path-reader", same_count=True, isolated_path_flow=True)
 
     escaped_helper_return = source.replace(
         'phases = root / "phases"',
