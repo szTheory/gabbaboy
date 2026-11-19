@@ -83,7 +83,7 @@ COVERAGE.md remains unchanged with its existing reasoned no-external-API declara
 - [x] D-220 global/local proof findings map to T18/T19 causal source-only production seams.
 - [x] Seven-test serial order, exact existing command forms, configured-source rebinding requirement, deadlines and floors are grounded in current files.
 - [x] D-209, one-plan/source allowlist, separate authorization and closure stops remain explicit.
-- [x] Revised sole plan and this validation passed independent plan checking with no issues; the documentation-only boundary is ready to commit.
+- [x] Revised sole plan and this validation passed independent plan checking with no issues; the documentation-only boundary is committed.
 - [ ] Owner separately authorizes execution.
 - [ ] Changed candidate passes causal controls and all seven focused CTests at its exact head.
 - [ ] Fresh exact-head independent review is clean.
