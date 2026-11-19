@@ -1099,6 +1099,9 @@ def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
         "tempfile": {"TemporaryDirectory"},
         "time": {"perf_counter"},
     }
+    module_direct_attributes = {name: set(attributes) for name, attributes in module_attributes.items()}
+    module_direct_attributes["os"] = {"environ", "devnull"}
+    module_direct_attributes["sys"] = {"flags", "stderr"}
     forbidden_dynamic_names = {"__import__", "__builtins__", "builtins", "getattr", "setattr", "delattr",
                                "globals", "locals", "vars"}
     for node in ast.walk(tree):
@@ -1119,6 +1122,10 @@ def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
         if not isinstance(node, ast.Name) or not isinstance(node.ctx, ast.Load):
             continue
         parent = parents.get(node)
+        if node.id in module_direct_attributes \
+                and (not isinstance(parent, ast.Attribute) or parent.value is not node
+                     or parent.attr not in module_direct_attributes[node.id]):
+            raise LintError("REJECT planning-path-git-command: imported module binding escapes its direct reviewed member uses")
         if node.id == "type":
             call = parent
             attribute = parents.get(call) if isinstance(call, ast.Call) else None
@@ -1322,6 +1329,70 @@ def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
                 raise LintError("REJECT planning-path-git-command: subprocess attribute is outside the reviewed adapter contract")
         if root_id == "Path" and node.attr == "resolve" and isinstance(node.ctx, (ast.Store, ast.Del)):
             raise LintError("REJECT planning-path-git-command: pathlib.Path.resolve is mutated")
+
+    regex_constants = {"DOTALL", "IGNORECASE", "MULTILINE"}
+    expected_optimize_guard = ast.dump(
+        ast.parse("not __debug__ or sys.flags.optimize", mode="eval").body,
+        include_attributes=False)
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Attribute):
+            continue
+        root = node
+        while isinstance(root, (ast.Attribute, ast.Subscript)):
+            root = root.value
+        root_id = root.id if isinstance(root, ast.Name) else None
+        if root_id not in module_attributes:
+            continue
+        parent = parents.get(node)
+        if isinstance(parent, ast.Attribute) and parent.value is node:
+            # Continue only an allowlisted chain such as os.environ.items or sys.flags.optimize.
+            continue
+        if isinstance(parent, ast.Call) and parent.func is node:
+            # The dedicated adapter checks above pin subprocess calls and all environment reads.
+            continue
+        approved_escape = False
+        if root_id == "re" and node.attr in regex_constants:
+            call = parent if isinstance(parent, ast.Call) else parents.get(parent)
+            call_func = call.func if isinstance(call, ast.Call) else None
+            approved_regex_call = (isinstance(call_func, ast.Attribute)
+                                   and call_func.attr in module_attributes["re"]
+                                   and isinstance(call_func.value, ast.Name)
+                                   and call_func.value.id == "re")
+            approved_escape = (approved_regex_call
+                               and ((isinstance(parent, ast.Call) and node in parent.args)
+                                    or (isinstance(parent, ast.keyword) and parent.value is node
+                                        and parent.arg == "flags")))
+        elif root_id == "os" and node.attr == "devnull" and isinstance(parent, ast.keyword):
+            approved_escape = parent.value is node and parent.arg in {"GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"}
+        elif root_id == "sys" and node.attr == "stderr" and isinstance(parent, ast.keyword):
+            call = parents.get(parent)
+            approved_escape = (parent.value is node and parent.arg == "file"
+                               and isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+                               and call.func.id == "print")
+        elif root_id == "sys" and node.attr == "optimize":
+            approved_escape = (isinstance(parent, ast.BoolOp)
+                               and ast.dump(parent, include_attributes=False) == expected_optimize_guard)
+        elif root_id == "argparse" and node.attr == "RawDescriptionHelpFormatter" \
+                and isinstance(parent, ast.keyword):
+            call = parents.get(parent)
+            approved_escape = (parent.value is node and parent.arg == "formatter_class"
+                               and isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
+                               and call.func.attr == "ArgumentParser"
+                               and isinstance(call.func.value, ast.Name) and call.func.value.id == "argparse")
+        elif root_id == "tarfile" and node.attr == "TarError" and isinstance(parent, ast.Tuple):
+            handler = parents.get(parent)
+            approved_escape = isinstance(handler, ast.ExceptHandler) and handler.type is parent
+        elif root_id == "subprocess" and node.attr == "CompletedProcess" \
+                and isinstance(parent, ast.Subscript):
+            function = next((ancestor for ancestor in _ancestor_chain(node, parents)
+                             if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
+            approved_escape = (parent.value is node and function is not None
+                               and function.name == "git_run" and function.returns is parent)
+        elif root_id == "subprocess" and node.attr == "run":
+            # The exact self-test mock and finally-restore writes are checked above.
+            approved_escape = node in subprocess_run_captures or node in subprocess_run_writes
+        if not approved_escape:
+            raise LintError("REJECT planning-path-git-command: imported module member escapes its reviewed direct use")
 
     for node in ast.walk(tree):
         if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
@@ -3361,9 +3432,9 @@ def injected_unvalidated_git_revision_reader(repo, rev):
         need(re.fullmatch(r"[0-9a-f]{40}", fixture_revision) is not None,
              "D-220 immutable-reader fixture did not produce a full commit id")
 
-        def run_source_then_reader(candidate: str, state: dict[str, int]) -> bytes:
+        def run_source_then_reader(candidate: str, state: dict[str, object]) -> bytes:
             def proof_entry() -> None:
-                state["proof_entries"] += 1
+                state["proof_entries"] = int(state["proof_entries"]) + 1
 
             validate_planning_hygiene_source(candidate, proof_entry=proof_entry)
             if candidate != source:
@@ -3382,7 +3453,11 @@ def injected_unvalidated_git_revision_reader(repo, rev):
                 real_git_run = module.git_run
 
                 def counted_git_run(repo: Path, *args: str):
-                    state["protected_reader_calls"] += 1
+                    state["protected_reader_calls"] = int(state["protected_reader_calls"]) + 1
+                    call_arguments = state["protected_reader_arguments"]
+                    if not isinstance(call_arguments, list):
+                        raise AssertionError("D-220 protected-reader argument witness is not a list")
+                    call_arguments.append(args)
                     return real_git_run(repo, *args)
 
                 module.git_run = counted_git_run
@@ -3394,7 +3469,7 @@ def injected_unvalidated_git_revision_reader(repo, rev):
             nonlocal controls
             need(len(list(SPELLINGS.finditer(candidate))) == original_lexical_count,
                  "%s: D-220 mutant changed the lexical path count" % label)
-            state = {"proof_entries": 0, "protected_reader_calls": 0}
+            state = {"proof_entries": 0, "protected_reader_calls": 0, "protected_reader_arguments": []}
             try:
                 run_source_then_reader(candidate, state)
             except LintError as error:
@@ -3408,16 +3483,21 @@ def injected_unvalidated_git_revision_reader(repo, rev):
                  "%s: mutant did not reach the production immutable-revision predicate" % label)
             need(state["protected_reader_calls"] == 0,
                  "%s: rejected mutant reached the protected immutable reader" % label)
+            need(state["protected_reader_arguments"] == [],
+                 "%s: rejected mutant reached a protected reader argument" % label)
             controls += 1
 
-        positive_state = {"proof_entries": 0, "protected_reader_calls": 0}
+        positive_state = {"proof_entries": 0, "protected_reader_calls": 0, "protected_reader_arguments": []}
         try:
             positive_bytes = run_source_then_reader(source, positive_state)
         except LintError as error:
             raise LintError("D-220 clean immutable-reader positive was refused: %s" % error) from None
-        need(positive_state == {"proof_entries": 1, "protected_reader_calls": 2}
+        expected_reader_arguments = [("ls-tree", fixture_revision, "--", fixture_path),
+                                     ("show", "%s:%s" % (fixture_revision, fixture_path))]
+        need(positive_state == {"proof_entries": 1, "protected_reader_calls": 2,
+                                "protected_reader_arguments": expected_reader_arguments}
              and positive_bytes == fixture_bytes,
-             "D-220 clean positive did not reach both reads in the pinned immutable reader with expected bytes")
+             "D-220 clean positive did not perform exact ls-tree/show reads in order with expected bytes")
         controls += 1
 
         standard_library_dependency_mutants = (
@@ -3478,6 +3558,27 @@ def injected_unvalidated_git_revision_reader(repo, rev):
              source + '\ncontextlib.sys.modules[__name__].V04_D209_ARCHIVE_REV = "' + git_hash + '"\n'),
             ("contextlib transitively replaces subprocess.run",
              source + '\ncontextlib.sys.modules["subprocess"].run = lambda *args, **kwargs: None\n'),
+            ("allowed module alias reaches the live git_run binding",
+             source + '\n_module_alias = contextlib\n'
+             '_module_alias.sys.modules[__name__].git_run = lambda repo, *args: None\n'),
+            ("allowed module alias reaches the pinned archive revision",
+             source + '\n_module_alias = contextlib\n'
+             '_module_alias.sys.modules[__name__].V04_D209_ARCHIVE_REV = "' + git_hash + '"\n'),
+            ("allowed module alias reaches frame locals",
+             source + '\n_module_alias = contextlib\n'
+             '_inspector = _module_alias.sys.modules["inspect"]\n'
+             '_frame = _inspector.currentframe()\n'
+             '_members = _inspector.getmembers(_frame)\n'
+             '_locals_name = "f_" + "locals"\n'
+             '_local_map = next(value for name, value in _members if name == _locals_name)\n'
+             '_local_map["r" + "ev"] = "HEAD"\n'),
+            ("allowed module alias reaches runtime adapter dependencies",
+             source + '\n_module_alias = contextlib\n'
+             '_module_alias.sys.modules["subprocess"].run = lambda *args, **kwargs: None\n'
+             '_module_alias.sys.modules["os"].environ["PATH"] = "/tmp/redirected"\n'
+             '_module_alias.sys.modules["pathlib"].Path.resolve = lambda self: self\n'),
+            ("allowed module member cannot escape as an alias",
+             source + '\n_redirect_alias = contextlib.redirect_stdout\n'),
             ("CompletedProcess constructor is replaced with spoofed successful result",
              source + '\nclass SpoofedCompletedProcess:\n'
              '    def __init__(self, *args, **kwargs):\n'
