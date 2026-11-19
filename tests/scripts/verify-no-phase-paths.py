@@ -3522,45 +3522,17 @@ def injected_unvalidated_git_revision_reader(repo, rev):
                  "%s: rejected mutant reached a protected reader argument" % label)
             controls += 1
 
-        git_run_pattern_rebindings = (
-            ("MatchAs Git adapter capture", "    match None:\n        case _ as git_run:\n            pass\n"),
-            ("MatchStar Git adapter capture", "    match []:\n        case [*git_run]:\n            pass\n"),
-            ("MatchMapping Git adapter capture", "    match {}:\n        case {**git_run}:\n            pass\n"),
-        )
-        for label, insertion in git_run_pattern_rebindings:
-            candidate = insert_in_function(
-                "immutable_blob", '    listed = git_run(repo, "ls-tree", revision, "--", path)\n', insertion)
-            expect_d220_gate_rejected(label, candidate)
-
-        imported_module_capture = insert_in_function(
-            "validate_v04_archive_and_recovery",
-            '    current_requirements = immutable_blob(repo, revision, V04_ARCHIVED_REQUIREMENTS)\n',
-            "    match None:\n        case _ as re:\n            pass\n")
-        expect_d220_gate_rejected("MatchAs capture shadows imported module used by archive validator",
-                                  imported_module_capture)
-        cache_pattern_capture = source + "\nmatch {}:\n    case {**_GIT_OBJECT_READ_CACHE}:\n        pass\n"
-        expect_d220_gate_rejected("MatchMapping capture shadows Git read cache", cache_pattern_capture,
-                                  "REJECT planning-path-git-command")
-
-        repo_pattern_capture = insert_in_function(
+        pattern_capture_mutant = insert_in_function(
             "immutable_blob", '    listed = git_run(repo, "ls-tree", revision, "--", path)\n',
-            "    match None:\n        case _ as repo:\n            pass\n")
-        expect_d220_gate_rejected("MatchAs capture shadows immutable reader repository", repo_pattern_capture)
-        path_pattern_capture = insert_in_function(
-            "immutable_blob", '    listed = git_run(repo, "ls-tree", revision, "--", path)\n',
-            '    match (path if revision == V04_D209_ARCHIVE_REV else "elsewhere"):\n'
-            "        case _ as path:\n            pass\n")
-        expect_d220_gate_rejected("conditional MatchAs capture shadows immutable reader path", path_pattern_capture)
-        root_roadmap_pattern_capture = insert_in_function(
-            "validate_v04_archive_and_recovery",
-            '    current_requirements = immutable_blob(repo, revision, V04_ARCHIVED_REQUIREMENTS)\n',
-            "    match None:\n        case _ as root_roadmap:\n            pass\n")
-        expect_d220_gate_rejected("MatchAs capture shadows archived route roadmap", root_roadmap_pattern_capture)
-        active_paths_pattern_capture = insert_in_function(
-            "validate_v04_archive_and_recovery",
-            '    current_requirements = immutable_blob(repo, revision, V04_ARCHIVED_REQUIREMENTS)\n',
-            "    match None:\n        case _ as active_paths:\n            pass\n")
-        expect_d220_gate_rejected("MatchAs capture shadows archived route inventory", active_paths_pattern_capture)
+            '    match {}:\n'
+            '        case {"repo": [*repo], "revision": _ as revision, "path": _ as path,\n'
+            '              "roadmap": _ as root_roadmap, "adapter": _ as git_run,\n'
+            '              "module": _ as re, "cache": _ as _GIT_OBJECT_READ_CACHE,\n'
+            '              **active_paths}:\n'
+            '            pass\n')
+        expect_d220_gate_rejected(
+            "combined MatchAs, MatchStar, and MatchMapping captures of protected bindings",
+            pattern_capture_mutant)
 
         wrong_repository_operand = replace_in_function(
             "immutable_blob", '    listed = git_run(repo, "ls-tree", revision, "--", path)\n',
