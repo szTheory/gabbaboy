@@ -1505,7 +1505,7 @@ def v04_gap_evidence_boundary(input_rev: str, report_path: str, report_raw: byte
 
 
 def check_v04_gap_assessment(repo: Path, stage: str, rev: str,
-                             baseline_rev: str) -> tuple[str, list[str]]:
+                             baseline_rev: str, *, input_revision: str = V04_GAP_INPUT_REV) -> tuple[str, list[str]]:
     """Validate the Phase 24 evidence and pending-verification handoff from immutable commits."""
     if stage not in ("report", "handoff"):
         return "", ["v04-gap-assessment-stage: stage must be report or handoff"]
@@ -1514,7 +1514,7 @@ def check_v04_gap_assessment(repo: Path, stage: str, rev: str,
         return "", ["v04-gap-assessment-rev: --rev must be a full 40-hex commit id"]
     if not FULL_COMMIT.fullmatch(baseline_rev):
         return "", ["v04-gap-assessment-baseline: --baseline-rev must be a full 40-hex commit id"]
-    if rev == V04_GAP_INPUT_REV:
+    if rev == input_revision:
         return "", ["v04-gap-assessment-input: report-containing revision must differ from its assessment input"]
     paths, error = commit_paths(repo, rev)
     if error:
@@ -1522,7 +1522,7 @@ def check_v04_gap_assessment(repo: Path, stage: str, rev: str,
     baseline_paths, error = commit_paths(repo, baseline_rev)
     if error:
         return "", ["v04-gap-assessment-baseline: --baseline-rev is not a readable commit"]
-    input_paths, error = commit_paths(repo, V04_GAP_INPUT_REV)
+    input_paths, error = commit_paths(repo, input_revision)
     if error:
         return "", ["v04-gap-assessment-input: required assessment input is not a readable full commit"]
     assert paths is not None and baseline_paths is not None and input_paths is not None
@@ -1531,8 +1531,8 @@ def check_v04_gap_assessment(repo: Path, stage: str, rev: str,
     if report_path != V04_GAP_REPORT_PATH:
         return "", ["v04-gap-assessment-report: canonical Phase 24 evidence report is missing or moved"]
     report_raw = commit_file(repo, rev, report_path)
-    input_requirements_raw = commit_file(repo, V04_GAP_INPUT_REV, V04_GAP_REQUIREMENTS_PATH)
-    input_audit_raw = commit_file(repo, V04_GAP_INPUT_REV, V04_GAP_AUDIT_PATH)
+    input_requirements_raw = commit_file(repo, input_revision, V04_GAP_REQUIREMENTS_PATH)
+    input_audit_raw = commit_file(repo, input_revision, V04_GAP_AUDIT_PATH)
     requirements_raw = commit_file(repo, rev, V04_GAP_REQUIREMENTS_PATH)
     audit_raw = commit_file(repo, rev, V04_GAP_AUDIT_PATH)
     if None in (report_raw, input_requirements_raw, input_audit_raw, requirements_raw, audit_raw):
@@ -1560,7 +1560,7 @@ def check_v04_gap_assessment(repo: Path, stage: str, rev: str,
     expected_fields = {
         "phase": "GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps",
         "report_kind": "point_in_time_gap_assessment",
-        "assessment_input_commit": V04_GAP_INPUT_REV,
+        "assessment_input_commit": input_revision,
         "baseline_commit": baseline_rev,
         "milestone": "v0.4",
         "milestone_status": "open",
@@ -1576,7 +1576,7 @@ def check_v04_gap_assessment(repo: Path, stage: str, rev: str,
             errors.append(f"{code}: {key} must be {expected}")
     if fields.get("assessment_input_commit") == rev:
         errors.append("v04-gap-assessment-input: report cannot assess its own containing revision")
-    if baseline_rev == V04_GAP_INPUT_REV:
+    if baseline_rev == input_revision:
         errors.append("v04-gap-assessment-baseline: baseline and assessment input must be distinct commits")
 
     source_records = frontmatter_objects(report, "source_records") or []
@@ -1586,7 +1586,7 @@ def check_v04_gap_assessment(repo: Path, stage: str, rev: str,
         errors.append("v04-gap-assessment-source-records: source records must list the exact canonical input paths in order")
     source_raw: dict[str, bytes] = {}
     for path in V04_GAP_SOURCE_PATHS:
-        raw = commit_file(repo, V04_GAP_INPUT_REV, path)
+        raw = commit_file(repo, input_revision, path)
         if raw is None:
             errors.append(f"v04-gap-assessment-source-records: required source blob is missing at input: {path}")
             continue
@@ -1609,7 +1609,7 @@ def check_v04_gap_assessment(repo: Path, stage: str, rev: str,
             errors.append(f"v04-gap-assessment-history: Phase {number} report path is missing or moved from baseline")
             continue
         before = commit_file(repo, baseline_rev, baseline_path)
-        at_input = commit_file(repo, V04_GAP_INPUT_REV, input_path)
+        at_input = commit_file(repo, input_revision, input_path)
         at_target = commit_file(repo, rev, target_path)
         if before is None or at_input is None or at_target is None or before != at_input or before != at_target:
             errors.append(f"v04-gap-assessment-history: Phase {number} report bytes must remain identical to baseline")
@@ -1673,7 +1673,7 @@ def check_v04_gap_assessment(repo: Path, stage: str, rev: str,
             "passed": f"passed in dated {audit_date} milestone audit; D-103 remains separate",
         }[freshness_kind]
         expected_boundary = v04_gap_evidence_boundary(
-            V04_GAP_INPUT_REV, report_source, source_report_raw, input_requirements_raw, input_audit_raw)
+            input_revision, report_source, source_report_raw, input_requirements_raw, input_audit_raw)
         expected_row = {
             "id": requirement,
             "original_criterion": definitions[requirement],
@@ -2840,12 +2840,14 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
         cache_fixture_commit_snapshot(repo, parent_rev, revision, files, delete)
         return revision
 
-    def cli(stage: str, revision: str, expected: str | None, label: str) -> None:
+    def cli(stage: str, revision: str, expected: str | None, label: str,
+            *, input_revision: str = V04_GAP_INPUT_REV) -> None:
         nonlocal controls
         stdout, stderr = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             exit_code = main(["--check", "v04-gap-assessment", "--stage", stage, "--rev", revision,
-                              "--baseline-rev", baseline_rev, "--repo", str(repo)])
+                              "--baseline-rev", baseline_rev, "--repo", str(repo)],
+                             _assessment_input_revision=input_revision)
         error_text = stderr.getvalue()
         if expected is None:
             wanted = f"v04-gap-assessment pass stage={stage}"
@@ -2959,12 +2961,8 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
                                       ("symbolic revision", "HEAD", "v04-gap-assessment-rev"),
                                       ("nonexistent revision", "0" * 40, "v04-gap-assessment-rev")):
         cli("report", revision, expected, label)
-    saved_input_rev = V04_GAP_INPUT_REV
-    try:
-        globals()["V04_GAP_INPUT_REV"] = report_rev
-        cli("report", report_rev, "v04-gap-assessment-input", "input equals containing revision")
-    finally:
-        globals()["V04_GAP_INPUT_REV"] = saved_input_rev
+    cli("report", report_rev, "v04-gap-assessment-input", "input equals containing revision",
+        input_revision=report_rev)
 
     # A full but incomplete input commit proves source-blob absence is distinct from ref syntax errors.
     checkout(report_rev)
@@ -2981,11 +2979,8 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
     altered_report = report_text().replace(f"assessment_input_commit: {V04_GAP_INPUT_REV}",
                                            f"assessment_input_commit: {missing_input}", 1)
     missing_source_candidate = commit({report_path: altered_report}, "point assessment at source-missing input")
-    try:
-        globals()["V04_GAP_INPUT_REV"] = missing_input
-        cli("report", missing_source_candidate, "v04-gap-assessment-source-records", "missing required input source")
-    finally:
-        globals()["V04_GAP_INPUT_REV"] = saved_input_rev
+    cli("report", missing_source_candidate, "v04-gap-assessment-source-records", "missing required input source",
+        input_revision=missing_input)
     COMMIT_SNAPSHOT_CACHE.pop((str(repo.resolve()), missing_input), None)
 
     checkout(report_rev)
@@ -4526,7 +4521,8 @@ The next command is owner-only: `/gsd-audit-milestone v0.4`. No next phase or mi
 # ---- CLI -------------------------------------------------------------------------------------------------
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *,
+         _assessment_input_revision: str = V04_GAP_INPUT_REV) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--check", choices=("plan-cap", "lessons-ids", "state-size", "playstead-docs", "deferrals",
                                               "v04-reconciliation", "v04-gap-assessment"))
@@ -4575,7 +4571,9 @@ def main(argv: list[str] | None = None) -> int:
         elif args.check == "v04-gap-assessment":
             if not args.stage or not args.rev or not args.baseline_rev:
                 parser.error("v04-gap-assessment needs --stage report|handoff --rev COMMIT --baseline-rev COMMIT")
-            summary, errors = check_v04_gap_assessment(Path(args.repo), args.stage, args.rev, args.baseline_rev)
+            summary, errors = check_v04_gap_assessment(
+                Path(args.repo), args.stage, args.rev, args.baseline_rev,
+                input_revision=_assessment_input_revision)
         else:
             if not args.root:
                 parser.error("playstead-docs needs --root")

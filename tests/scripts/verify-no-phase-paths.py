@@ -529,6 +529,10 @@ def _reflectively_writes_binding(tree: ast.Module, names: set[str]) -> bool:
 
     namespace_calls = {"globals", "locals", "vars"}
     for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr == "__globals__":
+            # A function's live global mapping can replace any approved module binding
+            # without an AST Name store (for example, git_run.__globals__["git_run"]).
+            return True
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
                 and node.func.id == "vars" and node.args:
             # vars(module) is handled by the module-binding proof, not the globals mapping proof.
@@ -759,6 +763,16 @@ def _has_stdlib_re_import(tree: ast.Module) -> bool:
         return False
     approved_statement, approved_alias = imports[0]
     for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module is not None \
+                and (node.module == "importlib" or node.module.startswith("importlib.")):
+            # Reject loader imports even when the imported function is renamed and
+            # called directly (e.g. `from importlib import import_module as load`).
+            return False
+        if isinstance(node, ast.ImportFrom) and node.module == "builtins" \
+                and any(alias.name == "__import__" for alias in node.names):
+            return False
+        if isinstance(node, ast.Name) and node.id == "__import__":
+            return False
         if isinstance(node, ast.Import):
             for alias in node.names:
                 binds_re = alias.asname == "re" or (alias.asname is None and alias.name.split(".", 1)[0] == "re")
@@ -980,6 +994,9 @@ def _revision_binding_changed(function: ast.AST, binding: str) -> bool:
 
 def _validate_immutable_revision_proof(tree: ast.Module) -> None:
     """Keep each Git reader bound to its exact validated full-commit value."""
+    if _reflectively_writes_binding(
+            tree, {"git_run", "_GIT_OBJECT_READ_CACHE", "re", "FULL_COMMIT", "V04_D209_ARCHIVE_REV"}):
+        raise LintError("REJECT planning-path-git-command: reflective namespace writes make revision proof unprovable")
     if not _has_full_commit_pattern(tree):
         raise LintError("REJECT planning-path-git-command: full-commit validator binding changed")
 
@@ -2629,6 +2646,8 @@ def injected_rebound_root_reader():
         ("escaped namespace mutator replaces git_run",
          source + "\nnamespace_update = globals().update\n"
                   "namespace_update({\"git_run\": lambda repo, *args: None})\n"),
+        ("function globals mapping replaces git_run",
+         source + "\ngit_run.__globals__[\"git_run\"] = lambda repo, *args: None\n"),
     ):
         expect_flow_rejected(label, candidate, "REJECT planning-path-git-adapter", same_count=True)
 
@@ -2682,6 +2701,9 @@ def injected_unvalidated_git_revision_reader(repo, rev):
          'builtins.__import__("re").compile = lambda pattern: None\n'),
         ("importlib re module write",
          'import importlib\nimportlib.import_module("re").compile = lambda pattern: None\n'),
+        ("aliased importlib loader re module write",
+         'from importlib import import_module as load_module\n'
+         'load_module("re").compile = lambda pattern: None\n'),
     ):
         candidate = source.replace(commit_binding, mutation + commit_binding, 1)
         need(candidate != source, "%s mutation did not find FULL_COMMIT" % label)
@@ -2754,6 +2776,14 @@ def injected_unvalidated_git_revision_reader(repo, rev):
     need(archive_pin_line in source, "archive pin mutation did not find the exact D-209 pin")
     expect_flow_rejected("different valid D-209 pin", source.replace(
         archive_pin_line, 'V04_D209_ARCHIVE_REV = "' + git_hash + '"', 1),
+        "REJECT planning-path-git-command", same_count=True)
+    expect_flow_rejected(
+        "reflective D-209 pin replacement",
+        source + '\nglobals().__setitem__("V04_D209_ARCHIVE_REV", "' + git_hash + '")\n',
+        "REJECT planning-path-git-command", same_count=True)
+    expect_flow_rejected(
+        "reflective D-209 pin update",
+        source + '\nglobals().update({"V04_D209_ARCHIVE_REV": "' + git_hash + '"})\n',
         "REJECT planning-path-git-command", same_count=True)
     expect_flow_rejected("rebound D-209 pin", source + '\nV04_D209_ARCHIVE_REV = "' + git_hash + '"\n',
                          "REJECT planning-path-git-command", same_count=True)
