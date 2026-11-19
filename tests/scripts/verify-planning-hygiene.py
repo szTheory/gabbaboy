@@ -3287,10 +3287,14 @@ The v0.4 milestone remains open. Four requirements remain Pending.
 
     baseline_rev = commit(base_files, "fixture baseline", materialize_git=True)
     COMMIT_SNAPSHOT_CACHE.pop((str(repo.resolve()), baseline_rev), None)
-    baseline_snapshot, baseline_error = commit_snapshot(repo, baseline_rev)
-    if baseline_error or baseline_snapshot != {
-            path: content.encode("utf-8") for path, content in base_files.items()}:
-        detail = baseline_error or "archived bytes differ from the fixture input"
+    baseline_paths, baseline_error = commit_paths(repo, baseline_rev)
+    baseline_snapshot = {
+        path: commit_file(repo, baseline_rev, path)
+        for path in (baseline_paths or [])
+    }
+    expected_baseline = {path: content.encode("utf-8") for path, content in base_files.items()}
+    if baseline_error or baseline_paths != sorted(expected_baseline) or baseline_snapshot != expected_baseline:
+        detail = baseline_error or "archived paths or bytes differ from the fixture input"
         raise SystemExit(f"planning-hygiene self-test FAIL: real fixture commit read mismatch: {detail}")
     controls += 1
     missing_revision = "0" * 40
