@@ -644,12 +644,18 @@ def validate_recovery_contract(snapshot: dict[str, bytes], plan_paths: list[str]
         raise Reject("recovery-plan-set-invalid")
     plan = decode(snapshot, V04_RECOVERY_PLAN)
     frontmatter = re.match(r"\A---\n(.*?)\n---(?:\n|\Z)", plan, re.DOTALL)
-    if (frontmatter is None
-            or re.search(r"(?m)^phase: GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps$",
-                         frontmatter.group(1)) is None
-            or re.search(r"(?m)^plan: [\"']?01[\"']?$", frontmatter.group(1)) is None
-            or re.search(r"(?m)^requirements: \[\]$", frontmatter.group(1)) is None
-            or "archived v0.4 tracker authoritative" not in frontmatter.group(1)):
+    if frontmatter is None:
+        raise Reject("recovery-plan-boundary-invalid")
+    metadata = frontmatter.group(1)
+    requirement_boundary = re.search(r"(?m)^requirement_boundary:[ \t]*(.+)$", metadata)
+    boundary_claim = requirement_boundary.group(1).strip().strip("\"'") if requirement_boundary else ""
+    if (re.search(r"(?m)^phase: GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps$",
+                  metadata) is None
+            or re.search(r"(?m)^plan: [\"']?01[\"']?$", metadata) is None
+            or re.search(r"(?m)^requirements: \[\]$", metadata) is None
+            or not all(claim in boundary_claim for claim in (
+                "phase_req_ids=null", "no assignment",
+                "archived v0.4 owners and dispositions remain authoritative"))):
         raise Reject("recovery-plan-boundary-invalid")
 
 
@@ -1615,6 +1621,15 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
         expect_reject(lambda: validate_recovery_contract(
             snapshot, [*plan_paths, V04_RECOVERY_PLAN.replace("24-01", "24-02")]),
             "recovery-plan-set-invalid", "extra-recovery-plan")
+        validate_recovery_contract(snapshot, plan_paths)
+        missing_boundary_claim = dict(snapshot)
+        boundary_claim_bytes = b"archived v0.4 owners and dispositions remain authoritative"
+        if boundary_claim_bytes not in missing_boundary_claim[V04_RECOVERY_PLAN]:
+            raise Reject("self-test-recovery-boundary-claim-inactive")
+        missing_boundary_claim[V04_RECOVERY_PLAN] = missing_boundary_claim[V04_RECOVERY_PLAN].replace(
+            boundary_claim_bytes, b"archived v0.4 ownership and disposition claim omitted", 1)
+        expect_reject(lambda: validate_recovery_contract(missing_boundary_claim, plan_paths),
+                      "recovery-plan-boundary-invalid", "missing-archived-owner-boundary-claim")
     historical_requirement = load_snapshot(repo, BASELINE, (V04_ROOT_REQUIREMENTS,))
     validate_historical_requirements(historical_requirement, repo, BASELINE)
     expect_reject(lambda: validate_requirements(historical_requirement, repo),
