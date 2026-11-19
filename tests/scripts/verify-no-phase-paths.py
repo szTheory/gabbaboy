@@ -283,6 +283,10 @@ def _source_path_sites(source: str) -> collections.Counter[tuple[str, str]]:
     for match in re.finditer("\n", source):
         line_starts.append(match.end())
     sites: collections.Counter[tuple[str, str]] = collections.Counter()
+    string_nodes = [node for node in ast.walk(tree)
+                    if isinstance(node, (ast.Constant, ast.JoinedStr))
+                    and (isinstance(node, ast.JoinedStr)
+                         or isinstance(node, ast.Constant) and isinstance(node.value, str))]
 
     for hit in SPELLINGS.finditer(source):
         start_line = source.count("\n", 0, hit.start())
@@ -297,11 +301,7 @@ def _source_path_sites(source: str) -> collections.Counter[tuple[str, str]]:
             raise LintError("REJECT planning-path-token: lexical hit is not inside one Python string token")
 
         candidates = []
-        for node in ast.walk(tree):
-            if not isinstance(node, (ast.Constant, ast.JoinedStr)):
-                continue
-            if isinstance(node, ast.Constant) and not isinstance(node.value, str):
-                continue
+        for node in string_nodes:
             start = (node.lineno - 1, node.col_offset)
             end = (node.end_lineno - 1, node.end_col_offset)
             if start <= (start_line, start_column) and end >= (end_line, end_column):
