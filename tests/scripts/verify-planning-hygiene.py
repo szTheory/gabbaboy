@@ -246,6 +246,8 @@ def git_run(repo: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
 
 def immutable_blob(repo: Path, revision: str, path: str) -> bytes:
     """Read one regular file from a commit, refusing missing, ambiguous, or symlink inputs."""
+    if not FULL_COMMIT.fullmatch(revision):
+        raise SystemExit("plan-cap-v04-archive: revision must be a full 40-hex commit id")
     listed = git_run(repo, "ls-tree", revision, "--", path)
     rows = [row for row in listed.stdout.splitlines() if row]
     if listed.returncode != 0 or len(rows) != 1:
@@ -2394,6 +2396,36 @@ def self_test_plan_cap_rev(base: Path, source_repo: Path, source_rev: str | None
         raise SystemExit(f"planning-hygiene self-test FAIL: --rev {label} was accepted")
 
     git("init", "-q")
+    real_subprocess_run = subprocess.run
+    git_attempts: list[object] = []
+
+    def forbidden_git_attempt(*args, **kwargs):
+        git_attempts.append(args)
+        raise RuntimeError("invalid archive revision reached Git")
+
+    subprocess.run = forbidden_git_attempt
+    try:
+        try:
+            immutable_blob(source_repo, "HEAD", V04_ARCHIVED_REQUIREMENTS)
+        except SystemExit as error:
+            if "plan-cap-v04-archive: revision must be a full 40-hex commit id" not in str(error):
+                raise SystemExit("planning-hygiene self-test FAIL: invalid archive revision refused for the wrong reason")
+        except RuntimeError as error:
+            raise SystemExit("planning-hygiene self-test FAIL: invalid archive revision reached Git") from error
+        else:
+            raise SystemExit("planning-hygiene self-test FAIL: symbolic archive revision was accepted")
+    finally:
+        subprocess.run = real_subprocess_run
+    if git_attempts:
+        raise SystemExit("planning-hygiene self-test FAIL: invalid archive revision attempted a Git read")
+    controls += 1
+
+    if source_rev is not None:
+        archive_bytes = immutable_blob(source_repo, source_rev, V04_ARCHIVED_REQUIREMENTS)
+        if not archive_bytes:
+            raise SystemExit("planning-hygiene self-test FAIL: valid pinned archive read was empty")
+        controls += 1
+
     dir17 = PHASES_AT_REV + "/GB-17-name/"
     good = {".planning/ROADMAP.md": roadmap_text([("16", "8"), ("17", "4")]),
             dir17 + "17-01-PLAN.md": PRIMARY_FRONTMATTER_TEXT, dir17 + "17-02-PLAN.md": PRIMARY_FRONTMATTER_TEXT,

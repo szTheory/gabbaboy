@@ -502,6 +502,11 @@ def _reflectively_writes_binding(tree: ast.Module, names: set[str]) -> bool:
     """Fail closed on dynamic namespace writes that can replace a protected global binding."""
     parents = _parents(tree)
 
+    def root_name(node: ast.AST) -> str | None:
+        while isinstance(node, (ast.Attribute, ast.Subscript)):
+            node = node.value
+        return node.id if isinstance(node, ast.Name) else None
+
     def literal_key(node: ast.AST) -> str | None:
         try:
             value = ast.literal_eval(node)
@@ -524,6 +529,75 @@ def _reflectively_writes_binding(tree: ast.Module, names: set[str]) -> bool:
 
     namespace_calls = {"globals", "locals", "vars"}
     for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == "vars" and node.args:
+            # vars(module) is handled by the module-binding proof, not the globals mapping proof.
+            continue
+        if isinstance(node, ast.Name) and node.id in namespace_calls:
+            parent = parents.get(node)
+            if (isinstance(node.ctx, (ast.Store, ast.Del))
+                    or not (isinstance(parent, ast.Call) and parent.func is node)):
+                return True
+        if isinstance(node, ast.arg) and node.arg in namespace_calls:
+            return True
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) \
+                and node.name in namespace_calls:
+            return True
+        if isinstance(node, ast.alias) and (node.asname in namespace_calls or
+                (node.asname is None and node.name.split(".", 1)[0] in namespace_calls)):
+            return True
+        if isinstance(node, ast.ExceptHandler) and node.name in namespace_calls:
+            return True
+        if isinstance(node, (ast.Global, ast.Nonlocal)) and set(node.names).intersection(namespace_calls):
+            return True
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in namespace_calls:
+            parent = parents.get(node)
+            if isinstance(parent, ast.Subscript) and parent.value is node:
+                key = literal_key(parent.slice)
+                if isinstance(parent.ctx, (ast.Store, ast.Del)) and (key is None or key in names):
+                    return True
+            elif isinstance(parent, ast.Attribute) and parent.value is node:
+                operation = parent.attr
+                operation_call = parents.get(parent)
+                if isinstance(operation_call, ast.Call) and operation_call.func is parent:
+                    if operation in {"__setitem__", "__delitem__", "update", "pop", "popitem",
+                                     "clear", "setdefault"}:
+                        if operation in {"clear", "popitem"}:
+                            return bool(names)
+                        keys: set[str] = set()
+                        known = True
+                        if operation in {"__setitem__", "__delitem__", "pop", "setdefault"}:
+                            key = literal_key(operation_call.args[0]) if operation_call.args else None
+                            if key is None:
+                                known = False
+                            else:
+                                keys.add(key)
+                        else:
+                            for argument in operation_call.args:
+                                parsed = dict_keys(argument)
+                                if parsed is None:
+                                    known = False
+                                else:
+                                    keys.update(parsed)
+                            if any(keyword.arg is None for keyword in operation_call.keywords):
+                                known = False
+                        keys.update(keyword.arg for keyword in operation_call.keywords if keyword.arg is not None)
+                        if not known or keys.intersection(names):
+                            return True
+                    elif operation not in {"get", "keys", "items", "values", "copy"}:
+                        # Unknown methods can return or mutate the live namespace mapping.
+                        return True
+                else:
+                    # A bound namespace method can itself escape and mutate later.
+                    return True
+            elif isinstance(parent, ast.Call):
+                # Includes dict.__setitem__/__delitem__ and calls that may retain the mapping.
+                return True
+            elif isinstance(parent, (ast.Assign, ast.AnnAssign, ast.NamedExpr, ast.Return, ast.Yield,
+                                     ast.YieldFrom, ast.List, ast.Tuple, ast.Set, ast.Dict)):
+                # A namespace alias can be mutated after this expression is inspected.
+                return True
+
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
             if node.func.id in {"eval", "__import__"}:
                 return True
@@ -535,38 +609,24 @@ def _reflectively_writes_binding(tree: ast.Module, names: set[str]) -> bool:
                                          and node.args[1].id == "d202_namespace")
                 if not isolated_fixture_exec:
                     return True
-            if node.func.id in namespace_calls:
-                parent = parents.get(node)
-                if isinstance(parent, ast.Subscript) and parent.value is node:
-                    key = literal_key(parent.slice)
-                    if key is None and isinstance(parent.ctx, (ast.Store, ast.Del)):
-                        return True
-                    if key in names and isinstance(parent.ctx, (ast.Store, ast.Del)):
-                        return True
-                elif isinstance(parent, ast.Attribute) and parent.value is node:
-                    operation = parent.attr
-                    operation_call = parents.get(parent)
-                    if isinstance(operation_call, ast.Call) and operation_call.func is parent:
-                        if operation in {"update", "pop", "popitem", "clear", "setdefault"}:
-                            keys = set(keyword.arg for keyword in operation_call.keywords if keyword.arg is not None)
-                            known = all(keyword.arg is not None for keyword in operation_call.keywords)
-                            for argument in operation_call.args:
-                                parsed = dict_keys(argument)
-                                if parsed is None:
-                                    known = False
-                                else:
-                                    keys.update(parsed)
-                            if not known or keys.intersection(names):
-                                return True
-                elif isinstance(parent, (ast.Assign, ast.AnnAssign, ast.NamedExpr)):
-                    return True
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
                 and node.func.id in {"setattr", "delattr"}:
             key = literal_key(node.args[1]) if len(node.args) > 1 else None
-            if key in names or key is None:
+            target = node.args[0] if node.args else None
+            if key in names or key is None or (target is not None and root_name(target) in names):
                 return True
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                and node.func.attr in {"setattr", "delattr", "__setattr__", "__delattr__"} \
+                and root_name(node.func.value) in names:
+            return True
+        if isinstance(node, ast.Attribute) and isinstance(node.ctx, (ast.Store, ast.Del)) \
+                and root_name(node) in names:
+            return True
         if isinstance(node, ast.Attribute) and node.attr == "__dict__":
             parent = parents.get(node)
+            if root_name(node) in names:
+                # Reading a protected module's dictionary exposes a reflective mutation route.
+                return True
             if isinstance(parent, ast.Subscript) and parent.value is node \
                     and isinstance(parent.ctx, (ast.Store, ast.Del)):
                 key = literal_key(parent.slice)
@@ -679,6 +739,19 @@ def _has_chr_binding(tree: ast.Module) -> bool:
 def _has_stdlib_re_import(tree: ast.Module) -> bool:
     if _reflectively_writes_binding(tree, {"re", "FULL_COMMIT"}):
         return False
+
+    def carries_module_value(node: ast.AST) -> bool:
+        if isinstance(node, ast.Name):
+            return node.id == "re"
+        if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+            return any(carries_module_value(item) for item in node.elts)
+        if isinstance(node, ast.Dict):
+            return any(item is not None and carries_module_value(item) for item in node.keys) \
+                or any(carries_module_value(item) for item in node.values)
+        if isinstance(node, ast.IfExp):
+            return carries_module_value(node.body) or carries_module_value(node.orelse)
+        return False
+
     imports = [(statement, alias) for statement in tree.body if isinstance(statement, ast.Import)
                for alias in statement.names if alias.name == "re" or alias.asname == "re"]
     if (len(imports) != 1 or len(imports[0][0].names) != 1 or imports[0][1].name != "re"
@@ -694,6 +767,23 @@ def _has_stdlib_re_import(tree: ast.Module) -> bool:
         if isinstance(node, ast.ImportFrom) and any(alias.asname == "re" or
                                                      (alias.asname is None and alias.name == "re")
                                                      for alias in node.names):
+            return False
+        if isinstance(node, ast.ImportFrom) and node.module == "re":
+            return False
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.NamedExpr)):
+            if carries_module_value(node.value):
+                return False
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "vars" \
+                and any(isinstance(argument, ast.Name) and argument.id == "re" for argument in node.args):
+            return False
+        if isinstance(node, ast.Attribute) and node.attr == "modules" \
+                and isinstance(node.value, ast.Name) and node.value.id == "sys":
+            return False
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                and node.func.attr in {"import_module", "reload"}:
+            return False
+        if isinstance(node, ast.Attribute) and node.attr == "__import__" \
+                and isinstance(node.value, ast.Name) and node.value.id == "builtins":
             return False
         if isinstance(node, ast.Name) and node.id == "re" and isinstance(node.ctx, (ast.Store, ast.Del)):
             return False
@@ -762,7 +852,8 @@ def _has_full_commit_pattern(tree: ast.Module) -> bool:
             and isinstance(value.args[0], ast.Constant) and value.args[0].value == "[0-9a-f]{40}")
 
 
-def _has_full_commit_guard(function: ast.AST) -> bool:
+def _has_full_commit_guard(function: ast.AST, revision_name: str = "rev",
+                           required_error: str | None = None) -> bool:
     body = function.body
     if (body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant)
             and isinstance(body[0].value.value, str)):
@@ -775,14 +866,20 @@ def _has_full_commit_guard(function: ast.AST) -> bool:
             and isinstance(test.operand, ast.Call) and isinstance(test.operand.func, ast.Attribute)
             and test.operand.func.attr == "fullmatch" and isinstance(test.operand.func.value, ast.Name)
             and test.operand.func.value.id == "FULL_COMMIT" and len(test.operand.args) == 1
-            and isinstance(test.operand.args[0], ast.Name) and test.operand.args[0].id == "rev"
+            and isinstance(test.operand.args[0], ast.Name) and test.operand.args[0].id == revision_name
             and not test.operand.keywords and not guard.orelse):
         return False
     if not guard.body or not isinstance(guard.body[0], ast.Raise):
         return False
     raised = guard.body[0].exc
-    return (isinstance(raised, ast.Call) and isinstance(raised.func, ast.Name)
-            and raised.func.id == "SystemExit")
+    if not (isinstance(raised, ast.Call) and isinstance(raised.func, ast.Name)
+            and raised.func.id == "SystemExit"):
+        return False
+    if required_error is None:
+        return True
+    return (len(raised.args) == 1 and not raised.keywords
+            and isinstance(raised.args[0], ast.Constant)
+            and raised.args[0].value == required_error)
 
 
 def _git_revision_operand(node: ast.AST, names: dict[str, str], validated_names: set[str]) -> bool:
@@ -845,8 +942,44 @@ def _approved_git_path_read(call: ast.Call, actual_facts: list[_PathFact],
     return False
 
 
+def _revision_binding_changed(function: ast.AST, binding: str) -> bool:
+    """Reject every finite Python binding form that can replace a validated revision."""
+    own_parameters = set()
+    if isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        own_parameters = set(function.args.posonlyargs + function.args.args + function.args.kwonlyargs)
+        if function.args.vararg is not None:
+            own_parameters.add(function.args.vararg)
+        if function.args.kwarg is not None:
+            own_parameters.add(function.args.kwarg)
+    for node in ast.walk(function):
+        if isinstance(node, ast.Name) and node.id == binding and isinstance(node.ctx, (ast.Store, ast.Del)):
+            return True
+        if isinstance(node, ast.arg) and node.arg == binding and node not in own_parameters:
+            return True
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node is not function \
+                and node.name == binding:
+            return True
+        if isinstance(node, ast.alias) and (node.asname == binding or
+                (node.asname is None and node.name.split(".", 1)[0] == binding)):
+            return True
+        if isinstance(node, ast.ExceptHandler) and node.name == binding:
+            return True
+        if isinstance(node, (ast.Global, ast.Nonlocal)) and binding in node.names:
+            return True
+        if ((match_as := getattr(ast, "MatchAs", None)) is not None
+                and isinstance(node, match_as) and node.name == binding):
+            return True
+        if ((match_star := getattr(ast, "MatchStar", None)) is not None
+                and isinstance(node, match_star) and node.name == binding):
+            return True
+        if ((match_mapping := getattr(ast, "MatchMapping", None)) is not None
+                and isinstance(node, match_mapping) and node.rest == binding):
+            return True
+    return False
+
+
 def _validate_immutable_revision_proof(tree: ast.Module) -> None:
-    """Keep the planning reader's full-commit proof bound to unmodified Git operands."""
+    """Keep each Git reader bound to its exact validated full-commit value."""
     if not _has_full_commit_pattern(tree):
         raise LintError("REJECT planning-path-git-command: full-commit validator binding changed")
 
@@ -879,14 +1012,8 @@ def _validate_immutable_revision_proof(tree: ast.Module) -> None:
                       *function.args.kwonlyargs]
         if sum(parameter.arg == "rev" for parameter in parameters) != 1:
             raise LintError("REJECT planning-path-git-command: %s revision parameter changed" % name)
-        if any(isinstance(node, ast.Name) and node.id == "rev"
-               and isinstance(node.ctx, (ast.Store, ast.Del)) for node in ast.walk(function)):
+        if _revision_binding_changed(function, "rev"):
             raise LintError("REJECT planning-path-git-command: %s rebinds its validated revision" % name)
-        if any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node is not function
-               and any(parameter.arg == "rev" for parameter in
-                       [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs])
-               for node in ast.walk(function)):
-            raise LintError("REJECT planning-path-git-command: nested helper shadows validated revision")
 
     def exact_revision_path(expression: ast.AST, revision_name: str) -> bool:
         return (isinstance(expression, ast.JoinedStr) and len(expression.values) == 3
@@ -948,24 +1075,110 @@ def _validate_immutable_revision_proof(tree: ast.Module) -> None:
                             *immutable_blob.args.kwonlyargs]
     if sum(parameter.arg == "revision" for parameter in immutable_parameters) != 1:
         raise LintError("REJECT planning-path-git-command: immutable archive revision parameter changed")
+    archive_error = "plan-cap-v04-archive: revision must be a full 40-hex commit id"
+    if not _has_full_commit_guard(immutable_blob, "revision", archive_error):
+        raise LintError("REJECT planning-path-git-command: immutable archive reader lost its pre-read full-commit guard")
+    if _revision_binding_changed(immutable_blob, "revision"):
+        raise LintError("REJECT planning-path-git-command: immutable archive reader rebinds its validated revision")
     exact_git_reader(immutable_blob, "revision", {"show", "ls-tree"})
+
+    archive_parameters = [*validate_archive.args.posonlyargs, *validate_archive.args.args,
+                          *validate_archive.args.kwonlyargs]
+    if sum(parameter.arg == "revision" for parameter in archive_parameters) != 1 \
+            or _revision_binding_changed(validate_archive, "revision"):
+        raise LintError("REJECT planning-path-git-command: archive route rebinds its validated revision")
+    exact_git_reader(validate_archive, "revision", {"ls-tree"})
+
+    parents = _parents(tree)
+    snapshot_calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                      and isinstance(node.func, ast.Name) and node.func.id == "commit_snapshot"]
+    snapshot_callers: dict[str, tuple[str, list[ast.Call]]] = {
+        "read_rev": ("rev", []), "commit_paths": ("rev", []),
+        "commit_file": ("rev", []), "cache_fixture_commit_snapshot": ("parent_rev", []),
+    }
+    for call in snapshot_calls:
+        caller = next((function for function in top_functions if _is_descendant(call, function, parents)), None)
+        if caller is None or caller.name not in snapshot_callers:
+            raise LintError("REJECT planning-path-git-command: unsupported snapshot helper caller")
+        revision_parameter, caller_calls = snapshot_callers[caller.name]
+        if (len(call.args) != 2 or call.keywords
+                or not isinstance(call.args[0], ast.Name) or call.args[0].id != "repo"
+                or not isinstance(call.args[1], ast.Name) or call.args[1].id != revision_parameter):
+            raise LintError("REJECT planning-path-git-command: snapshot helper revision argument changed")
+        caller_calls.append(call)
+        caller_parameters = [*caller.args.posonlyargs, *caller.args.args, *caller.args.kwonlyargs]
+        if (sum(parameter.arg == revision_parameter for parameter in caller_parameters) != 1
+                or _revision_binding_changed(caller, revision_parameter)):
+            raise LintError("REJECT planning-path-git-command: snapshot caller changes its revision value")
+    if (len(snapshot_calls) != 4
+            or any(len(calls) != 1 for _parameter, calls in snapshot_callers.values())):
+        raise LintError("REJECT planning-path-git-command: immutable snapshot caller set changed")
+
+    route_calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                   and isinstance(node.func, ast.Name) and node.func.id == "validate_v04_archive_and_recovery"]
+    read_rev = top_level["read_rev"]
+    if (len(route_calls) != 1 or not _is_descendant(route_calls[0], read_rev, parents)
+            or len(route_calls[0].args) != 4 or route_calls[0].keywords
+            or not isinstance(route_calls[0].args[0], ast.Name) or route_calls[0].args[0].id != "repo"
+            or not isinstance(route_calls[0].args[1], ast.Name) or route_calls[0].args[1].id != "rev"):
+        raise LintError("REJECT planning-path-git-command: read_rev changed the validated archive-route argument")
 
     archive_revision_calls = [node for node in ast.walk(tree)
                               if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
                               and node.func.id == "immutable_blob"]
-    parents = _parents(tree)
-    if not archive_revision_calls or any(
-            not _is_descendant(call, validate_archive, parents) or len(call.args) < 2
-            or not isinstance(call.args[1], ast.Name)
-            or call.args[1].id not in {"revision", "V04_D209_ARCHIVE_REV"}
-            for call in archive_revision_calls):
-        raise LintError("REJECT planning-path-git-command: immutable archive revision call changed")
-    archive_pin = next((node.value.value for node in tree.body if isinstance(node, ast.Assign)
-                        and any(isinstance(target, ast.Name) and target.id == "V04_D209_ARCHIVE_REV"
-                                for target in node.targets)
-                        and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)), None)
-    if not isinstance(archive_pin, str) or not re.fullmatch(r"[0-9a-f]{40}", archive_pin):
+    expected_archive_reads = (
+        ("revision", "V04_ARCHIVED_REQUIREMENTS"),
+        ("revision", "V04_ARCHIVED_ROADMAP"),
+        ("V04_D209_ARCHIVE_REV", "V04_ARCHIVED_REQUIREMENTS"),
+        ("V04_D209_ARCHIVE_REV", "V04_ARCHIVED_ROADMAP"),
+    )
+    actual_archive_reads = []
+    for call in archive_revision_calls:
+        if not _is_descendant(call, validate_archive, parents):
+            caller = next((function for function in top_functions if _is_descendant(call, function, parents)), None)
+            valid_runtime_control = (
+                caller is not None and caller.name == "self_test_plan_cap_rev"
+                and len(call.args) == 3 and not call.keywords
+                and isinstance(call.args[0], ast.Name) and call.args[0].id == "source_repo"
+                and ((isinstance(call.args[1], ast.Constant) and call.args[1].value == "HEAD")
+                     or (isinstance(call.args[1], ast.Name) and call.args[1].id == "source_rev"))
+                and isinstance(call.args[2], ast.Name) and call.args[2].id == "V04_ARCHIVED_REQUIREMENTS")
+            if valid_runtime_control:
+                continue
+            raise LintError("REJECT planning-path-git-command: immutable archive reader escaped its proved route")
+        if (len(call.args) != 3 or call.keywords
+                or any(not isinstance(call.args[index], ast.Name) for index in (0, 1, 2))
+                or call.args[0].id != "repo"):
+            raise LintError("REJECT planning-path-git-command: immutable archive revision call changed")
+        actual_archive_reads.append((call.args[1].id, call.args[2].id))
+    expected_archive_reads_sorted = tuple(sorted(expected_archive_reads, key=lambda item: (item[0], item[1])))
+    if (len(actual_archive_reads) != 4 or
+            tuple(sorted(actual_archive_reads, key=lambda item: (item[0], item[1])))
+            != expected_archive_reads_sorted):
+        raise LintError("REJECT planning-path-git-command: immutable archive reader arguments changed")
+
+    archive_pin = "96d502d4733ac54aa8bf7fbfd7813065143771dc"
+    pin_assignments = [node for node in tree.body if isinstance(node, ast.Assign)
+                       and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+                       and node.targets[0].id == "V04_D209_ARCHIVE_REV"]
+    if (len(pin_assignments) != 1 or not isinstance(pin_assignments[0].value, ast.Constant)
+            or pin_assignments[0].value.value != archive_pin):
         raise LintError("REJECT planning-path-git-command: immutable archive revision pin changed")
+    pin_target = pin_assignments[0].targets[0]
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == "V04_D209_ARCHIVE_REV" \
+                and isinstance(node.ctx, (ast.Store, ast.Del)) and node is not pin_target:
+            raise LintError("REJECT planning-path-git-command: immutable archive revision pin is rebound")
+        if ((match_as := getattr(ast, "MatchAs", None)) is not None
+                and isinstance(node, match_as) and node.name == "V04_D209_ARCHIVE_REV"):
+            raise LintError("REJECT planning-path-git-command: immutable archive revision pin is rebound")
+        if ((match_star := getattr(ast, "MatchStar", None)) is not None
+                and isinstance(node, match_star) and node.name == "V04_D209_ARCHIVE_REV"):
+            raise LintError("REJECT planning-path-git-command: immutable archive revision pin is rebound")
+        if ((match_mapping := getattr(ast, "MatchMapping", None)) is not None
+                and isinstance(node, match_mapping) and node.rest == "V04_D209_ARCHIVE_REV"):
+            raise LintError("REJECT planning-path-git-command: immutable archive revision pin is rebound")
+
 
 
 def _validate_decoded_path_flow(source: str, tree: ast.Module,
@@ -2403,6 +2616,19 @@ def injected_rebound_root_reader():
         ("later lambda replaces git_run", source + "\ngit_run = lambda repo, *args: None\n"),
         ("conditional binding replaces git_run", source + "\nif True:\n    git_run = lambda repo, *args: None\n"),
         ("reflective namespace replaces git_run", source + "\nglobals()[\"git_run\"] = lambda repo, *args: None\n"),
+        ("globals setitem replaces git_run", source + "\nglobals().__setitem__(\"git_run\", lambda repo, *args: None)\n"),
+        ("globals delitem removes git_run", source + "\nglobals().__delitem__(\"git_run\")\n"),
+        ("builtin dict setitem replaces git_run",
+         source + "\ndict.__setitem__(globals(), \"git_run\", lambda repo, *args: None)\n"),
+        ("escaped namespace alias replaces git_run",
+         source + "\nnamespace_alias = globals()\nnamespace_alias[\"git_run\"] = lambda repo, *args: None\n"),
+        ("aliased namespace accessor replaces git_run",
+         source + "\nnamespace_factory = globals\nnamespace_factory()[\"git_run\"] = lambda repo, *args: None\n"),
+        ("expanded globals update replaces git_run",
+         source + "\nglobals().update(**{\"git_run\": lambda repo, *args: None})\n"),
+        ("escaped namespace mutator replaces git_run",
+         source + "\nnamespace_update = globals().update\n"
+                  "namespace_update({\"git_run\": lambda repo, *args: None})\n"),
     ):
         expect_flow_rejected(label, candidate, "REJECT planning-path-git-adapter", same_count=True)
 
@@ -2444,6 +2670,22 @@ def injected_unvalidated_git_revision_reader(repo, rev):
     expect_flow_rejected("reflective re replacement",
                          source + "\nglobals()[\"re\"] = object()\n",
                          "REJECT planning-path-git-command", same_count=True)
+    for label, mutation in (
+        ("setattr re compile", 'setattr(re, "compile", lambda pattern: None)\n'),
+        ("delattr re compile", 'delattr(re, "compile")\n'),
+        ("re module dictionary compile write", 're.__dict__["compile"] = lambda pattern: None\n'),
+        ("aliased re module compile write",
+         'regex_module = re\nsetattr(regex_module, "compile", lambda pattern: None)\n'),
+        ("vars re module compile write",
+         'regex_namespace = vars(re)\nregex_namespace["compile"] = lambda pattern: None\n'),
+        ("builtins importer re module write",
+         'builtins.__import__("re").compile = lambda pattern: None\n'),
+        ("importlib re module write",
+         'import importlib\nimportlib.import_module("re").compile = lambda pattern: None\n'),
+    ):
+        candidate = source.replace(commit_binding, mutation + commit_binding, 1)
+        need(candidate != source, "%s mutation did not find FULL_COMMIT" % label)
+        expect_flow_rejected(label, candidate, "REJECT planning-path-git-command", same_count=True)
     re_binding_mutant = source + "\nre = object()\n"
     expect_flow_rejected("re binding shadows the standard-library import", re_binding_mutant,
                          "REJECT planning-path-git-command", same_count=True)
@@ -2453,6 +2695,69 @@ def injected_unvalidated_git_revision_reader(repo, rev):
     need(post_guard_rebind != source, "post-guard revision mutation did not find read_rev")
     expect_flow_rejected("post-guard local revision rebind", post_guard_rebind,
                          "REJECT planning-path-git-command", same_count=True)
+
+    def insert_in_function(function_name: str, needle: str, insertion: str) -> str:
+        start = source.index("def " + function_name + "(")
+        end = source.find("\ndef ", start + 1)
+        if end < 0:
+            end = len(source)
+        function_source = source[start:end]
+        need(needle in function_source, "%s mutation could not find its target in %s" %
+             (function_name, needle.strip()))
+        return source[:start] + function_source.replace(needle, insertion + needle, 1) + source[end:]
+
+    pattern_rebindings = (
+        ("MatchAs revision capture", "    match value:\n        case _ as rev:\n            pass\n"),
+        ("MatchStar revision capture", "    match []:\n        case [*rev]:\n            pass\n"),
+        ("MatchMapping revision capture", "    match {}:\n        case {\"revision\": _, **rev}:\n            pass\n"),
+    )
+    for function_name in ("read_rev", "commit_snapshot"):
+        for label, insertion in pattern_rebindings:
+            candidate = insert_in_function(function_name,
+                                           '    found = git_run(repo, "cat-file", "-t", rev)\n', insertion)
+            expect_flow_rejected("%s in %s" % (label, function_name), candidate,
+                                 "REJECT planning-path-git-command", same_count=True)
+
+    archive_rebindings = (
+        ("ordinary valid-SHA reassignment", '    revision = "' + git_hash + '"\n'),
+        ("MatchAs archive revision capture", "    match value:\n        case _ as revision:\n            pass\n"),
+        ("MatchStar archive revision capture", "    match []:\n        case [*revision]:\n            pass\n"),
+        ("MatchMapping archive revision capture",
+         "    match {}:\n        case {\"archive\": _, **revision}:\n            pass\n"),
+    )
+    for function_name, needle in (
+        ("immutable_blob", '    listed = git_run(repo, "ls-tree", revision, "--", path)\n'),
+        ("validate_v04_archive_and_recovery",
+         '    current_requirements = immutable_blob(repo, revision, V04_ARCHIVED_REQUIREMENTS)\n'),
+    ):
+        for label, insertion in archive_rebindings:
+            candidate = insert_in_function(function_name, needle, insertion)
+            expect_flow_rejected("%s in %s" % (label, function_name), candidate,
+                                 "REJECT planning-path-git-command", same_count=True)
+
+    changed_snapshot_argument = source.replace(
+        "    snapshot, _ = commit_snapshot(repo, rev)",
+        '    snapshot, _ = commit_snapshot(repo, "' + git_hash + '")', 1)
+    need(changed_snapshot_argument != source, "snapshot argument mutation did not find its helper call")
+    expect_flow_rejected("changed validated snapshot helper argument", changed_snapshot_argument,
+                         "REJECT planning-path-git-command", same_count=True)
+
+    archive_guard = ('    if not FULL_COMMIT.fullmatch(revision):\n'
+                     '        raise SystemExit("plan-cap-v04-archive: revision must be a full 40-hex commit id")\n')
+    need(archive_guard in source, "archive reader mutation did not find its full-commit guard")
+    expect_flow_rejected("removed immutable archive revision guard", source.replace(archive_guard, "", 1),
+                         "REJECT planning-path-git-command", same_count=True)
+    expect_flow_rejected("weakened immutable archive revision guard",
+                         source.replace("FULL_COMMIT.fullmatch(revision)", "FULL_COMMIT.match(revision)", 1),
+                         "REJECT planning-path-git-command", same_count=True)
+    archive_pin_line = 'V04_D209_ARCHIVE_REV = "96d502d4733ac54aa8bf7fbfd7813065143771dc"'
+    need(archive_pin_line in source, "archive pin mutation did not find the exact D-209 pin")
+    expect_flow_rejected("different valid D-209 pin", source.replace(
+        archive_pin_line, 'V04_D209_ARCHIVE_REV = "' + git_hash + '"', 1),
+        "REJECT planning-path-git-command", same_count=True)
+    expect_flow_rejected("rebound D-209 pin", source + '\nV04_D209_ARCHIVE_REV = "' + git_hash + '"\n',
+                         "REJECT planning-path-git-command", same_count=True)
+
     for label, replacement in (
         ("truncating revision format", 'f"{rev:.39}:{path}"'),
         ("converted revision format", 'f"{rev!r}:{path}"'),
