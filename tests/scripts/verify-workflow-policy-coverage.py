@@ -3035,7 +3035,8 @@ def _self_test(root: Path, revision: str) -> int:
     # Preserve the 640 original cases plus both recovery profiles, the receipt
     # runner regression controls, and four real-Git byte controls.
     # Retain the original 694 refusals plus the seven publisher identity mutants.
-    if controls != 712:
+    # D-217 adds six behavior assertions for replacement refs and hostile Git selectors.
+    if controls != 718:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
 
     # A recovery's verifier overlay must not dirty the source inspected by the
