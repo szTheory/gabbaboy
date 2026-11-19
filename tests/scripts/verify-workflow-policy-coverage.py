@@ -175,7 +175,7 @@ def reject(message: str) -> None:
 
 def git_environment() -> dict[str, str]:
     allowed = ("PATH", "SYSTEMROOT", "SystemRoot", "WINDIR", "PATHEXT", "COMSPEC",
-               "TMPDIR", "TMP", "TEMP", "HOME")
+               "TMPDIR", "TMP", "TEMP")
     env = {key: os.environ[key] for key in allowed if key in os.environ}
     env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull,
                GIT_CONFIG_NOSYSTEM="1", GIT_TERMINAL_PROMPT="0", LC_ALL="C")
@@ -3241,6 +3241,10 @@ def original_object_read_controls() -> int:
         decoy_head = commit_control(decoy, "decoy")
         decoy_refs = setup_git(decoy, "for-each-ref", "--format=%(refname) %(objectname)")
         decoy_index = hashlib.sha256((decoy / ".git/index").read_bytes()).hexdigest()
+        decoy_object_root = decoy / ".git/objects"
+        decoy_objects = hashlib.sha256(b"\0".join(
+            path.relative_to(decoy_object_root).as_posix().encode("utf-8") + b"\0" + path.read_bytes()
+            for path in sorted(decoy_object_root.rglob("*")) if path.is_file())).hexdigest()
         hostile = {
             "GIT_DIR": str(decoy / ".git"),
             "GIT_WORK_TREE": str(decoy),
@@ -3272,7 +3276,10 @@ def original_object_read_controls() -> int:
                     os.environ.pop(key, None)
         if (setup_git(decoy, "rev-parse", "--verify", "HEAD^{commit}").decode("ascii").strip() != decoy_head
                 or setup_git(decoy, "for-each-ref", "--format=%(refname) %(objectname)") != decoy_refs
-                or hashlib.sha256((decoy / ".git/index").read_bytes()).hexdigest() != decoy_index):
+                or hashlib.sha256((decoy / ".git/index").read_bytes()).hexdigest() != decoy_index
+                or hashlib.sha256(b"\0".join(
+                    path.relative_to(decoy_object_root).as_posix().encode("utf-8") + b"\0" + path.read_bytes()
+                    for path in sorted(decoy_object_root.rglob("*")) if path.is_file())).hexdigest() != decoy_objects):
             reject("hostile Git selectors changed the workflow-policy decoy repository")
     return 6
 

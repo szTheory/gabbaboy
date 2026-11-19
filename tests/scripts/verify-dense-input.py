@@ -353,6 +353,15 @@ def candidate_git_context_controls(source_revision: str) -> int:
         decoy_head = git(decoy, "rev-parse", "--verify", "HEAD^{commit}").stdout.strip()
         decoy_refs = git(decoy, "for-each-ref", "--format=%(refname) %(objectname)").stdout
         decoy_index = hashlib.sha256((decoy / ".git/index").read_bytes()).hexdigest()
+        decoy_object_root = decoy / ".git/objects"
+
+        def decoy_object_digest() -> str:
+            payload = b"\0".join(
+                path.relative_to(decoy_object_root).as_posix().encode("utf-8") + b"\0" + path.read_bytes()
+                for path in sorted(decoy_object_root.rglob("*")) if path.is_file())
+            return hashlib.sha256(payload).hexdigest()
+
+        decoy_objects = decoy_object_digest()
         hostile_values = {
             "GIT_DIR": str(decoy / ".git"),
             "GIT_WORK_TREE": str(decoy),
@@ -374,6 +383,9 @@ def candidate_git_context_controls(source_revision: str) -> int:
         previously_present = {key for key in hostile_values if key in os.environ}
         try:
             os.environ.update(hostile_values)
+            sanitized = _git_environment()
+            require(all(key not in sanitized for key in hostile_values),
+                    "Git environment allowlist retained an inherited selector or config override")
             hostile_candidate = temp / "hostile-candidate"
             hostile_candidate.mkdir()
             hostile_pins = install_candidate_git_context(hostile_candidate, source_revision)
@@ -384,19 +396,22 @@ def candidate_git_context_controls(source_revision: str) -> int:
                     "sanitized candidate Git operations changed decoy refs")
             require(hashlib.sha256((decoy / ".git/index").read_bytes()).hexdigest() == decoy_index,
                     "sanitized candidate Git operations changed the decoy index")
+            require(decoy_object_digest() == decoy_objects,
+                    "sanitized candidate Git operations changed the decoy object store")
 
-            safe_environment = _git_environment
-            try:
-                globals()["_git_environment"] = lambda: os.environ.copy()
-                try:
-                    validate_candidate_git_context(candidate, source_revision)
-                except RuntimeError as error:
-                    require("candidate-git-dir-mismatch" in str(error),
-                            f"unsanitized Git control refused for the wrong cause: {error}")
-                else:
-                    raise RuntimeError("unsanitized Git environment redirection was accepted")
-            finally:
-                globals()["_git_environment"] = safe_environment
+            # Show that the inherited selectors really redirect an unsanitized
+            # Git call, then exercise the production adapter with the same hostile
+            # parent environment; its allowlist must still select the candidate.
+            unsanitized = subprocess.run(
+                ["git", "-C", str(candidate), "rev-parse", "--absolute-git-dir"],
+                cwd=candidate, env=os.environ.copy(), stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True, check=False,
+            )
+            require(unsanitized.returncode == 0
+                    and Path(unsanitized.stdout.strip()).resolve() == (decoy / ".git").resolve(),
+                    "hostile Git selectors did not redirect the unsanitized comparison")
+            require(validate_candidate_git_context(candidate, source_revision) == pins,
+                    "production Git allowlist failed under hostile inherited selectors")
         finally:
             for key in hostile_values:
                 if key in previously_present:
@@ -409,6 +424,8 @@ def candidate_git_context_controls(source_revision: str) -> int:
                 "hostile-environment controls changed decoy refs")
         require(hashlib.sha256((decoy / ".git/index").read_bytes()).hexdigest() == decoy_index,
                 "hostile-environment controls changed the decoy index")
+        require(decoy_object_digest() == decoy_objects,
+                "hostile-environment controls changed the decoy object store")
 
         missing = temp / "missing-object"
         missing.mkdir()

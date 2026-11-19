@@ -1232,7 +1232,7 @@ def boundary_history_control(source_root: pathlib.Path) -> None:
         git(decoy, "add", "decoy.txt")
         git(decoy, "commit", "-qm", "synthetic decoy")
 
-        def decoy_state() -> tuple[bytes, bytes, bytes]:
+        def decoy_state() -> tuple[bytes, bytes, bytes, str]:
             git_dir = pathlib.Path(git(decoy, "rev-parse", "--absolute-git-dir").decode(
                 "utf-8", "strict").strip())
             refs = git(decoy, "for-each-ref", "--format=%(refname) %(objectname)")
@@ -1241,12 +1241,31 @@ def boundary_history_control(source_root: pathlib.Path) -> None:
                 index = (git_dir / "index").read_bytes()
             except OSError as error:
                 raise Reject(f"self-test-decoy-index-unreadable:{error.__class__.__name__}") from None
-            return refs, status, index
+            object_root = git_dir / "objects"
+            object_payload = b"\0".join(
+                path.relative_to(object_root).as_posix().encode("utf-8") + b"\0" + path.read_bytes()
+                for path in sorted(object_root.rglob("*")) if path.is_file())
+            return refs, status, index, hashlib.sha256(object_payload).hexdigest()
 
         original_decoy_state = decoy_state()
+        hostile_global = root / "hostile-global-config"
+        hostile_system = root / "hostile-system-config"
+        hostile_global.write_text("[core]\n\tbare = true\n", encoding="utf-8")
+        hostile_system.write_text("[core]\n\tbare = true\n", encoding="utf-8")
         hostile = {
             "GIT_DIR": str((decoy / ".git").resolve()),
             "GIT_WORK_TREE": str(repo.resolve()),
+            "GIT_COMMON_DIR": str((decoy / ".git").resolve()),
+            "GIT_INDEX_FILE": str((decoy / ".git/index").resolve()),
+            "GIT_OBJECT_DIRECTORY": str((decoy / ".git/objects").resolve()),
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES": str((decoy / ".git/objects").resolve()),
+            "GIT_CONFIG_GLOBAL": str(hostile_global),
+            "GIT_CONFIG_SYSTEM": str(hostile_system),
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.bare",
+            "GIT_CONFIG_VALUE_0": "true",
+            "GIT_NAMESPACE": "redirected",
+            "GIT_PREFIX": "redirected/",
         }
         prior_environment = {key: os.environ.get(key) for key in hostile}
         try:

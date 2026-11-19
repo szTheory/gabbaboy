@@ -68,7 +68,7 @@ def fixture_git_path(manifest_dir: PurePosixPath, filename: str) -> str:
 def git_environment() -> dict[str, str]:
     """Keep immutable reads on the requested repository with replacement refs disabled."""
     allowed = ("PATH", "SYSTEMROOT", "SystemRoot", "WINDIR", "PATHEXT", "COMSPEC",
-               "TMPDIR", "TMP", "TEMP", "HOME")
+               "TMPDIR", "TMP", "TEMP")
     env = {key: os.environ[key] for key in allowed if key in os.environ}
     env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull,
                GIT_CONFIG_NOSYSTEM="1", GIT_TERMINAL_PROMPT="0", LC_ALL="C")
@@ -849,25 +849,85 @@ def inventory_cli_controls(rev: str, repo: Path) -> int:
     """Prove inventory mode rejects every conflicting operation before Git or output effects."""
     controls = 0
     with tempfile.TemporaryDirectory(prefix="state-fork-cli-controls-") as temp_dir:
-        output = Path(temp_dir) / "mutant.c"
-        command = [sys.executable, "-I", str(Path(__file__).resolve()),
-                   "--inventory-controls", "--materialize-mutant-core", "--rev", rev,
-                   "--repo", str(repo), "--output", str(output)]
-        result = subprocess.run(command, cwd=repo, env=git_environment(),
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                text=True, check=False, timeout=10)
-        combined = result.stdout + result.stderr
-        if (result.returncode != 1 or "inventory-controls is exclusive" not in combined
-                or "inventory-controls pass" in combined or output.exists()):
-            raise ForkError("inventory/materialization CLI conflict was not refused before Git/output effects")
-        controls += 1
+        root = Path(temp_dir)
+        trap_dir = root / "bin"
+        trap_dir.mkdir()
+        marker = root / "git-called"
+        trap = trap_dir / "git"
+        marker_literal = "'" + str(marker).replace("'", "'\\''") + "'"
+        trap.write_text(f"#!/bin/sh\nprintf 'called\\n' >> {marker_literal}\nexit 97\n", encoding="utf-8")
+        trap.chmod(0o755)
+        env = git_environment()
+        env["PATH"] = str(trap_dir) + os.pathsep + env.get("PATH", "")
 
+        inputs = root / "inputs"
+        inputs.mkdir()
+        sentinel_bytes = b"do not modify inventory conflict input\n"
+        sentinel_paths = {
+            option: inputs / (option.lstrip("-").replace("-", "_") + ".sentinel")
+            for option in ("--test-exe", "--control-exe", "--mutant-core", "--check")
+        }
+        for path in sentinel_paths.values():
+            path.write_bytes(sentinel_bytes)
+        absent_outputs = {
+            "--report": root / "report.json",
+            "--report-dir": root / "report-dir",
+            "--output": root / "mutant.c",
+            "--build-dir": root / "build-dir",
+        }
+
+        def reject_before_effects(label: str, conflict: list[str]) -> None:
+            marker.unlink(missing_ok=True)
+            command = [sys.executable, "-I", str(Path(__file__).resolve()),
+                       "--inventory-controls", "--rev", rev,
+                       "--repo", str(repo), *conflict]
+            result = subprocess.run(command, cwd=repo, env=env,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    text=True, check=False, timeout=10)
+            combined = result.stdout + result.stderr
+            if (result.returncode != 1
+                    or "verify-state-forks: --inventory-controls is exclusive with every other mode and mode-specific input" not in combined
+                    or result.stdout.strip()
+                    or marker.exists()
+                    or any(path.read_bytes() != sentinel_bytes for path in sentinel_paths.values())
+                    or any(path.exists() for path in absent_outputs.values())):
+                raise ForkError(f"inventory {label} conflict did not refuse before Git/output effects: {combined.strip()}")
+
+        operation_flags = (
+            "--matrix-shard", "--matrix-summary", "--self-test", "--mutants",
+            "--mutant-controls", "--mutant-summary", "--materialize-mutant-core",
+        )
+        for option in operation_flags:
+            reject_before_effects(option, [option])
+            controls += 1
+
+        input_options = (
+            ("--test-exe", str(sentinel_paths["--test-exe"])),
+            ("--control-exe", str(sentinel_paths["--control-exe"])),
+            ("--mutant-core", str(sentinel_paths["--mutant-core"])),
+            ("--shard", "0"),
+            ("--shards", "0"),
+            ("--report", str(absent_outputs["--report"])),
+            ("--report-dir", str(absent_outputs["--report-dir"])),
+            ("--check", str(sentinel_paths["--check"])),
+            ("--output", str(absent_outputs["--output"])),
+            ("--build-dir", str(absent_outputs["--build-dir"])),
+        )
+        for option, value in input_options:
+            reject_before_effects(option, [option, value])
+            controls += 1
+
+        parsed_inventory = parse_args(["--inventory-controls", "--rev", rev, "--repo", str(repo)])
+        if (not parsed_inventory.inventory_controls or parsed_inventory.rev != rev
+                or parsed_inventory.repo != repo.resolve()):
+            raise ForkError("valid inventory-only argument parsing changed")
+        output = root / "materialized.c"
         parsed = parse_args(["--materialize-mutant-core", "--rev", rev,
                              "--repo", str(repo), "--output", str(output)])
         if (not parsed.materialize_mutant_core or parsed.rev != rev
                 or parsed.output != output.resolve()):
             raise ForkError("materialization-only argument parsing positive changed")
-    controls += 1
+        controls += 2
     return controls
 
 
@@ -875,15 +935,7 @@ def synthetic_path_controls(rev: str, repo: Path, spec: dict) -> int:
     """Exercise raw Git path framing against a disposable manifest tree."""
     with tempfile.TemporaryDirectory(prefix="state-fork-paths-") as temp_dir:
         synthetic_repo = Path(temp_dir)
-        git_env = os.environ.copy()
-        for key in tuple(git_env):
-            if key.startswith("GIT_"):
-                del git_env[key]
-        git_env.update({
-            "GIT_CONFIG_NOSYSTEM": "1",
-            "GIT_CONFIG_GLOBAL": os.devnull,
-            "GIT_TERMINAL_PROMPT": "0",
-        })
+        git_env = git_environment()
 
         def git(*args: str, input_bytes: bytes | None = None) -> bytes:
             result = subprocess.run(
@@ -981,6 +1033,10 @@ def synthetic_path_controls(rev: str, repo: Path, spec: dict) -> int:
         decoy_head = decoy_git("rev-parse", "--verify", "HEAD^{commit}").strip()
         decoy_refs = decoy_git("for-each-ref", "--format=%(refname) %(objectname)")
         decoy_index = digest((decoy / ".git/index").read_bytes())
+        object_root = decoy / ".git/objects"
+        decoy_objects = digest(b"\0".join(
+            path.relative_to(object_root).as_posix().encode("utf-8") + b"\0" + path.read_bytes()
+            for path in sorted(object_root.rglob("*")) if path.is_file()))
         hostile = {
             "GIT_DIR": str(decoy / ".git"),
             "GIT_WORK_TREE": str(decoy),
@@ -1015,7 +1071,10 @@ def synthetic_path_controls(rev: str, repo: Path, spec: dict) -> int:
                     os.environ.pop(key, None)
         if (decoy_git("rev-parse", "--verify", "HEAD^{commit}").strip() != decoy_head
                 or decoy_git("for-each-ref", "--format=%(refname) %(objectname)") != decoy_refs
-                or digest((decoy / ".git/index").read_bytes()) != decoy_index):
+                or digest((decoy / ".git/index").read_bytes()) != decoy_index
+                or digest(b"\0".join(
+                    path.relative_to(object_root).as_posix().encode("utf-8") + b"\0" + path.read_bytes()
+                    for path in sorted(object_root.rglob("*")) if path.is_file())) != decoy_objects):
             raise ForkError("hostile Git selector control modified the decoy repository")
 
         harmless_path = "fixtures/odd\nname/readme.txt"
@@ -1487,6 +1546,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--build-dir", type=Path)
     args = parser.parse_args(argv)
+    reject_inventory_mode_conflicts(args)
     args.repo = args.repo.resolve()
     if args.test_exe:
         args.test_exe = args.test_exe.resolve()
@@ -1507,18 +1567,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
+def reject_inventory_mode_conflicts(args: argparse.Namespace) -> None:
+    """Reject mixed inventory requests before resolving paths or reaching Git."""
+    if not args.inventory_controls:
+        return
+    conflicting_modes = (args.matrix_shard, args.matrix_summary, args.self_test,
+                         args.mutants, args.mutant_controls, args.mutant_summary,
+                         args.materialize_mutant_core)
+    conflicting_inputs = (args.test_exe, args.control_exe, args.mutant_core,
+                          args.shard, args.shards, args.report, args.report_dir,
+                          args.check, args.output, args.build_dir)
+    if any(conflicting_modes) or any(value is not None for value in conflicting_inputs):
+        raise ForkError("--inventory-controls is exclusive with every other mode and mode-specific input")
+
+
 def main() -> int:
-    args = parse_args()
     try:
+        args = parse_args()
         if args.inventory_controls:
-            conflicting_modes = (args.matrix_shard, args.matrix_summary, args.self_test,
-                                 args.mutants, args.mutant_controls, args.mutant_summary,
-                                 args.materialize_mutant_core)
-            conflicting_inputs = (args.test_exe, args.control_exe, args.mutant_core,
-                                  args.shard, args.shards, args.report, args.report_dir,
-                                  args.check, args.output, args.build_dir)
-            if any(conflicting_modes) or any(value is not None for value in conflicting_inputs):
-                raise ForkError("--inventory-controls is exclusive with every other mode and mode-specific input")
             if not args.rev:
                 raise ForkError("--inventory-controls needs --rev")
             rev = checked_rev(args.rev, args.repo)
