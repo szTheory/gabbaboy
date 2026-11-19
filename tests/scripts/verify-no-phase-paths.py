@@ -681,6 +681,20 @@ def _reflectively_writes_binding(tree: ast.Module, names: set[str]) -> bool:
     return False
 
 
+def _pattern_capture_name(node: ast.AST) -> str | None:
+    """Return names bound by Python structural-pattern capture nodes."""
+    match_as = getattr(ast, "MatchAs", None)
+    if match_as is not None and isinstance(node, match_as):
+        return node.name
+    match_star = getattr(ast, "MatchStar", None)
+    if match_star is not None and isinstance(node, match_star):
+        return node.name
+    match_mapping = getattr(ast, "MatchMapping", None)
+    if match_mapping is not None and isinstance(node, match_mapping):
+        return node.rest
+    return None
+
+
 def _approved_git_object_adapters(tree: ast.Module) -> set[ast.AST]:
     """Return only the exact reviewed Git subprocess adapter, rejecting body changes."""
     candidates = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -723,6 +737,8 @@ def _approved_git_object_adapters(tree: ast.Module) -> set[ast.AST]:
         raise LintError("REJECT planning-path-git-adapter: immutable read cache binding is not the approved empty dictionary")
     cache_target = cache_bindings[0].targets[0]
     for node in ast.walk(tree):
+        if _pattern_capture_name(node) in {"git_run", "_GIT_OBJECT_READ_CACHE"}:
+            raise LintError("REJECT planning-path-git-adapter: structural pattern shadows a protected Git binding")
         if isinstance(node, ast.Name) and node.id == "_GIT_OBJECT_READ_CACHE" \
                 and isinstance(node.ctx, (ast.Store, ast.Del)) and node is not cache_target:
             if not (_is_descendant(node, actual, parents)):
@@ -854,14 +870,7 @@ def _has_stdlib_re_import(tree: ast.Module) -> bool:
             return False
         if isinstance(node, (ast.Global, ast.Nonlocal)) and "re" in node.names:
             return False
-        if ((match_as := getattr(ast, "MatchAs", None)) is not None and isinstance(node, match_as)
-                and node.name == "re"):
-            return False
-        if ((match_star := getattr(ast, "MatchStar", None)) is not None and isinstance(node, match_star)
-                and node.name == "re"):
-            return False
-        if ((match_mapping := getattr(ast, "MatchMapping", None)) is not None
-                and isinstance(node, match_mapping) and node.rest == "re"):
+        if _pattern_capture_name(node) == "re":
             return False
     return True
 
@@ -879,14 +888,7 @@ def _has_full_commit_pattern(tree: ast.Module) -> bool:
         if isinstance(node, ast.Name) and node.id == "FULL_COMMIT" \
                 and isinstance(node.ctx, (ast.Store, ast.Del)) and node is not allowed_target:
             return False
-        if ((match_as := getattr(ast, "MatchAs", None)) is not None and isinstance(node, match_as)
-                and node.name == "FULL_COMMIT"):
-            return False
-        if ((match_star := getattr(ast, "MatchStar", None)) is not None and isinstance(node, match_star)
-                and node.name == "FULL_COMMIT"):
-            return False
-        if ((match_mapping := getattr(ast, "MatchMapping", None)) is not None
-                and isinstance(node, match_mapping) and node.rest == "FULL_COMMIT"):
+        if _pattern_capture_name(node) == "FULL_COMMIT":
             return False
         if isinstance(node, ast.arg) and node.arg == "FULL_COMMIT":
             return False
@@ -1038,14 +1040,7 @@ def _revision_binding_changed(function: ast.AST, binding: str) -> bool:
             return True
         if isinstance(node, (ast.Global, ast.Nonlocal)) and binding in node.names:
             return True
-        if ((match_as := getattr(ast, "MatchAs", None)) is not None
-                and isinstance(node, match_as) and node.name == binding):
-            return True
-        if ((match_star := getattr(ast, "MatchStar", None)) is not None
-                and isinstance(node, match_star) and node.name == binding):
-            return True
-        if ((match_mapping := getattr(ast, "MatchMapping", None)) is not None
-                and isinstance(node, match_mapping) and node.rest == binding):
+        if _pattern_capture_name(node) == binding:
             return True
     return False
 
@@ -1116,6 +1111,8 @@ def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
             raise LintError("REJECT planning-path-git-command: imported standard-library binding is shadowed")
         if isinstance(node, ast.ExceptHandler) and node.name in imported_names:
             raise LintError("REJECT planning-path-git-command: imported standard-library binding is shadowed")
+        if _pattern_capture_name(node) in imported_names:
+            raise LintError("REJECT planning-path-git-command: imported standard-library binding is captured by a pattern")
         if isinstance(node, (ast.Global, ast.Nonlocal)) and set(node.names).intersection(imported_names):
             raise LintError("REJECT planning-path-git-command: imported standard-library binding has dynamic scope")
 
@@ -1782,14 +1779,7 @@ def _validate_immutable_revision_proof(tree: ast.Module, *, on_entry=None) -> No
         if isinstance(node, ast.Name) and node.id == "V04_D209_ARCHIVE_REV" \
                 and isinstance(node.ctx, (ast.Store, ast.Del)) and node is not pin_target:
             raise LintError("REJECT planning-path-git-command: immutable archive revision pin is rebound")
-        if ((match_as := getattr(ast, "MatchAs", None)) is not None
-                and isinstance(node, match_as) and node.name == "V04_D209_ARCHIVE_REV"):
-            raise LintError("REJECT planning-path-git-command: immutable archive revision pin is rebound")
-        if ((match_star := getattr(ast, "MatchStar", None)) is not None
-                and isinstance(node, match_star) and node.name == "V04_D209_ARCHIVE_REV"):
-            raise LintError("REJECT planning-path-git-command: immutable archive revision pin is rebound")
-        if ((match_mapping := getattr(ast, "MatchMapping", None)) is not None
-                and isinstance(node, match_mapping) and node.rest == "V04_D209_ARCHIVE_REV"):
+        if _pattern_capture_name(node) == "V04_D209_ARCHIVE_REV":
             raise LintError("REJECT planning-path-git-command: immutable archive revision pin is rebound")
 
 
@@ -1800,8 +1790,8 @@ def _validate_decoded_path_flow(source: str, tree: ast.Module,
                                 proof_entry=None) -> None:
     """Check decoded values and bounded helper calls without importing or executing source."""
     if validate_git_contract:
-        trusted_git_adapters = _approved_git_object_adapters(tree)
         _validate_immutable_revision_proof(tree, on_entry=proof_entry)
+        trusted_git_adapters = _approved_git_object_adapters(tree)
     else:
         # Path-flow mutation controls hold the production Git surface constant. Its full
         # runtime proof is checked on the clean source and on each Git-proof mutant below.
@@ -3465,7 +3455,8 @@ def injected_unvalidated_git_revision_reader(repo, rev):
             finally:
                 sys.modules.pop(module_name, None)
 
-        def expect_d220_gate_rejected(label: str, candidate: str) -> None:
+        def expect_d220_gate_rejected(label: str, candidate: str,
+                                      reason_prefix: str = "REJECT planning-path-git-command") -> None:
             nonlocal controls
             need(len(list(SPELLINGS.finditer(candidate))) == original_lexical_count,
                  "%s: D-220 mutant changed the lexical path count" % label)
@@ -3473,7 +3464,7 @@ def injected_unvalidated_git_revision_reader(repo, rev):
             try:
                 run_source_then_reader(candidate, state)
             except LintError as error:
-                need(str(error).startswith("REJECT planning-path-git-command"),
+                need(str(error).startswith(reason_prefix),
                      "%s: full production predicate refused for %r" % (label, str(error)))
             else:
                 raise LintError("%s: full production predicate accepted the D-220 mutant; "
@@ -3486,6 +3477,26 @@ def injected_unvalidated_git_revision_reader(repo, rev):
             need(state["protected_reader_arguments"] == [],
                  "%s: rejected mutant reached a protected reader argument" % label)
             controls += 1
+
+        git_run_pattern_rebindings = (
+            ("MatchAs Git adapter capture", "    match None:\n        case _ as git_run:\n            pass\n"),
+            ("MatchStar Git adapter capture", "    match []:\n        case [*git_run]:\n            pass\n"),
+            ("MatchMapping Git adapter capture", "    match {}:\n        case {**git_run}:\n            pass\n"),
+        )
+        for label, insertion in git_run_pattern_rebindings:
+            candidate = insert_in_function(
+                "immutable_blob", '    listed = git_run(repo, "ls-tree", revision, "--", path)\n', insertion)
+            expect_d220_gate_rejected(label, candidate, "REJECT planning-path-git-adapter")
+
+        imported_module_capture = insert_in_function(
+            "validate_v04_archive_and_recovery",
+            '    current_requirements = immutable_blob(repo, revision, V04_ARCHIVED_REQUIREMENTS)\n',
+            "    match None:\n        case _ as re:\n            pass\n")
+        expect_d220_gate_rejected("MatchAs capture shadows imported module used by archive validator",
+                                  imported_module_capture)
+        cache_pattern_capture = source + "\nmatch {}:\n    case {**_GIT_OBJECT_READ_CACHE}:\n        pass\n"
+        expect_d220_gate_rejected("MatchMapping capture shadows Git read cache", cache_pattern_capture,
+                                  "REJECT planning-path-git-adapter")
 
         positive_state = {"proof_entries": 0, "protected_reader_calls": 0, "protected_reader_arguments": []}
         try:
