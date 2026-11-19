@@ -525,3 +525,40 @@ Keep the current candidate's exact state-fork list at 153 and both diagnostic ex
 - [VERIFIED: `tests/scripts/verify-planning-hygiene.py`] — existing narrow allowlisted Git environment adapter for local precedent.
 
 **D-216 validity:** Revisit if the four reviewed defects are replaced by new evidence, the Python/Git version contract changes, the state-fork inventory changes, or existing CTest membership/branch protection changes. This addendum records the authorized scope; successful verification remains pending execution.
+
+## D-217 Review Addendum — Replacement Refs, Runtime Bindings and Alternate Index
+
+The independent exact-head review at candidate `5652e488f7940e00b2b00893cd5dbbea8d620fc8` (tree `301a7f3818d3d31ab97bbcac8e162b9e8cdc7fe3`) identified five remaining defects: the static adapter proof ignores runtime rebinding; validated full-commit identity can be invalidated through a reflective regex replacement, a later local rebinding, or truncated formatting; candidate Git reads can honor `refs/replace`; tracked-source inventory can inherit `GIT_INDEX_FILE`; and one inventory-only CLI mode can silently supersede a simultaneous materialization request. The report is [D-216 fix-pass review](../../../build/phase24/d216-review-fix1-5652e48.md). Independent audits validated these reproductions and classified the replacement-ref/alternate-index findings as a scope extension rather than silently folding them into the prior authorization.
+
+### Primary-source behavior
+
+The official [Git replacement-ref manual](https://git-scm.com/docs/git-replace) states that replacement refs affect Git commands by default and can be disabled with `--no-replace-objects` immediately after `git` or `GIT_NO_REPLACE_OBJECTS`. Therefore, a full object ID does not alone prove that object reads see the original object; the checker’s Git adapter and candidate-object readers require an explicit replacement-ref policy. The official [Git environment manual](https://git-scm.com/docs/git) states that `GIT_INDEX_FILE` chooses an alternate index instead of `$GIT_DIR/index`; therefore, inventory commands must scrub repository/index selectors before reading the tracked path list.
+
+### Affected checker surfaces and controls
+
+| Surface | Required property | Causal control |
+|---|---|---|
+| `verify-no-phase-paths.py` adapter analysis | Only the exact immutable adapter function remains callable; regex and revision names cannot be rebound or formatted/truncated after validation. | Inject later `git_run` binding, reflective `FULL_COMMIT` replacement, guarded `rev` rebinding, and f-string format-spec mutants; require semantic reason-specific refusals and retain full-SHA positive reads. |
+| `verify-no-phase-paths.py` tracked inventory | An inherited alternate index or repository selector cannot suppress a tracked source file. | Use a synthetic repository with a live-path reader plus an alternate index omitting it; set `GIT_INDEX_FILE` and decoy repository selectors, then require the ordinary repository’s complete source inventory still rejects the reader. |
+| `verify-planning-hygiene.py` immutable Git adapter | Its actual runtime command disables replacement refs so the static proof corresponds to runtime behavior. | Create a synthetic replace ref mapping a pinned commit to a same-type mutant; prove the approved adapter reads original bytes, then prove the negative control demonstrates Git's default replacement behavior. |
+| `verify-dense-input.py` | Candidate tree, pin, and ancestry reads cannot follow replacement refs or repository redirection. | Add synthetic replacement-ref and hostile selector controls; prove selected candidate, exact pins/ancestry, and decoy repository state remain unchanged. |
+| `verify-diagnostic-evidence.py` | Revision-bound archive, route, and blob reads use the original Git objects under a minimal Git environment. | Add a replacement-ref mutation to the existing disposable candidate/decoy controls; ensure original evidence is selected, replacement data is not, and the decoy remains unchanged. |
+| `verify-state-forks.py` | Immutable inventory/blob reads use the intended repository and original commit; inventory-control arguments cannot silently shadow other modes. | Add replacement-ref and redirected-repository controls; add an incompatible `--inventory-controls --materialize-mutant-core --output` negative that fails before reporting success. |
+| `verify-workflow-policy-coverage.py` | Revision-bound workflow/source reads remain tied to the original candidate objects under hostile inherited selectors/replacements. | Use the existing self-test or mutation seam to install a replacement for a source commit and require exact original bytes; hostile Git selectors must not redirect the inspected repository. |
+
+### Scope and validation order
+
+D-217 authorizes one exact integrated correction in those six existing checker files and additive closeout evidence. It uses the second and final scoped fix/re-review pass already allowed by D-216. The initial review and first correction/re-review pass remain spent; no review count, plan, matrix, or CI retry is added. Use existing standard-library and Git/CMake seams. Do not change the tracked fixture inventory, admission data/policy, CTest registration/identity, dependency tree, source payloads, release artifacts, or protected job coverage. The local loop is limited to D-217 code and directly affected checker controls; preserve the seven existing focused CTests and the established timeout/control floors.
+
+Run syntax and cheap immutable/source-scope checks first, then direct causal self-tests for the changed checkers, then the already inventoried seven focused CTests in their existing order. Freeze only after all direct controls pass. The last exact-head review decides whether the existing single protected PR matrix may start; no further repair/re-review/matrix cycle follows a blocker. If clean, run that one complete protected matrix and merge only its identical passing head through protection. CI efficiency remains measurement-only: record current job/step/queue/wait/headroom data without changing jobs, timeout, cache, or concurrency.
+
+### D-217 source findings
+
+- [VERIFIED: `build/phase24/d216-review-fix1-5652e48.md`] — candidate-bound four critical findings and one warning, including exact reproductions and proposed minimal remedies.
+- [VERIFIED: `https://git-scm.com/docs/git-replace`] — replacement refs affect commands by default; the global `--no-replace-objects` option and `GIT_NO_REPLACE_OBJECTS` disable them.
+- [VERIFIED: `https://git-scm.com/docs/git`] — `GIT_INDEX_FILE` selects an alternate index.
+- [VERIFIED: read-only Git environment audit] — replacement reads affect the six checker surfaces recorded above; index-query redirection is a separate issue from replacement-ref resolution.
+- [VERIFIED: read-only Git adapter audit] — runtime `git_run` rebinding, reflective regex mutation, revision rebinding, and formatted truncation invalidate the current static proof.
+- [VERIFIED: read-only inventory-mode audit] — alternate-index scan suppression and incompatible inventory/materialization mode arguments are reproducible.
+
+**D-217 validity:** Revisit only if the exact affected checker surface, immutable-Git contract, or existing focused CTest mapping changes. The scope does not imply successful correction; all new controls must pass at the frozen candidate before final review.

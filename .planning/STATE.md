@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: D-216 authorized; commit the updated plan boundary, then execute T13 and T12
-last_updated: "2026-11-18T21:54:23.829Z"
-state_head: e1d3200b1568fb619759c0f31cf4a8605e57ea06
+stopped_at: D-217 plan checked; commit the updated route, then execute the remaining T13 correction and T12
+last_updated: "2026-11-19T00:12:22.676Z"
+state_head: 5652e488f7940e00b2b00893cd5dbbea8d620fc8
 progress:
   total_phases: 6
   completed_phases: 5
@@ -12,9 +12,9 @@ progress:
   completed_plans: 32
 milestone_name: Evidence Floor
 last_activity: 2026-11-18
-current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: "Phase 24 Plan 24-01 D-216: T13 correction, then T12 qualification"
+current_phase: 24
+current_plan: "Phase 24 Plan 24-01 D-217: remaining T13 correction, then T12 qualification"
 ---
 
 # Project State
@@ -107,12 +107,13 @@ Current stage: **The checked D-215 Phase 24 plan passed independent review, and 
 - [Phase 24]: D-211 authorizes one same-plan correction, one exact-candidate review, and one protected matrix for already-admitted game/fixture ROM cases; Acid2 remains excluded. — This is the bounded response to D-210 review findings. Any blocker or required-context failure stops without retry; Task 7 and v0.4 dispositions remain unchanged.
 - [Phase 24]: D-213 replans the same sole recovery plan after the D-212 T10 stop. Planning passed an independent check; execution remains unapproved. A later authorized local round may iterate scoped diagnoses/fixes/retests until focused gates pass, then spend at most one fresh review and one protected matrix. The exact D-209 gaps, Acid2 failure/exclusion, Task 7 deferral and other boundaries remain.
 - [Phase 24]: D-214 authorizes the fresh D-213 T10–T12 execution, local unpushed planning-boundary commit, scoped local convergence, one fresh exact-head review and one protected matrix. The old T10 attempt stays stopped; all D-209 limits and exclusions remain. Merge, phase verification, milestone closure and v0.5 are not authorized here.
+- [Phase 24]: D-217 extends the sole plan to five findings across six checker files and authorizes the remaining T13 correction followed by T12. The first correction/re-review pass is spent; exactly one final pass and the existing single protected matrix remain. Preserve all D-209 statuses, no-retry boundaries, excluded ROMs, Task 7 deferral and separate closure limits.
 
 ## Session
 
 **Last session:** 2026-11-18T19:10:15.541Z
-**Stopped at:** D-216 authorized; commit the updated plan boundary, then execute T13 and T12
+**Stopped at:** D-217 plan checked; commit the updated route, then execute the remaining T13 correction and T12
 **Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md
 
 ### Blockers
-D-211 matrix `44189691301` and package-preview `44189691412` failed at frozen candidate `96d502d4733ac54aa8bf7fbfd7813065143771dc`; preserve those failures. The stopped D-212 attempt remains historical, and its edits were integrated during D-214. D-214 local checks passed at `feb195f5e50eb4669b5bdb8b62e50459ec84121d`, but the fresh review found four blockers and two warnings; no matrix or push followed. D-215's plan check passed and the owner has authorized T10–T12; source execution has not yet begun. No phase closure, phase verification, or milestone archive is authorized here.
+D-211 matrix `44189691301` and package-preview `44189691412` failed at frozen candidate `96d502d4733ac54aa8bf7fbfd7813065143771dc`; preserve those failures. The stopped D-212 attempt remains historical, and its edits were integrated during D-214. D-214/D-215/D-216 candidates and blocked reviews remain historical. D-217's sole plan passed independent checking after reconciling validation guidance; source execution has not begun. One final correction/re-review pass and the already-authorized single protected matrix remain, gated by local success and clean review. No phase closure, phase verification, milestone archive, v0.5 start, or worktree cleanup is authorized here.

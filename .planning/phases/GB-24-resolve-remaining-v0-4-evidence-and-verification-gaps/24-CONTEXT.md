@@ -1,7 +1,7 @@
 # Phase 24: Resolve remaining v0.4 evidence and verification gaps - Context
 
-**Gathered:** 2026-11-18; updated after the D-216 recovery authorization
-**Status:** D-215 local T10–T12 checks passed at candidate `e1d3200b1568fb619759c0f31cf4a8605e57ea06` (tree `1dd6999e95076662c21eb79c63c4baf3188cdb1e`), but its independent exact-head review found three path/Git-environment blockers and a separate newline-bearing Git-path census blocker. The owner extended the sole plan to cover all four findings and explicitly authorized the correction, focused local retests, up to two scoped post-correction review-fix passes, one full protected PR matrix after a clean review, and conditional protected merge of the identical qualified head. D-215's first blocked candidate and review remain immutable history. Task 7, Phase 24 verification, milestone audit/archive, v0.5 and worktree cleanup remain outside this scope.
+**Gathered:** 2026-11-18; updated after the D-217 recovery extension
+**Status:** D-216 local gates passed at candidate `5652e488f7940e00b2b00893cd5dbbea8d620fc8` (tree `301a7f3818d3d31ab97bbcac8e162b9e8cdc7fe3`), but the first scoped correction/re-review pass found four critical Git/path-trust blockers and one CLI warning. The owner extended the existing plan to cover this exact set using the one remaining scoped correction/re-review pass. A clean final review still precedes the single protected PR matrix and conditional merge already authorized under D-216. Earlier failed candidates and reviews remain immutable history. Task 7, Phase 24 verification, milestone audit/archive, v0.5 and worktree cleanup remain outside this scope.
 
 <domain>
 ## Phase Boundary
@@ -86,6 +86,18 @@ Preserve D-209 statuses and owners, FIXT-01 Pending, the failed unreplayed Acid2
 
 **Primary-source basis:** Git documents `git ls-tree -z` as emitting path names verbatim and NUL-terminated ([git-ls-tree](https://git-scm.com/docs/git-ls-tree.html)); its environment documentation explains repository redirection by `GIT_DIR`/`GIT_WORK_TREE` ([Git environment](https://git-scm.com/docs/git)). These support the byte-delimited census and isolated-Git test boundary; neither changes fixture policy.
 
+### D-217 — Remaining correction/re-review pass
+
+The independent exact-head review of candidate `5652e488f7940e00b2b00893cd5dbbea8d620fc8` found the approved `git_run` function can be rebound at runtime; the full-commit proof can be invalidated through a reflective regex write, a later `rev` rebinding, or a truncated f-string format; normal Git object reads can follow mutable `refs/replace`; `verify-no-phase-paths.py` can inherit `GIT_INDEX_FILE` and omit a tracked source file; and `--inventory-controls` can silently override mutant-materialization arguments. The exact report is [D-216 fix-pass review](../../../build/phase24/d216-review-fix1-5652e48.md). Three read-only audits confirmed the findings and the plan boundary; no tests or source edits were performed during review.
+
+The scope is one integrated correction across the existing Git-backed checkers only: `tests/scripts/verify-no-phase-paths.py`, `tests/scripts/verify-planning-hygiene.py`, `tests/scripts/verify-dense-input.py`, `tests/scripts/verify-diagnostic-evidence.py`, `tests/scripts/verify-state-forks.py`, and `tests/scripts/verify-workflow-policy-coverage.py`, plus additive `24-CLOSEOUT.md` evidence. Require the approved Git adapter and every candidate-object reader in this set to ignore replacement refs. Isolate repository and index selectors for the tracked-file census and repository-backed checker reads. Prove original-object selection with a synthetic replacement ref; prove a hostile alternate index cannot suppress a scanned file; reject incompatible inventory mode/argument combinations; and add reason-specific controls for runtime rebinding and revision-value changes. Retain all current positive controls and protected path checks.
+
+This uses the second and final scoped correction/re-review pass allowed by D-216; the first pass at `86eaa535db9f292c0425dd607e2bc79a3a5a916c` and its review at `5652e488f7940e00b2b00893cd5dbbea8d620fc8` are already spent/recorded. Local diagnosis and directly relevant retests remain part of this pass. The single protected PR matrix and conditional exact-head merge remain available only after a clean final review. No retry or further expansion follows a blocker.
+
+The target is to make checker reads truly commit-pinned while preserving the current inventory, admission contract, exact seven focused CTests, their deadlines/floors, and the existing Python standard-library design. Add no dependency, CTest, fixture, test identity, production admission change, or workflow optimization. Keep Acid2 and excluded ROMs unexecuted; preserve D-209 statuses, D-103, Task 7, phase/milestone stops, and the current worktree boundary.
+
+The official [Git replacement-ref documentation](https://git-scm.com/docs/git-replace) states that replacement refs affect Git commands by default and can be disabled with `--no-replace-objects` immediately after `git` or `GIT_NO_REPLACE_OBJECTS`. The official [Git environment documentation](https://git-scm.com/docs/git) states that `GIT_INDEX_FILE` selects an alternate index. These are the direct bases for the two new causal controls; they do not justify general changes outside the named checker set.
+
 ### the agent's Discretion
 - Select the existing focused CTest targets that match the files and claims touched by the one plan; keep the existing test identities and CMake/Python standard-library patterns.
 - Use machine-checkable positive and negative controls for the Phase 24 report so false requirement completion, ownership changes, or milestone closure are rejected.
@@ -104,7 +116,7 @@ Preserve D-209 statuses and owners, FIXT-01 Pending, the failed unreplayed Acid2
 - `.planning/milestones/v0.4-REQUIREMENTS.md` — Archived original v0.4 requirement definitions and current tracker dispositions; there is no active root requirements tracker.
 - `.planning/PROJECT.md` — Product scope, current limits, and milestone status.
 - `.planning/STATE.md` — Current owner handoff and preserved verification/lifecycle limits.
-- `.planning/context/DECISIONS.md` — D-103, D-193 through D-216; read the latest Phase 24 scope decisions alongside historical limits.
+- `.planning/context/DECISIONS.md` — D-103, D-193 through D-217; read the latest Phase 24 scope decisions alongside historical limits.
 - `.planning/context/WORKFLOW.md#cicd-efficiency` — standing policy for measured CI/CD timing, cheap-before-expensive checks, and preserving required coverage.
 - `.planning/v0.4-MILESTONE-AUDIT.md` — Current requirement, phase freshness, integration, and flow assessment.
 
@@ -119,7 +131,7 @@ Preserve D-209 statuses and owners, FIXT-01 Pending, the failed unreplayed Acid2
 - [Current continuation handoff](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md) — Owner handoff, bounded recovery proposal, and stops to preserve.
 - [24-SECURITY.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-SECURITY.md) — T-24-04 and its open status before the recovery.
 - [24-01-PLAN.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md) and [24-VALIDATION.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md) — Existing one-plan scope and the two authorized focused CTests.
-- [24-CLOSEOUT.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md) — D-214/D-215 local candidates, focused checks and preserved failures; D-216 adds the latest exact-head review and execution authorization.
+- [24-CLOSEOUT.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md) — D-214/D-215/D-216 local candidates, focused checks and preserved failures; T12 adds D-217 correction evidence and final qualification receipts.
 
 ### Existing checkers and wiring
 - [Plan checker](tests/scripts/verify-planning-hygiene.py) — Plan frontmatter classifier, immutable plan-cap CLI, and current production-CLI self-test seam for the BOM regression.
@@ -138,11 +150,13 @@ Preserve D-209 statuses and owners, FIXT-01 Pending, the failed unreplayed Acid2
 - `tests/scripts/verify-scene-report.py` — Scene-intake/promotion contract checks.
 - `tests/scripts/verify-summary-coverage.py` and `tests/scripts/verify-uat-closure.py` — Existing automated planning/UAT closure patterns.
 
-### Primary-language and Git behavior references for D-215/D-216
+### Primary-language and Git behavior references for D-215/D-216/D-217
 - [Python AST](https://docs.python.org/3/library/ast.html) and [Python lexical analysis](https://docs.python.org/3/reference/lexical_analysis.html) — AST constants represent decoded literal values; escapes and adjacent string literals affect runtime values.
 - [Python pathlib](https://docs.python.org/3/library/pathlib.html) — Path containment and resolution semantics; lexical parent operations alone do not prove filesystem containment.
 - [Git documentation](https://git-scm.com/docs/git) — `GIT_DIR`, `GIT_WORK_TREE`, and related environment variables can redirect repository discovery and operations.
 - [Git `ls-tree`](https://git-scm.com/docs/git-ls-tree.html) — `-z` emits path names verbatim and NUL-terminated, avoiding quote/newline ambiguity in the state-fork census.
+- [Git replacement refs](https://git-scm.com/docs/git-replace) — replacements affect commands by default; `--no-replace-objects` or `GIT_NO_REPLACE_OBJECTS` preserves original-object reads.
+- [Git environment](https://git-scm.com/docs/git) — `GIT_INDEX_FILE` selects an alternate index, so tracked-file enumeration must isolate it.
 
 ### First-party source metadata
 - [Potion Panic creator page](https://deved.itch.io/potion-panic) — Shows the creator's source link and page-level code/asset license labels. These labels are recorded only as page metadata, not as a rights determination.
