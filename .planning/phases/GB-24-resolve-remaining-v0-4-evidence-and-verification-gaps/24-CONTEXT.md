@@ -1,7 +1,7 @@
 # Phase 24: Resolve remaining v0.4 evidence and verification gaps - Context
 
-**Gathered:** 2026-11-18; updated for the D-218 recovery authorization
-**Status:** D-217's seven focused tests passed at source candidate `cbef74856ebf2dae1cac7bc802da4d29c4ecaf2c`; final local evidence was frozen at `4239a8bdb0ddd33d0904c8e05eb30bc5787302fb` (tree `353657877d00105c318b687682f0d83012cdbb88`). The independent review of `4239a8b` found three security blockers in the path checker's proof of runtime bindings and immutable revision flow. D-217's review boundary is spent. The owner has now authorized a new, exact D-218 correction in the two affected checkers, one clean independent go/no-go review, then one protected PR matrix and conditional merge if every required context passes. No phase or milestone closure follows from that recovery. Preserve the D-217 blocked review and all earlier candidates as immutable history. Task 7, Phase 24 verification, milestone audit/archive, v0.5 and worktree cleanup remain outside this scope.
+**Gathered:** 2026-11-18; updated for the D-219 recovery discussion
+**Status:** D-218's seven focused CTests passed at source candidate `0b4387091b5148b35af420daf3b6743aa27d8fbb`; the frozen reviewed head is `ba5afae5cb5c53a04c859fa9e94c3b422d995ad6` (tree `ea74868a0ed43cbfb950cf04bff85e609727ad3e`). Its exact-head review returned NO-GO for two critical Python proof gaps. No push, protected matrix, or merge followed. The owner selected all three D-219 discussion areas and directed the agent to follow the synthesized recommendations. The sole existing Phase 24 plan must be updated and independently checked before implementation begins. Within that checked plan, the owner's existing extend-and-execute authorization covers the integrated scope below: up to two correction/review passes, one protected matrix only after a clean final review, and conditional merge of the identical reviewed/passing head. No broad suite, ROM/Acid2 replay, Task 7, phase verification, milestone closure, or worktree cleanup is included.
 
 <domain>
 ## Phase Boundary
@@ -116,7 +116,7 @@ The official [Git replacement-ref documentation](https://git-scm.com/docs/git-re
 - `.planning/milestones/v0.4-REQUIREMENTS.md` — Archived original v0.4 requirement definitions and current tracker dispositions; there is no active root requirements tracker.
 - `.planning/PROJECT.md` — Product scope, current limits, and milestone status.
 - `.planning/STATE.md` — Current owner handoff and preserved verification/lifecycle limits.
-- `.planning/context/DECISIONS.md` — D-103, D-193 through D-217; read the latest Phase 24 scope decisions alongside historical limits.
+- `.planning/context/DECISIONS.md` — D-103, D-193 through D-219; read the latest Phase 24 scope decisions alongside historical limits.
 - `.planning/context/WORKFLOW.md#cicd-efficiency` — standing policy for measured CI/CD timing, cheap-before-expensive checks, and preserving required coverage.
 - `.planning/v0.4-MILESTONE-AUDIT.md` — Current requirement, phase freshness, integration, and flow assessment.
 
@@ -130,7 +130,7 @@ The official [Git replacement-ref documentation](https://git-scm.com/docs/git-re
 - [24-REVIEW.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-REVIEW.md) — Exact-candidate finding CR-01 and the reason the existing plan guard is blocked.
 - [Current continuation handoff](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md) — Owner handoff, bounded recovery proposal, and stops to preserve.
 - [24-SECURITY.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-SECURITY.md) — T-24-04 and its open status before the recovery.
-- [24-01-PLAN.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md) and [24-VALIDATION.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md) — Existing one-plan scope and the two authorized focused CTests.
+- [24-01-PLAN.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md) and [24-VALIDATION.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-VALIDATION.md) — Existing one-plan boundary and historical focused checks; D-219 requires the seven existing focused CTests after cheap direct controls.
 - [24-CLOSEOUT.md](.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md) — D-214/D-215/D-216 local candidates, focused checks and preserved failures; T12 adds D-217 correction evidence and final qualification receipts.
 
 ### Existing checkers and wiring
@@ -157,6 +157,7 @@ The official [Git replacement-ref documentation](https://git-scm.com/docs/git-re
 - [Git `ls-tree`](https://git-scm.com/docs/git-ls-tree.html) — `-z` emits path names verbatim and NUL-terminated, avoiding quote/newline ambiguity in the state-fork census.
 - [Git replacement refs](https://git-scm.com/docs/git-replace) — replacements affect commands by default; `--no-replace-objects` or `GIT_NO_REPLACE_OBJECTS` preserves original-object reads.
 - [Git environment](https://git-scm.com/docs/git) — `GIT_INDEX_FILE` selects an alternate index, so tracked-file enumeration must isolate it.
+- [Python data model](https://docs.python.org/3.14/reference/datamodel.html) and [importlib](https://docs.python.org/3.14/library/importlib.html) — functions expose their defining module globals through `__globals__`; `import_module()` returns module objects, and import aliases bind the imported function under another name.
 
 ### First-party source metadata
 - [Potion Panic creator page](https://deved.itch.io/potion-panic) — Shows the creator's source link and page-level code/asset license labels. These labels are recorded only as page metadata, not as a rights determination.
@@ -378,3 +379,41 @@ The owner authorizes extending the sole existing Phase 24 plan for only these th
 Do not add a second plan, dependency, CTest identity, fixture, source payload, admission, release change or broader analyzer. Do not run Acid2, any ROM/diagnostic replay, the broad suite, Task 7, phase/security verification, milestone audit/archive, v0.5 work, or worktree cleanup. Keep FIXT-01 Pending, all D-209 dispositions, the failed Acid2 comparison, D-103 and D-211 failures unchanged. Keep this worktree until any authorized protected merge is reconciled; do not switch or remove it during recovery.
 
 **Next route:** The independent static plan check passed with no findings. Commit the reviewed D-218 planning boundary while excluding generated `.planning/state.json`, run the committed route/archive/ancestry preflight, then use `$gsd-execute-phase 24` in this worktree. Phase 24 and v0.4 remain open.
+
+## D-219 — Integrated recovery after the D-218 NO-GO (owner-directed, 2026-11-18)
+
+The owner selected all three discussion areas and instructed the agent to follow the fan-out recommendation. The D-218 candidate and NO-GO review remain immutable history. This addendum reopens the sole Phase 24 plan for one integrated recovery. The next step is `$gsd-plan-phase 24`; implementation and checks begin after that plan is updated, independently checked, and committed. The user's prior “extend and execute” authorization applies only to the exact scope and limits below.
+
+### Python proof boundary and revision integrity
+
+Keep a small, closed, standard-library AST contract for the fixed checker proof surfaces. Reject aliased dynamic-import routes and function `__globals__` access that can replace trusted runtime bindings; reject reflective mutation of proof-sensitive module bindings, including `V04_D209_ARCHIVE_REV`. Refactor self-tests that swap module globals to pass fixture values explicitly. Preserve the approved exact adapter, standard-library full-commit validator, validated revision, and D-209 pin as positive controls. At the Git-facing archive reader, require a full commit identity and prove the exact validated revision and pin reach each immutable read without rebinding. Account for ordinary stores, nested scope shadowing, `MatchAs.name`, `MatchStar.name`, and `MatchMapping.rest`.
+
+Add causal static negatives for the reported `from importlib import import_module as load_module` mutation, `function.__globals__` replacement of `git_run`, direct and `update`-based mutation of `V04_D209_ARCHIVE_REV`, validator-module mutation, and each revision-rebinding form. Parse injected source; never execute the mutation payloads. Avoid general-purpose alias/data-flow analysis and new dependencies. If rejecting all reflective namespace writes in the proof surface is too broad, use a complete finite inventory of proof-sensitive names with one narrow, exact test-only allowance; do not grow a string-key exception list opportunistically.
+
+### Git environment isolation and inventory-mode CLI
+
+Across the affected immutable-Git checker adapters, preserve the explicit `--no-replace-objects` option and run with a minimal environment that excludes Git variables able to redirect the repository, worktree, common directory, index, object store, alternates, or namespace. Git documents that replacement refs are active by default and that variables such as `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`, `GIT_INDEX_FILE`, and object-directory variables change repository or object selection. Reuse the existing small environment helpers where they fit; do not add a general Git wrapper. Add decoy-repository, alternate-index/object-store, and replacement-ref controls that prove the intended immutable object is read and decoy state remains untouched.
+
+For state-fork inventory controls, make inventory mode exclusive with every other operation and all mode-specific inputs. Reject conflicts before Git access or output creation. Exercise the production CLI with one conflicting-argument negative per operation/input class and a valid inventory positive; keep materialization-only parsing as a positive. This addresses argument combinations without altering the admitted manifest set or running excluded diagnostic cases.
+
+### Recovery, validation, and CI efficiency
+
+The integrated correction is limited to the six checker files already reviewed in D-218: `verify-dense-input.py`, `verify-diagnostic-evidence.py`, `verify-no-phase-paths.py`, `verify-planning-hygiene.py`, `verify-state-forks.py`, and `verify-workflow-policy-coverage.py`. Keep all seven existing focused CTests, their identities, ordering, deadlines, control floors, and required branch-protection contexts. Add causal controls in the existing self-test/CTest seams. Run cheap syntax, immutable-input, source-scope, and direct controls first; then run only the focused seven CTests. Do not run the broad suite, Acid2, any other ROM, or excluded gbmicrotest case. Keep Task 7, FIXT-01, D-103, requirement dispositions, release assets, and milestone closure unchanged.
+
+After the current D-218 NO-GO, allow up to two scoped correction/review passes in this recovery. The first corrected exact-head review is pass one; one in-scope correction and re-review may be pass two. Local diagnosis and targeted retesting may iterate within these findings before a review. Stop for any out-of-scope or unresolved correctness/security blocker after pass two. Allow at most one protected PR matrix, and only after a clean final exact-head review. Once that matrix starts, any failed, skipped, stale, or missing required context ends the recovery without a matrix retry. Merge only the identical reviewed head after all required contexts pass under existing branch protection.
+
+The D-218 run did not reach CI and provides no new timing evidence. Apply `.planning/context/WORKFLOW.md#cicd-efficiency` if the authorized matrix runs: capture measured queue, job/step, dependency-wait, package-step, and timeout-headroom data while retaining all required coverage. Make a CI efficiency change only when current measurements prove a safe improvement; do not change triggers, required jobs, timeouts, caches, or concurrency speculatively. Keep the D-211 package-waiter redesign separate.
+
+### Role synthesis and sources
+
+| Lens | Direction |
+|---|---|
+| Security / Python runtime | Prove actual binding integrity and the validated revision flow; fail closed on unmodeled reflection and aliases. |
+| Git / repository integrity | Disable replacement objects explicitly and remove repository/index/object redirection from each trusted Git process environment. |
+| Test design | Use source-only causal mutants, preserve exact positives, and ensure inventory conflicts fail before side effects. |
+| Maintainability | Reuse the standard library and existing CTest seams; refactor global-mutating fixtures instead of introducing a general analyzer or broad exception list. |
+| CI operations | Spend hosted qualification only after a clean review; measure current waits and step costs without reducing required checks. |
+
+Primary references: [Python function and module namespaces](https://docs.python.org/3.14/reference/datamodel.html), [Python dynamic imports](https://docs.python.org/3.14/library/importlib.html), [Git environment variables](https://git-scm.com/docs/git), and [Git replacement refs](https://git-scm.com/docs/git-replace). These sources establish the runtime and selection mechanisms; the repository-specific controls remain defined by the six checker contracts and their causal tests.
+
+**D-219 route:** Update and independently check the existing 24-01 plan, commit the coherent planning boundary without `.planning/state.json`, then execute only the D-219 integrated correction and focused qualification within the limits above. Phase 24 and v0.4 remain open.

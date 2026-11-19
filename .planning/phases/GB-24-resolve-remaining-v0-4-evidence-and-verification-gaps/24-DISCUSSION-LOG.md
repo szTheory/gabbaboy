@@ -293,3 +293,44 @@ No new plan, dependency, analyzer framework, CTest identity, source payload, fix
 The CI/CD efficiency policy is already discoverable from `AGENTS.md` through `.planning/context/WORKFLOW.md#cicd-efficiency`; D-218 requires measured run evidence, preserves all required contexts, and does not authorize speculative workflow changes.
 
 **Next route:** The sole plan was revised as T14 correction followed by T12 qualification. Independent plan checking passed with no findings. Commit the reviewed D-218 planning boundary, run its immutable-route preflight, then execute `$gsd-execute-phase 24` in this worktree. Phase 24 and v0.4 remain open.
+
+## D-219 — Integrated recovery after the D-218 NO-GO
+
+**Date:** 2026-11-18
+**Areas discussed:** Python proof boundary and revision integrity; Git environment isolation and inventory-mode CLI; bounded recovery and CI efficiency
+
+### Python proof boundary and revision integrity
+
+| Option | Description | Selected |
+|---|---|---|
+| Alias/provenance tracking | Resolve arbitrary Python import aliases, function-global references, scopes, and value flow | |
+| Closed AST contract | Reject unmodeled aliases/reflection in the fixed proof surfaces, refactor global-mutating self-tests, and preserve exact positive/negative controls | ✓ |
+| General analysis dependency | Add a broad static-analysis library to model Python semantics | |
+
+**Owner's direction:** Follow the synthesized recommendation. Keep the proof surface finite and standard-library-only. Close aliased `import_module`, function `__globals__`, reflective archive-pin writes, and revision rebinding at every protected Git reader. Refactor test fixtures away from module-global mutation where practical.
+
+### Git environment isolation and inventory-mode CLI
+
+| Option | Description | Selected |
+|---|---|---|
+| Working-directory isolation | Rely on `-C` and expected repository layout | |
+| Minimal Git environment | Keep explicit `--no-replace-objects`, remove Git-controlled repository/index/object redirection, assert the subject object identity, and reject inventory-mode conflicts before side effects | ✓ |
+| General Git wrapper | Add a broad wrapper abstraction around every Git invocation | |
+
+**Owner's direction:** Apply the recommendation across affected checker adapters. Retain replacement-ref protections, add decoy/index/object redirection controls, and ensure state-fork inventory mode rejects all conflicting operations and mode-specific inputs before Git or output effects.
+
+### Bounded recovery and CI efficiency
+
+| Option | Description | Selected |
+|---|---|---|
+| One correction/review pass | Lowest review cost; a new finding ends the attempt | |
+| Up to two correction/review passes | One in-scope re-review if the first D-219 candidate review finds a fixable in-scope issue; keep hosted matrix to one clean-review-gated run | ✓ |
+| Multiple protected matrices | Retry hosted qualification after a failure | |
+
+**Owner's direction:** Follow the two-pass recommendation, consistent with the owner's prior up-to-two-pass choice. The D-218 NO-GO is historical and does not consume this new exception. Use one protected matrix after a clean final review, and merge only the same reviewed/passing head through branch protection. The user's earlier “extend and execute” authorization applies after the sole plan is updated, independently checked, and committed. Preserve all other stop conditions.
+
+**CI efficiency:** D-218 did not reach CI, so no current timing or optimization claim is available. If the authorized matrix runs, record actual queue, job/step, dependency-wait, package-step, and timeout-headroom data. Keep the existing `.planning/context/WORKFLOW.md#cicd-efficiency` policy and required coverage; make no speculative workflow changes. The D-211 package-waiter redesign remains separate.
+
+**Deferred:** No broader analyzer, dependency, CTest identity, CI topology change, Task 7, Phase 24 closure, milestone audit/archive, v0.5 start, or worktree cleanup.
+
+**Next route:** Update and independently check the sole Phase 24 plan with D-219's integrated findings, commit the planning boundary without `.planning/state.json`, then execute only the scoped recovery and existing focused qualification. The current handoff is `$gsd-plan-phase 24` in this worktree.

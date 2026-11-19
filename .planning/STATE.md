@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: D-218 sole plan passed independent static review; commit the planning boundary, then execute T14 and T12
-last_updated: "2026-11-19T02:15:43.610Z"
-state_head: 4239a8bdb0ddd33d0904c8e05eb30bc5787302fb
+stopped_at: Phase 24 D-219 discussion complete; next command is $gsd-plan-phase 24
+last_updated: "2026-11-19T03:54:23.671Z"
+state_head: ba5afae5cb5c53a04c859fa9e94c3b422d995ad6
 progress:
   total_phases: 6
   completed_phases: 5
@@ -14,17 +14,17 @@ milestone_name: Evidence Floor
 last_activity: 2026-11-18
 current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: "Phase 24 Plan 24-01 D-218: correct three D-217 AST proof blockers, then qualify and review"
+current_plan: Phase 24 Plan 24-01 D-219 integrated recovery; update and independently check the sole plan before scoped execution
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone stage:** v0.4 remains administratively closed with D-209 gaps; D-218 authorizes only the three-blocker Phase 24 recovery, final review, and conditional protected reconciliation.
+**Milestone stage:** v0.4 remains administratively closed with D-209 gaps; no phase or milestone closure is authorized by this stop.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
-**Phase state:** Phase 24 remains incomplete. D-217's final review found three blockers; D-218 authorizes T14 correction then T12 qualification. Task 7 remains deferred; FIXT-01 remains Pending; Acid2 remains failed and unreplayed.
-**Next route:** Commit the checked D-218 planning boundary (excluding generated .planning/state.json), run its immutable route/archive/ancestry preflight, then execute only T14 followed by T12 in this worktree.
+**Phase state:** Phase 24 remains incomplete. D-218 focused CTests passed at source candidate 0b4387091b5148b35af420daf3b6743aa27d8fbb; the frozen reviewed head ba5afae5cb5c53a04c859fa9e94c3b422d995ad6 received a NO-GO for two critical Python proof gaps. No push, CI matrix, or merge followed. D-219 authorizes an integrated recovery through the sole plan, with up to two scoped correction/review passes and one protected matrix after a clean final review. FIXT-01 remains Pending; Task 7, D-103, Acid2 failure/non-replay, and milestone closure remain unchanged.
+**Next route:** The next command is $gsd-plan-phase 24 to update and independently check the sole plan. After that committed plan passes, execute only the D-219 scoped recovery and focused checks; current worktree remains in use. Phase 24 and v0.4 stay open.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -52,11 +52,11 @@ Two items had already been acknowledged by an earlier closeout; the audit record
 
 FIXT-01 remains Pending: neither Potion Panic nor µCity has a complete source/build/ROM/header/mode/runtime chain. Do not introduce a third game candidate under the v0.4 requirement. Do not replay the Acid2 comparison or claim its cause. The v0.4.0 tag/assets and published claims remain unchanged. No hardware, perception, mode-3 timing, general compatibility, Linux player, Steam Deck, or live Playstead claim is established by this closeout.
 
-The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 verification is stale; Phase 24 Task 7 is incomplete. These remain gaps, not passes. D-211's failed matrix and D-214's four blockers/two warnings remain preserved. D-215 replanning passed its independent check, and the owner separately authorized only active T10–T12. Local checks may converge in scope; one fresh exact-head review may be followed by up to two scoped correction/re-review passes, then one full protected matrix may run after a clean review. A failed, missing, skipped, stale, or unresolved required result stops without another matrix. Conditional merge is limited to the identical reviewed and fully qualified head through branch protection. No Acid2 replay, excluded gbmicrotest replay, candidate expansion, release/tag/asset change, broad local suite, canonical summary, worktree cleanup, Task 7, phase verification, or milestone archive. Both automatic-advance flags remain false.
+The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 verification is stale; Phase 24 Task 7 is incomplete. These remain gaps, not passes. D-211's failed matrix and the D-214 through D-218 blocked reviews remain preserved. D-218's single final review found two critical gaps; its allowance is spent and its one-matrix gate was not entered. Only a new owner-authorized discussion can define another recovery scope. No Acid2 replay, excluded gbmicrotest replay, candidate expansion, release/tag/asset change, broad local suite, canonical summary, worktree cleanup, Task 7, phase verification, or milestone archive. Both automatic-advance flags remain false.
 
 ## Owner Handoff
 
-Current stage: **The checked D-215 Phase 24 plan passed independent review, and the owner has authorized active T10–T12.** The reviewed D-214 candidate `feb195f5e50eb4669b5bdb8b62e50459ec84121d` passed local gates, but its fresh exact-head review found four blockers and two warnings; no push or matrix followed. No D-215 source changes or execution checks have started. The orchestrator is committing the authorization boundary; then the executor verifies the exact route/history and runs only active T10–T12 in sequence. Preserve D-209 dispositions and the D-211/D-214 failures; leave the canonical summary absent. Keep the current checkout until qualified work is reconciled through a protected merge; Task 7, phase verification, UAT closure, milestone audit/archive, and v0.5 remain separate.
+Current stage: Phase 24 D-219 discussion is complete; D-218 remains a historical NO-GO at frozen head ba5afae5cb5c53a04c859fa9e94c3b422d995ad6. The next command is $gsd-plan-phase 24. After the sole plan is independently checked and committed, continue under the bounded D-219 authorization; no phase or milestone closure is included.
 
 ## Accumulated Context
 
@@ -109,12 +109,14 @@ Current stage: **The checked D-215 Phase 24 plan passed independent review, and 
 - [Phase 24]: D-214 authorizes the fresh D-213 T10–T12 execution, local unpushed planning-boundary commit, scoped local convergence, one fresh exact-head review and one protected matrix. The old T10 attempt stays stopped; all D-209 limits and exclusions remain. Merge, phase verification, milestone closure and v0.5 are not authorized here.
 - [Phase 24]: D-217 extends the sole plan to five findings across six checker files and authorizes the remaining T13 correction followed by T12. The first correction/re-review pass is spent; exactly one final pass and the existing single protected matrix remain. Preserve all D-209 statuses, no-retry boundaries, excluded ROMs, Task 7 deferral and separate closure limits.
 - [Phase 24]: D-218 authorizes one correction for three D-217 static-proof blockers, one new review, and one protected matrix after clean review; no retry or phase closure — Close the reviewed runtime namespace/regex mutation and validated-revision rebinding gaps while preserving all D-209, D-103, Task 7, CI coverage, and milestone boundaries.
+- [Phase 24]: D-219 authorizes the sole-plan integrated recovery after D-218: up to two scoped correction/review passes, seven existing focused CTests, one protected matrix after a clean final review, and conditional merge of that identical passing head; preserve D-209 gaps, Task 7, D-103, Acid2, and milestone boundaries.
 
 ## Session
 
-**Last session:** 2026-11-18T19:10:15.541Z
-**Stopped at:** D-218 sole plan passed independent static review; commit the planning boundary, then execute T14 and T12
-**Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md
+**Last session:** 2026-11-19T03:53:08.990Z
+**Stopped at:** Phase 24 D-219 discussion complete; next command is $gsd-plan-phase 24
+**Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md
 
 ### Blockers
-D-211 matrix `44189691301` and package-preview `44189691412` failed at frozen candidate `96d502d4733ac54aa8bf7fbfd7813065143771dc`; preserve those failures. The stopped D-212 attempt remains historical, and its edits were integrated during D-214. D-214/D-215/D-216 candidates and blocked reviews remain historical. D-217's sole plan passed independent checking after reconciling validation guidance; source execution has not begun. One final correction/re-review pass and the already-authorized single protected matrix remain, gated by local success and clean review. No phase closure, phase verification, milestone archive, v0.5 start, or worktree cleanup is authorized here.
+
+- D-219 supersedes the prior owner-next-discuss handoff. The current next command is $gsd-plan-phase 24; after the sole plan is updated, independently checked, and committed, proceed under the D-219 authorization within its exact limits.
