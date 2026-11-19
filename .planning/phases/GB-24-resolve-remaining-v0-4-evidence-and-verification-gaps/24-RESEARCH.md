@@ -562,3 +562,15 @@ Run syntax and cheap immutable/source-scope checks first, then direct causal sel
 - [VERIFIED: read-only inventory-mode audit] — alternate-index scan suppression and incompatible inventory/materialization mode arguments are reproducible.
 
 **D-217 validity:** Revisit only if the exact affected checker surface, immutable-Git contract, or existing focused CTest mapping changes. The scope does not imply successful correction; all new controls must pass at the frozen candidate before final review.
+
+## D-218 Research Addendum — Python binding and runtime mutation semantics
+
+The D-217 final review (`build/phase24/d217-final-review-4239a8b.md`) identifies three concrete weaknesses in the fixed Python checker proof surface: calling namespace-dictionary mutation methods can replace `git_run`; match-pattern captures can assign the validated revision after its guard; and reflective mutation can replace `re.compile` before `FULL_COMMIT` is constructed.
+
+The official Python documentation confirms the relevant runtime semantics. [`globals()`](https://docs.python.org/3/library/functions.html#globals) exposes the current module namespace dictionary; [`setattr`](https://docs.python.org/3/library/functions.html#setattr) mutates the named object attribute; the [match statement reference](https://docs.python.org/3/reference/compound_stmts.html#match) defines pattern captures as bindings; and the [AST reference](https://docs.python.org/3.14/library/ast.html) represents `MatchAs`, `MatchStar`, and `MatchMapping.rest` captures in pattern-node fields rather than `ast.Name` store nodes.
+
+The best fit is a small closed AST contract for the named checker functions, not a new general-purpose data-flow engine. Reject reflection and aliases that can mutate the protected namespace or regex module; explicitly enumerate all relevant pattern-binding fields; validate full commit IDs again at the Git-facing archive reader; and prove the validated argument or exact D-209 pin is not rebound before every Git read. This combination gives runtime defense at the reader and static provenance across the known helper chain without a new dependency or speculative analyzer abstraction.
+
+Add reason-specific static negative controls for direct and builtin dictionary namespace mutation, reflective `re.compile`/module-dictionary mutation, each relevant match capture form, and an archive-helper revision reassignment. Retain positive controls for the exact approved adapter, standard-library validator, full validated revision, and D-209 pin. Mutated source must be parsed and checked without executing the injected operations.
+
+For qualification, preserve the seven existing focused CTests and their established order, deadlines, and floors; run the cheap syntax/boundary/control checks first. A clean independent exact-head review is the only entry to the already authorized single protected PR matrix. Measure hosted efficiency from that run without reducing required coverage or making unmeasured workflow changes.

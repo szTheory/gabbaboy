@@ -268,3 +268,28 @@ The fresh independent D-215 review is bound to candidate `e1d3200b1568fb619759c0
 - **Git reliability:** Validate pin blobs as raw bytes containing exactly 40 lowercase hex ASCII bytes, optionally followed by LF or CRLF (or with no terminator); reject bare CR and any extra/invalid bytes. Sanitize repository-redirection environment variables and assert the temporary subject repository identity.
 - **QA and CI operations:** Add causal positive and negative controls in existing CTest/self-test seams, run cheap checks first, preserve full matrix membership, and inspect measured run timing rather than changing coverage by guesswork.
 - **Dependency policy:** Reuse Python standard-library AST/path tools and Git; add no package or CTest identity.
+
+## D-218 — Three-blocker recovery discussion and owner authorization (2026-11-18)
+
+D-217's final independent review of `4239a8bdb0ddd33d0904c8e05eb30bc5787302fb` found three blockers in the path checker's proof of runtime trust and revision identity. The owner directed the agent to fan out, synthesize the best bounded recovery, and proceed under that recommendation.
+
+### Fan-out findings
+
+| Lens | Recommendation | Trade-off considered |
+|---|---|---|
+| Security / namespace trust | Fail closed on reflective namespace writes that can replace the approved Git adapter, including direct namespace-dict methods and builtin-dict forms; reject reflective mutation of the imported regex module regardless of attribute key. | This may refuse future reflection in the proof-bearing checker, which is preferable to silently trusting mutable runtime bindings; general alias analysis would be larger and harder to audit. |
+| Python / AST semantics | Explicitly model the finite binding fields in `MatchAs`, `MatchStar`, and `MatchMapping.rest`; verify the exact validated revision passes through the known helper chain and guard again at the archive Git-reader boundary. | A closed helper-specific contract requires deliberate maintenance if the route changes, but avoids building a broad Python data-flow engine or adding a dependency. |
+| QA / recovery governance | Add causal controls for all three issues, preserve the seven existing focused tests and their time limits, use one clean independent go/no-go review, then one protected matrix; stop after any blocker. | One new explicit exception acknowledges the spent D-217 limit without converting it into a general cap increase or retry loop. |
+| CI / release operations | Measure queue, job/step and dependency waits, timeout headroom, and package-step behavior during the protected matrix; retain full coverage and existing release gates. | Make efficiency changes only when the run data proves a safe improvement; keep the package-waiter redesign separate. |
+
+The Python primary sources confirm that `globals()` exposes the current module namespace dictionary, `setattr` mutates the selected attribute, and match patterns bind names. Links and implementation implications are recorded in the D-218 section of `24-CONTEXT.md` and the D-218 addendum in `24-RESEARCH.md`.
+
+### Adopted D-218 scope
+
+The owner authorizes one correction in the two existing checkers `verify-no-phase-paths.py` and `verify-planning-hygiene.py`, causal positive/negative controls, the same seven focused CTests, one new independent exact-head review, one protected PR matrix only after a clean review, and conditional protected merge of that identical head if all required checks pass. Any review blocker or failed/skipped/stale/missing required context stops without another correction, review, or matrix. This is a one-time Phase 24 exception, not a global allowance reset.
+
+No new plan, dependency, analyzer framework, CTest identity, source payload, fixture, admission change, release change, broad suite, Acid2/ROM replay, Task 7, Phase 24 verification, milestone audit/archive, v0.5 start, or worktree cleanup is authorized. Keep FIXT-01 Pending, all D-209 dispositions, the D-217 blocked review, D-211 failures, and D-103 unchanged.
+
+The CI/CD efficiency policy is already discoverable from `AGENTS.md` through `.planning/context/WORKFLOW.md#cicd-efficiency`; D-218 requires measured run evidence, preserves all required contexts, and does not authorize speculative workflow changes.
+
+**Next route:** The sole plan was revised as T14 correction followed by T12 qualification. Independent plan checking passed with no findings. Commit the reviewed D-218 planning boundary, run its immutable-route preflight, then execute `$gsd-execute-phase 24` in this worktree. Phase 24 and v0.4 remain open.

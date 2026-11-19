@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: D-217 plan checked; commit the updated route, then execute the remaining T13 correction and T12
-last_updated: "2026-11-19T00:12:22.676Z"
-state_head: 5652e488f7940e00b2b00893cd5dbbea8d620fc8
+stopped_at: D-218 sole plan passed independent static review; commit the planning boundary, then execute T14 and T12
+last_updated: "2026-11-19T02:15:43.610Z"
+state_head: 4239a8bdb0ddd33d0904c8e05eb30bc5787302fb
 progress:
   total_phases: 6
   completed_phases: 5
@@ -12,19 +12,19 @@ progress:
   completed_plans: 32
 milestone_name: Evidence Floor
 last_activity: 2026-11-18
-current_phase_name: Resolve remaining v0.4 evidence and verification gaps
 current_phase: 24
-current_plan: "Phase 24 Plan 24-01 D-217: remaining T13 correction, then T12 qualification"
+current_phase_name: Resolve remaining v0.4 evidence and verification gaps
+current_plan: "Phase 24 Plan 24-01 D-218: correct three D-217 AST proof blockers, then qualify and review"
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone stage:** v0.4 remains administratively closed with D-209 gaps. D-216 authorizes only Phase 24's four-finding correction and final qualification; preserve the historical e1d3200 review and D-211 failures.
+**Milestone stage:** v0.4 remains administratively closed with D-209 gaps; D-218 authorizes only the three-blocker Phase 24 recovery, final review, and conditional protected reconciliation.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
-**Phase state:** Phase 24 remains incomplete; T10/T11 local work and the D-215 review are historical. D-216 authorizes T13's four-finding correction followed by T12 qualification. Task 7 remains deferred; Phase 20/21/23.1 verification stays stale. FIXT-01 remains Pending; Acid2 remains failed and unreplayed.
-**Next route:** Commit the D-216 planning boundary, verify the immutable route/history, then execute only T13 and T12. After local convergence, obtain the bounded fresh review; run one protected matrix only after a clean final review and conditionally merge the identical qualified head. Stop on out-of-scope issues or failed required gates. Keep this worktree and both auto-advance flags false.
+**Phase state:** Phase 24 remains incomplete. D-217's final review found three blockers; D-218 authorizes T14 correction then T12 qualification. Task 7 remains deferred; FIXT-01 remains Pending; Acid2 remains failed and unreplayed.
+**Next route:** Commit the checked D-218 planning boundary (excluding generated .planning/state.json), run its immutable route/archive/ancestry preflight, then execute only T14 followed by T12 in this worktree.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -108,11 +108,12 @@ Current stage: **The checked D-215 Phase 24 plan passed independent review, and 
 - [Phase 24]: D-213 replans the same sole recovery plan after the D-212 T10 stop. Planning passed an independent check; execution remains unapproved. A later authorized local round may iterate scoped diagnoses/fixes/retests until focused gates pass, then spend at most one fresh review and one protected matrix. The exact D-209 gaps, Acid2 failure/exclusion, Task 7 deferral and other boundaries remain.
 - [Phase 24]: D-214 authorizes the fresh D-213 T10–T12 execution, local unpushed planning-boundary commit, scoped local convergence, one fresh exact-head review and one protected matrix. The old T10 attempt stays stopped; all D-209 limits and exclusions remain. Merge, phase verification, milestone closure and v0.5 are not authorized here.
 - [Phase 24]: D-217 extends the sole plan to five findings across six checker files and authorizes the remaining T13 correction followed by T12. The first correction/re-review pass is spent; exactly one final pass and the existing single protected matrix remain. Preserve all D-209 statuses, no-retry boundaries, excluded ROMs, Task 7 deferral and separate closure limits.
+- [Phase 24]: D-218 authorizes one correction for three D-217 static-proof blockers, one new review, and one protected matrix after clean review; no retry or phase closure — Close the reviewed runtime namespace/regex mutation and validated-revision rebinding gaps while preserving all D-209, D-103, Task 7, CI coverage, and milestone boundaries.
 
 ## Session
 
 **Last session:** 2026-11-18T19:10:15.541Z
-**Stopped at:** D-217 plan checked; commit the updated route, then execute the remaining T13 correction and T12
+**Stopped at:** D-218 sole plan passed independent static review; commit the planning boundary, then execute T14 and T12
 **Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md
 
 ### Blockers
