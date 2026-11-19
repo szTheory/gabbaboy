@@ -1115,6 +1115,8 @@ def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
     environ_reads = 0
     devnull_reads = 0
     subprocess_run_writes: list[ast.Attribute] = []
+    subprocess_run_calls: list[tuple[str, ...]] = []
+    subprocess_run_captures: list[ast.Attribute] = []
     completed_process_reads = 0
     for node in ast.walk(tree):
         if not isinstance(node, ast.Attribute):
@@ -1171,14 +1173,33 @@ def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
                     raise LintError("REJECT planning-path-git-command: subprocess.run mutation is outside its restored self-test mock")
             elif node.attr == "run":
                 if isinstance(node.ctx, ast.Load) and isinstance(parent, ast.Call) and parent.func is node:
+                    function = next((ancestor for ancestor in _ancestor_chain(node, parents)
+                                     if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
+                    function_chain = tuple(ancestor.name for ancestor in _ancestor_chain(node, parents)
+                                           if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef)))
+                    allowed_calls = {
+                        ("git_run",),
+                        ("git", "self_test_plan_cap_rev"),
+                        ("d205_git", "self_test_plan_cap_rev"),
+                        ("d212_git", "self_test_plan_cap_rev"),
+                        ("git", "self_test_v04_gap_assessment"),
+                        ("git", "self_test_v04_reconciliation"),
+                        ("cli_pre_fix_accepts", "self_test_v04_reconciliation"),
+                    }
+                    if function_chain in allowed_calls:
+                        subprocess_run_calls.append(function_chain)
+                    else:
+                        raise LintError("REJECT planning-path-git-command: subprocess.run call is outside the reviewed Git adapters")
                     continue
-                function = next((ancestor for ancestor in _ancestor_chain(node, parents)
-                                 if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
                 if (not isinstance(node.ctx, ast.Load) or not isinstance(parent, ast.Assign)
                         or len(parent.targets) != 1 or not isinstance(parent.targets[0], ast.Name)
-                        or parent.targets[0].id != "real_subprocess_run" or function is None
-                        or function.name != "self_test_plan_cap_rev"):
+                        or parent.targets[0].id != "real_subprocess_run"):
                     raise LintError("REJECT planning-path-git-command: subprocess.run escapes as an unreviewed callable")
+                function = next((ancestor for ancestor in _ancestor_chain(node, parents)
+                                 if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
+                if function is None or function.name != "self_test_plan_cap_rev":
+                    raise LintError("REJECT planning-path-git-command: subprocess.run capture is outside its self-test restore")
+                subprocess_run_captures.append(node)
             elif node.attr == "CompletedProcess":
                 function = next((ancestor for ancestor in _ancestor_chain(node, parents)
                                  if isinstance(ancestor, (ast.FunctionDef, ast.AsyncFunctionDef))), None)
@@ -1195,8 +1216,17 @@ def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
         if root_id == "Path" and node.attr == "resolve" and isinstance(node.ctx, (ast.Store, ast.Del)):
             raise LintError("REJECT planning-path-git-command: pathlib.Path.resolve is mutated")
 
-    if environ_reads != 4 or devnull_reads != 8 or len(subprocess_run_writes) != 2 \
-            or completed_process_reads != 2:
+    if (environ_reads != 4 or devnull_reads != 8 or len(subprocess_run_writes) != 2
+            or collections.Counter(subprocess_run_calls) != collections.Counter({
+                ("git_run",): 1,
+                ("git", "self_test_plan_cap_rev"): 1,
+                ("d205_git", "self_test_plan_cap_rev"): 1,
+                ("d212_git", "self_test_plan_cap_rev"): 1,
+                ("git", "self_test_v04_gap_assessment"): 1,
+                ("git", "self_test_v04_reconciliation"): 1,
+                ("cli_pre_fix_accepts", "self_test_v04_reconciliation"): 1,
+            })
+            or len(subprocess_run_captures) != 1 or completed_process_reads != 2):
         raise LintError("REJECT planning-path-git-command: standard-library adapter dependency inventory changed")
 
     # This self-test temporarily replaces subprocess.run to prove an invalid
@@ -1208,6 +1238,35 @@ def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
     if target_function is None:
         raise LintError("REJECT planning-path-git-command: protected Git mock scope is missing")
     target_parents = _parents(target_function)
+    real_run_stores = [node for node in ast.walk(target_function)
+                       if isinstance(node, ast.Name) and node.id == "real_subprocess_run"
+                       and isinstance(node.ctx, (ast.Store, ast.Del))]
+    if (len(real_run_stores) != 1 or not isinstance(target_parents.get(real_run_stores[0]), ast.Assign)
+            or target_parents[real_run_stores[0]].value is not subprocess_run_captures[0]):
+        raise LintError("REJECT planning-path-git-command: saved subprocess.run binding changed")
+    mock_function = next((node for node in target_function.body if isinstance(node, ast.FunctionDef)
+                          and node.name == "forbidden_git_attempt"), None)
+    if (mock_function is None or len(mock_function.args.args) != 0
+            or mock_function.args.vararg is None or mock_function.args.vararg.arg != "args"
+            or mock_function.args.kwarg is None or mock_function.args.kwarg.arg != "kwargs"
+            or len(mock_function.body) != 2
+            or not isinstance(mock_function.body[0], ast.Expr)
+            or not isinstance(mock_function.body[0].value, ast.Call)
+            or not isinstance(mock_function.body[0].value.func, ast.Attribute)
+            or mock_function.body[0].value.func.attr != "append"
+            or not isinstance(mock_function.body[0].value.func.value, ast.Name)
+            or mock_function.body[0].value.func.value.id != "git_attempts"
+            or len(mock_function.body[0].value.args) != 1
+            or not isinstance(mock_function.body[0].value.args[0], ast.Name)
+            or mock_function.body[0].value.args[0].id != "args"
+            or not isinstance(mock_function.body[1], ast.Raise)
+            or not isinstance(mock_function.body[1].exc, ast.Call)
+            or not isinstance(mock_function.body[1].exc.func, ast.Name)
+            or mock_function.body[1].exc.func.id != "RuntimeError"
+            or len(mock_function.body[1].exc.args) != 1
+            or not isinstance(mock_function.body[1].exc.args[0], ast.Constant)
+            or mock_function.body[1].exc.args[0].value != "invalid archive revision reached Git"):
+        raise LintError("REJECT planning-path-git-command: protected Git mock no longer records and refuses reads")
     writes = []
     for node in ast.walk(target_function):
         if not isinstance(node, ast.Attribute) or node.attr != "run" \
@@ -1250,7 +1309,7 @@ def _validate_immutable_revision_proof(tree: ast.Module, *, on_entry=None) -> No
     # f_globals and builtins dictionaries can replace the same runtime bindings.
     forbidden_namespace_names = {
         "_getframe", "f_globals", "f_locals", "f_builtins", "__dict__",
-        "__builtins__", "builtins", "__import__",
+        "__builtins__", "builtins", "__import__", "__class__",
     }
     dynamic_lookup_capabilities = {
         "getattr", "vars", "attrgetter", "__getattribute__", "__getattr__",
@@ -3211,6 +3270,17 @@ def injected_unvalidated_git_revision_reader(repo, rev):
              source + '\nPath.resolve = lambda self: self\n'),
             ("Path class escapes through an alias before mutation",
              source + '\npath_type = Path\npath_type.resolve = lambda self: self\n'),
+            ("Path.resolve is mutated through an instance class",
+             insert_in_function("self_test_plan_cap_rev", '    repo = base / "rev-repo"\n',
+                                '    repo.__class__.resolve = lambda path: path\n')),
+            ("saved subprocess.run restoration binding is replaced",
+             source.replace("real_subprocess_run = subprocess.run",
+                            "real_subprocess_run = forbidden_git_attempt", 1)),
+            ("saved subprocess.run restoration binding is reassigned",
+             insert_in_function("self_test_plan_cap_rev", "    real_subprocess_run = subprocess.run\n",
+                                "    real_subprocess_run = forbidden_git_attempt\n")),
+            ("unscoped subprocess.run invocation is introduced",
+             source + '\nsubprocess.run(["git", "status"])\n'),
             ("subprocess.run restoration is redirected to the mock",
              source.replace("subprocess.run = real_subprocess_run", "subprocess.run = forbidden_git_attempt", 1)),
         )
