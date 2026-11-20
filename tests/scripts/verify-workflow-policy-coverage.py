@@ -30,8 +30,8 @@ SUPPORT_LEDGER_CONTROL_MARKER = (
 )
 ARCHIVE_HELPER_PATH = ".github/scripts/safe_extract_package.py"
 POLICY_SHA256 = "c5aa1d60a2391e7126e714bcf101292dc86c75ddd1cd6167aea55cdb8b629083"
-REVIEWED_POLICY_COMMIT = "56ff25b6a9a9cad4bb19e4a367e3f7c937975a88"
-REVIEWED_POLICY_SHA256 = "77d78361fd8005d61c9cb605549293ec6869cc40b4cfb5cc92a4d20c60fcf568"
+REVIEWED_POLICY_COMMIT = "5542f45eb436201969015f0478fdde40ba92a5d3"
+REVIEWED_POLICY_SHA256 = "c36763d5655fb9f63f5f19ef4189754263a123f1ec011939f8bb82b7a872e81e"
 REVIEWED_ARCHIVE_HELPER_COMMIT = "37de7e8a9afee6b2b8a263e543279704cbfc1d56"
 REVIEWED_ARCHIVE_HELPER_SHA256 = "54fcfd4869ca2f3d085cfac690804858b42c37d73e7032ff6912a4e972123ce5"
 TRUSTED_FIXTURE_CHECKER_COMMIT = "3de1b0e427f37a202be4469dd818266f359c8b20"
@@ -132,7 +132,7 @@ INSTRUMENTED_POLICY_FUNCTIONS = {
 # are pinned by REVIEWED_POLICY_SHA256; skip only their historical baseline AST diff.
 REVIEWED_CHANGED_POLICY_FUNCTIONS = {
     "_check_ci_planning_lane", "_copy_fixture", "_ledger_mutations", "_mutations",
-    "check_version_window", "check_version_pr_gate", "main", "self_test",
+    "check_preview_player_lane", "check_version_window", "check_version_pr_gate", "main", "self_test",
 }
 ADDED_MUTATION_CONTROLS = (
     ("P20 isolated Linux product verifier is removed", "release.yml", "fixture-product-trust"),
@@ -224,35 +224,8 @@ def verify_reviewed_policy_identity(candidate: bytes, reviewed: bytes | None) ->
     reviewed_digest = hashlib.sha256(reviewed).hexdigest()
     if reviewed_digest != REVIEWED_POLICY_SHA256:
         reject(f"reviewed workflow-policy source identity has the wrong digest: {reviewed_digest}")
-    # Preserve the complete historical reviewed blob, allowing only the missing
-    # publisher option spelling and the player's existing archive wrapper. The
-    # extracted inner tree still reaches the unchanged product policy checker.
-    original = b'parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2],'
-    corrected = b'parser.add_argument("--root", "--repo-root", type=Path, default=Path(__file__).resolve().parents[2],'
-    if reviewed.count(original) != 1:
-        reject("reviewed workflow-policy root argument is missing or ambiguous")
-    expected = reviewed.replace(original, corrected, 1)
-    old_product_root = (
-        b'        created = True\n'
-        b'        result = subprocess.run(\n'
-        b'            [sys.executable, "-I", str(checker), "--check-product-tree", str(destination),'
-    )
-    new_product_root = (
-        b'        created = True\n'
-        b'        product_root = destination\n'
-        b'        if layout == "player":\n'
-        b'            product_root = destination / "installed-prefix"\n'
-        b'            if (sorted(path.name for path in destination.iterdir()) != ["installed-prefix"]\n'
-        b'                    or not product_root.is_dir() or product_root.is_symlink()):\n'
-        b'                raise Reject("product-archive-player-prefix", "player archive must contain only its installed-prefix directory")\n'
-        b'        result = subprocess.run(\n'
-        b'            [sys.executable, "-I", str(checker), "--check-product-tree", str(product_root),'
-    )
-    if expected.count(old_product_root) != 1:
-        reject("reviewed workflow-policy product root is missing or ambiguous")
-    expected = expected.replace(old_product_root, new_product_root, 1)
-    if candidate != expected:
-        reject("candidate workflow-policy source differs from the exact reviewed publisher corrections")
+    if candidate != reviewed:
+        reject("candidate workflow-policy source differs from the exact reviewed snapshot")
 
 
 def git_text(root: Path, revision: str, path: str) -> bytes:
@@ -632,6 +605,7 @@ def _preview_wait_deadlines(job: dict, job_id: str, preview_workflow: str,
         reject(f"preview job {job_id} exact-head waiter must be a standalone unconditional command")
     expected = [
         "python3", ".github/scripts/wait-exact-head-ci.py",
+        "--fail-fast-required-native",
         "--sha", "$EXPECTED_SHA", "--repo", "$GITHUB_REPOSITORY",
         "--require", "required-native",
     ]
@@ -2856,6 +2830,23 @@ def _self_test(root: Path, revision: str) -> int:
                  lambda comment_only_wait=comment_only_wait: validate_phase23_timeout_profile(
                      candidate_ci, comment_only_wait, candidate_namespace))
         current_waiter = _folded_waiter_run(candidate_preview, job_id, preview_tree["jobs"][job_id])
+        missing_fail_fast = current_waiter.replace("--fail-fast-required-native ", "", 1)
+        missing_fail_fast_preview = _replace_folded_waiter_run(candidate_preview, job_id, missing_fail_fast)
+        rejected(f"missing fail-fast opt-in in {job_id}", lambda missing_fail_fast_preview=missing_fail_fast_preview:
+                 validate_phase23_timeout_profile(candidate_ci, missing_fail_fast_preview,
+                                                  candidate_namespace, candidate_release))
+        duplicate_fail_fast = current_waiter.replace(
+            "--fail-fast-required-native", "--fail-fast-required-native --fail-fast-required-native", 1)
+        duplicate_fail_fast_preview = _replace_folded_waiter_run(candidate_preview, job_id, duplicate_fail_fast)
+        rejected(f"duplicate fail-fast opt-in in {job_id}", lambda duplicate_fail_fast_preview=duplicate_fail_fast_preview:
+                 validate_phase23_timeout_profile(candidate_ci, duplicate_fail_fast_preview,
+                                                  candidate_namespace, candidate_release))
+        moved_fail_fast = current_waiter.replace(
+            "--fail-fast-required-native --sha", "--sha", 1) + " --fail-fast-required-native"
+        moved_fail_fast_preview = _replace_folded_waiter_run(candidate_preview, job_id, moved_fail_fast)
+        rejected(f"misplaced fail-fast opt-in in {job_id}", lambda moved_fail_fast_preview=moved_fail_fast_preview:
+                 validate_phase23_timeout_profile(candidate_ci, moved_fail_fast_preview,
+                                                  candidate_namespace, candidate_release))
         dead_branch_waiter = _replace_folded_waiter_run(
             candidate_preview, job_id, f"if false; then {current_waiter}; fi; true")
         rejected(f"unreachable {job_id} exact-head waiter decoy",
