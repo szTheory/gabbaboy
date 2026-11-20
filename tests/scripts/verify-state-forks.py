@@ -973,6 +973,22 @@ def synthetic_path_controls(rev: str, repo: Path, spec: dict) -> int:
             git("-c", "core.hooksPath=" + os.devnull, "commit", "--quiet", "-m", label)
             return git("rev-parse", "HEAD").decode("ascii").strip()
 
+        def commit_metadata_path(parent_rev: str, label: str, path: str, content: bytes) -> str:
+            """Commit one raw path through Git metadata without creating a host filename."""
+            git("read-tree", parent_rev)
+            blob = git("hash-object", "-w", "--stdin", input_bytes=content).strip()
+            if not REVISION.fullmatch(blob.decode("ascii", "strict")):
+                raise ForkError("synthetic path control did not produce a full blob object id")
+            record = b"100644 " + blob + b"\t" + path.encode("utf-8") + b"\0"
+            git("update-index", "-z", "--index-info", input_bytes=record)
+            tree = git("write-tree").decode("ascii", "strict").strip()
+            revision = git("commit-tree", tree, "-p", parent_rev, "-m", label).decode(
+                "ascii", "strict").strip()
+            if (not REVISION.fullmatch(revision)
+                    or git("cat-file", "-t", revision).strip() != b"commit"):
+                raise ForkError("synthetic metadata-path control did not produce a commit object")
+            return revision
+
         base_rev = commit_tree("base manifest inventory")
         validate_manifest_census(base_rev, synthetic_repo, spec)
         base_manifests = immutable_fixture_manifests(base_rev, synthetic_repo)
@@ -1095,17 +1111,18 @@ def synthetic_path_controls(rev: str, repo: Path, spec: dict) -> int:
             raise ForkError("hostile Git selector control modified the decoy repository")
 
         harmless_path = "fixtures/odd\nname/readme.txt"
-        harmless = synthetic_repo.joinpath(*PurePosixPath(harmless_path).parts)
-        harmless.parent.mkdir(parents=True, exist_ok=True)
-        harmless.write_bytes(b"not a manifest\n")
-        harmless_rev = commit_tree("newline non-manifest path")
+        worktree_entries_before = {
+            entry.relative_to(synthetic_repo).as_posix()
+            for entry in synthetic_repo.rglob("*")
+            if entry.relative_to(synthetic_repo).parts[0] != ".git"
+        }
+        harmless_rev = commit_metadata_path(
+            base_rev, "newline non-manifest path", harmless_path, b"not a manifest\n")
         validate_manifest_census(harmless_rev, synthetic_repo, spec)
 
         newline_manifest = "fixtures/odd\nsuite/manifest.json"
-        manifest = synthetic_repo.joinpath(*PurePosixPath(newline_manifest).parts)
-        manifest.parent.mkdir(parents=True, exist_ok=True)
-        manifest.write_bytes(b"{}\n")
-        newline_rev = commit_tree("newline manifest path")
+        newline_rev = commit_metadata_path(
+            harmless_rev, "newline manifest path", newline_manifest, b"{}\n")
         try:
             validate_manifest_census(newline_rev, synthetic_repo, spec)
         except ForkError as exc:
@@ -1116,6 +1133,14 @@ def synthetic_path_controls(rev: str, repo: Path, spec: dict) -> int:
                 ) from exc
         else:
             raise ForkError("newline-bearing manifest was omitted from exact census")
+
+        worktree_entries_after = {
+            entry.relative_to(synthetic_repo).as_posix()
+            for entry in synthetic_repo.rglob("*")
+            if entry.relative_to(synthetic_repo).parts[0] != ".git"
+        }
+        if worktree_entries_after != worktree_entries_before:
+            raise ForkError("newline path control materialized Git metadata paths in the host worktree")
 
         invalid_name = b"invalid-\xff"
         invalid_manifest_bytes = b"fixtures/" + invalid_name + b"/manifest.json"

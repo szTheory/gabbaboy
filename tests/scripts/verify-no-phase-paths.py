@@ -80,7 +80,7 @@ HISTORICAL_V04_EVIDENCE_LOCATIONS = (
     ("sources", 3, "components", 4, "evidence", 0),
 )
 PLANNING_HYGIENE_FILE = "tests/scripts/verify-planning-hygiene.py"
-PLANNING_HYGIENE_SOURCE_SHA256 = "34f6f6b6620cf0b72c08a7aab4686223f8f0ce6ef60ccd6a227f99c018977e76"
+PLANNING_HYGIENE_SOURCE_SHA256 = "c80afba104ff252da2161a710d59b47ebda97e680973f6fb4d3897d179c7b9c8"
 
 # Files the walk must reach, or the scan is vacuous.
 MUST_SCAN = (
@@ -1214,6 +1214,7 @@ def _validate_planning_hygiene_import_use(tree: ast.Module) -> None:
                                     'GIT_AUTHOR_NAME="fixture", GIT_AUTHOR_EMAIL="fixture@example.invalid", '
                                     'GIT_COMMITTER_NAME="fixture", GIT_COMMITTER_EMAIL="fixture@example.invalid")',
         "self_test_v04_gap_assessment": 'env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull, '
+                                         'GIT_CONFIG_NOSYSTEM="1", GIT_NO_REPLACE_OBJECTS="1", '
                                          'GIT_AUTHOR_NAME="fixture", GIT_AUTHOR_EMAIL="fixture@example.invalid", '
                                          'GIT_COMMITTER_NAME="fixture", GIT_COMMITTER_EMAIL="fixture@example.invalid")',
         "self_test_v04_reconciliation": 'env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull, '

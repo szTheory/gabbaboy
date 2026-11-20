@@ -2744,8 +2744,13 @@ def self_test_plan_cap_rev(base: Path, source_repo: Path, source_rev: str | None
 
 
 def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str) -> int:
-    """Run report and handoff mutations through the committed production CLI in an alternate-object fixture."""
+    """Run report and handoff mutations through the committed CLI in an owned-object fixture."""
     controls = 0
+    source_repo = source_repo.resolve()
+    source_root = git_run(source_repo, "rev-parse", "--show-toplevel")
+    if (source_root.returncode != 0
+            or Path(source_root.stdout.decode("utf-8", errors="strict").strip()).resolve() != source_repo):
+        raise SystemExit("planning-hygiene self-test FAIL: fixture source is not the resolved repository root")
     phase_dir = ".planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps"
     report_path = V04_GAP_REPORT_PATH
     summary_path = f"{phase_dir}/24-01-SUMMARY.md"
@@ -2757,6 +2762,7 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
     repo.mkdir()
     env = {k: v for k, v in os.environ.items() if k in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")}
     env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull,
+               GIT_CONFIG_NOSYSTEM="1", GIT_NO_REPLACE_OBJECTS="1",
                GIT_AUTHOR_NAME="fixture", GIT_AUTHOR_EMAIL="fixture@example.invalid",
                GIT_COMMITTER_NAME="fixture", GIT_COMMITTER_EMAIL="fixture@example.invalid")
 
@@ -2773,15 +2779,35 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
         return head or None
 
     git("init", "-q")
-    object_dir_raw = git_run(source_repo, "rev-parse", "--git-path", "objects")
-    if object_dir_raw.returncode != 0:
-        raise SystemExit("planning-hygiene self-test FAIL: could not locate source object store")
-    object_dir = Path(object_dir_raw.stdout.decode("utf-8").strip())
-    if not object_dir.is_absolute():
-        object_dir = source_repo.resolve() / object_dir
+    required_revisions = (source_rev, V04_GAP_INPUT_REV, V04_D209_ARCHIVE_REV)
+    for revision in required_revisions:
+        if not FULL_COMMIT.fullmatch(revision):
+            raise SystemExit("planning-hygiene self-test FAIL: required fixture revision is not a full commit id")
+        source_type = git_run(source_repo, "cat-file", "-t", revision)
+        if source_type.returncode != 0 or source_type.stdout.strip() != b"commit":
+            raise SystemExit(
+                "planning-hygiene self-test FAIL: intended source repository lacks required commit " + revision
+            )
+        if git_run(repo, "cat-file", "-e", revision).returncode == 0:
+            raise SystemExit(
+                "planning-hygiene self-test FAIL: owned fixture already has source commit before transfer " + revision
+            )
+    for revision in required_revisions:
+        fetched = git_run(repo, "fetch", "--no-tags", "--recurse-submodules=no",
+                          str(source_repo), revision)
+        if fetched.returncode != 0:
+            raise SystemExit(
+                "planning-hygiene self-test FAIL: could not transfer required local fixture commit " + revision
+            )
+        resolved = git("rev-parse", "--verify", revision)
+        object_type = git("cat-file", "-t", revision)
+        if resolved != revision or object_type != "commit":
+            raise SystemExit(
+                "planning-hygiene self-test FAIL: transferred fixture object is not the exact unpeeled commit " + revision
+            )
     alternate = repo / ".git/objects/info/alternates"
-    alternate.parent.mkdir(parents=True, exist_ok=True)
-    alternate.write_text(str(object_dir.resolve()) + "\n", encoding="utf-8")
+    if alternate.exists():
+        raise SystemExit("planning-hygiene self-test FAIL: owned fixture retained an alternate-object route")
     fixture_paths = (
         report_path,
         V04_GAP_REQUIREMENTS_PATH,
@@ -2797,7 +2823,19 @@ def self_test_v04_gap_assessment(base: Path, source_repo: Path, source_rev: str)
         raw = commit_file(source_repo, source_rev, source_path)
         if raw is None:
             raise SystemExit(f"planning-hygiene self-test FAIL: source candidate {source_rev} lacks {source_path}")
+        owned = commit_file(repo, source_rev, source_path)
+        if owned != raw:
+            raise SystemExit(
+                f"planning-hygiene self-test FAIL: transferred source object differs for {source_path}"
+            )
         snapshot[source_path] = raw
+    for archive_path in (V04_ARCHIVED_REQUIREMENTS, V04_ARCHIVED_ROADMAP):
+        expected = commit_file(source_repo, V04_D209_ARCHIVE_REV, archive_path)
+        owned = commit_file(repo, V04_D209_ARCHIVE_REV, archive_path)
+        if expected is None or owned != expected:
+            raise SystemExit(
+                f"planning-hygiene self-test FAIL: owned D-209 archive bytes are unavailable for {archive_path}"
+            )
     for rel, content in snapshot.items():
         path = repo / rel
         path.parent.mkdir(parents=True, exist_ok=True)
