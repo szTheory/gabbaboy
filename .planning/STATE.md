@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: D-223 plan awaiting independent check; then authorized autonomous T24–T26, verification, and v0.4 closeout
-last_updated: "2026-11-20T16:31:24.976Z"
-state_head: 2125f3df0e24e0bb3a37c4338c70838af129d9f0
+stopped_at: "Phase 24 T24 D-223 frozen gate stopped: bootstrap denied discussion_boundary_drift; no repin. Owner decision needed before any new recovery scope."
+last_updated: "2026-11-20T17:03:25.135Z"
+state_head: d6c33eca114715d10ca46a92c033fda4327be92c
 progress:
   total_phases: 6
   completed_phases: 5
@@ -14,17 +14,17 @@ milestone_name: Evidence Floor
 last_activity: 2026-11-20
 current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: Phase 24 Plan 24-01 D-223 T24–T26 recovery, automated verification, and v0.4 closeout
+current_plan: Phase 24 Plan 24-01 D-223 T24–T26 recovery — stopped at the frozen gate bootstrap boundary
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone stage:** The v0.4 release remains administratively closed under D-209; Phase 24 D-223 recovery is active under explicit owner authorization for automated verification and D-209-compatible lifecycle closeout after the exact protected merge is reconciled.
+**Milestone stage:** v0.4 remains administratively closed under D-209. Its Phase 24 D-223 recovery is now stopped at the frozen T24 gate after a bootstrap-boundary denial; no phase verification or new v0.4 closeout is authorized until the owner decides whether to open a new bounded discussion.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
-**Phase state:** Phase 24 remains incomplete. Candidate f19 passed fresh reviews but its D-220 protected matrix failed required-native and preview-package-smoke; fixture-repro passed. Candidate 9bab completed D-221 local checks but review returned NO-GO; it was not pushed. No candidate correction, push, or matrix has occurred since D-220. D-223 now governs the sole plan and permits one replacement gate-only bootstrap; preserve the two-candidate maximum, same-head protected merge, and all D-209/D-103/Task 7 boundaries.
-**Next route:** D-223 replaces the failed D-222 loader route. Independently check and commit the sole plan, then continue `$gsd-autonomous --from 24` through T24–T26, automated verification, and the authorized v0.4 closeout after exact merge reconciliation. Do not start v0.5 in this route.
+**Phase state:** Phase 24 remains incomplete at T24. Gate commit d6c33eca114715d10ca46a92c033fda4327be92c passed 28 direct and pre-freeze immutable controls. Its post-freeze bootstrap preflight failed `discussion_boundary_drift` because the pinned D-223 discussion commit tree contains the inherited D-222 gate path; that discussion commit changed no gate bytes. No d223-bootstrap.json, T25/T26 work, push, or CI matrix exists. The D-223 no-repin stop is active; preserve D-209 requirements, archive snapshots, FIXT-01 Pending, failed unreplayed Acid2, Task 7 deferral, and D-103.
+**Next route:** The frozen D-223 gate cannot bootstrap because its pinned discussion commit tree contains the inherited gate path, although that commit did not modify the gate. The D-223 plan forbids a second pin. Owner next chooses whether to authorize a new bounded `$gsd-discuss-phase 24` recovery scope. No T25/T26, push, CI, phase verification, or v0.4 closeout proceeds before that decision.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -56,9 +56,9 @@ The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 veri
 
 ## Owner Handoff
 
-Current stage: D-223 discussion, sole-plan replan, and CI/verification boundary are recorded. The plan awaits independent checking and its planning-boundary commit; no replacement gate, candidate correction, push, or matrix has started.
+Current stage: Phase 24 T24 is stopped after the sole D-223 gate was frozen. Direct and pre-freeze immutable controls passed; frozen bootstrap denied because the discussion-boundary check rejects an inherited gate path. No bootstrap receipt or candidate exists.
 
-Next actor: The orchestrator obtains the independent Phase 24 plan check, commits only the intended D-223 planning boundary, then resumes the already authorized `$gsd-autonomous --from 24` through T24–T26, automated Phase 24 verification, and the D-209-compatible v0.4 lifecycle after merge/reconciliation. No owner action is needed unless a real gate fails or scope changes.
+Next actor: The owner decides whether to authorize a new bounded recovery scope through `$gsd-discuss-phase 24`. Until then, make no further gate, T25/T26, push, CI, phase verification, milestone closeout, or branch-switch changes. Keep D-209 archives and generated .planning/state.json unchanged.
 
 Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-103, D-209 dispositions, v0.4 administrative closeout, required branch protection, and all phase/milestone closure boundaries. Keep this worktree and both automatic-advance flags false.
 ## Accumulated Context
@@ -119,7 +119,7 @@ Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-10
 ## Session
 
 **Last session:** 2026-11-20T13:43:10Z
-**Stopped at:** D-223 plan awaiting independent check; then authorized autonomous T24–T26, verification, and v0.4 closeout
+**Stopped at:** Phase 24 T24 D-223 frozen gate stopped: bootstrap denied discussion_boundary_drift; no repin. Owner decision needed before any new recovery scope.
 **Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md
 
 ### Blockers
