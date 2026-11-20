@@ -392,3 +392,32 @@ The CI/CD efficiency policy is already discoverable from `AGENTS.md` through `.p
 | Product/scope | Keep this in Phase 24's sole plan and preserve D-209/v0.4 closeout dispositions. | Fixes the blocked closeout path without reopening FIXT-01 or v0.5. |
 
 **Deferred:** No matrix topology, required-context, timeout, trigger, cache or concurrency change; no dependency, new CTest identity, broad suite, ROM replay, Task 7, phase closure, milestone closure, v0.5 start or worktree cleanup.
+
+## D-222 — Enforceable promotion gate after the D-221 review stop
+
+**Date:** 2026-11-20
+**Areas discussed:** trusted promotion boundary; exact-head review and CI evidence; bounded repair of the fresh review findings
+
+| Option | Description | Selected |
+|---|---|---|
+| Keep D-221 stopped | Preserve the rejected 9bab candidate and do not attempt to qualify it | |
+| Replan integrated gate | Add an executable, least-privilege promotion guard to the sole Phase 24 plan; fix the two direct review defects and preserve existing contexts and candidate cap | ✓ |
+
+**Owner's choice:** Replan integrated gate.
+**Notes:** The owner authorized updating and independently checking the sole Phase 24 plan. The previously authorized GSD Autonomous route continues only within the expanded boundary. No push or matrix until clean fresh code/security reviews on the same SHA/tree; no live GitHub protection/ruleset changes, GitHub App creation, or new credentials under this authorization.
+
+### Cross-role synthesis
+
+| Lens | Recommendation | Trade-off |
+|---|---|---|
+| Security / trust boundary | Load a local promotion guard from the immutable D-222 planning commit, not the candidate's editable copy. Bind review receipts, exact SHA/tree, current protected contexts, and candidate history. Stop if reviewers require server-side enforcement. | Controls the authorized GSD actor's path and prevents accidental promotion; it cannot stop a separate manual bypass or malicious PR that rewrites its workflow. |
+| GitHub Actions / DevOps | Preserve the three required contexts and all existing jobs. Avoid `workflow_run` and `pull_request_target` with PR code; GitHub warns these privileged triggers can expose secrets and write tokens. | A PR workflow can run a gate early but cannot be its independent trust root if the PR can edit that workflow. |
+| Test engineering | Correct duplicate-job fixtures with valid records, distinct IDs, and incremented `total_count`; prove the named duplicate guard is reached. Convert `TimeoutExpired` to transient uncertainty and stop by the existing waiter deadline. | Reuses existing self-test and CTest identities, no dependency, no timeout extension. |
+| Operations / CI efficiency | Run cheap identity, syntax, and causal checks before focused suites; read current protection and matrix results before any costly hosted run. Measure actual job/wait/headroom if a matrix is reached. | Adds a local preflight step but avoids spending runner time on an unpromotable candidate. |
+| Maintainability | Prefer the standard library and existing policy/control seams; keep the old candidate/review/matrix records immutable. | The guard requires explicit updates when the Phase 24 promotion contract changes, but avoids a general workflow framework or dependency. |
+
+Primary references: [GitHub secure-use guidance](https://docs.github.com/en/actions/reference/security/secure-use), [branch-protection API](https://docs.github.com/en/rest/branches/branch-protection), and [ruleset available rules](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets). These show the risk of privileged workflows with untrusted PR content and the external nature of app-bound checks/ruleset gates.
+
+**Retained limits:** One existing Phase 24 plan; no external protection/app/credential changes; preserve three required contexts and at most two changed protected matrix candidates. Candidate two requires a concrete in-scope first-matrix failure and causal fix. Keep FIXT-01 Pending, the Acid2 mismatch failed and unreplayed, D-103, Task 7, all ROM/fixture exclusions, no broad suite, and separate phase/milestone closure.
+
+**Next route:** `$gsd-plan-phase 24` updates and independently checks the sole plan. Then continue `$gsd-autonomous --from 24` only if the repo-only guard can be independently reviewed without an unresolved security finding. If the stronger external gate is required, stop and ask before changing GitHub settings or creating an app.
