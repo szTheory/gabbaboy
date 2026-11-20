@@ -22,6 +22,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import types
 import unittest
 from unittest import mock
 from dataclasses import dataclass
@@ -31,13 +32,17 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 PLAN_PATH = ".planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md"
 CLOSEOUT_PATH = ".planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md"
+DISCUSSION_PATH = ".planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-DISCUSSION-LOG.md"
 GATE_PATH = ".github/scripts/phase24-promotion-gate.py"
-PLAN_REV = "1e4be837d936e9540714b93df254accc473babb4"
-PLAN_PARENT = "e264687b7548d2ef02467eb72d46de0030e716ca"
-PLAN_TREE = "4a7ff6e6cee70209e9b0c514ea79d61845c603cd"
-PLAN_BLOB = "587fd0ee9af4271ad43479888ae45e57dad30a5a"
-PLAN_SHA256 = "dce2e6ff7dc548437ea16a830fa394a3f70908626c72dd78da0d7d2d0db8a4b6"
-DISCUSSION_REV = "3ef551f7176b016c36302acb003701f105f58081"
+PLAN_REV = "06d2e06cef78c8802fd4208198dabf571115bb55"
+PLAN_PARENT = "2125f3df0e24e0bb3a37c4338c70838af129d9f0"
+PLAN_TREE = "4e4e722a87bdac3be253fc9048ca060aefd8938f"
+PLAN_BLOB = "0ffd71880d55e1d76a517c07a86b8e76f4702260"
+PLAN_SHA256 = "ae550ca58336bb299290bf8f883a7f47ff089798a81c60f43f1c2ca8c24e3550"
+DISCUSSION_REV = "06d2e06cef78c8802fd4208198dabf571115bb55"
+DISCUSSION_TREE = "4e4e722a87bdac3be253fc9048ca060aefd8938f"
+DISCUSSION_BLOB = "8cb3ce6c54f24e67e2ce6d23c857309eb42b05f9"
+DISCUSSION_SHA256 = "9c959658488730bdfa219fc48d1adcd1aa2bec44a985f1f8d9626de5e80ad5b5"
 D209_REV = "96d502d4733ac54aa8bf7fbfd7813065143771dc"
 D220_SHA = "f19d5ae2f5819d18074a68e1e80d959dc31b1302"
 D221_SHA = "9bab99b6af2462291d8481ce5da14fa72c1777e4"
@@ -422,8 +427,12 @@ def validate_plan_anchor(git: Git, *, env: Mapping[str, str] | None = None) -> d
         deny("planning_hygiene_pin_drift")
     if not git.is_ancestor(D221_EXEC_REV, rev):
         deny("d221_boundary_not_ancestor")
-    if git.object_type(DISCUSSION_REV) != "commit" or git.exists("cat-file", "-e", f"{DISCUSSION_REV}:{GATE_PATH}"):
+    if (git.object_type(DISCUSSION_REV) != "commit" or git.tree(DISCUSSION_REV) != DISCUSSION_TREE
+            or git.text("rev-parse", f"{DISCUSSION_REV}:{DISCUSSION_PATH}") != DISCUSSION_BLOB
+            or digest_bytes(git.blob(DISCUSSION_REV, DISCUSSION_PATH)) != DISCUSSION_SHA256
+            or git.exists("cat-file", "-e", f"{DISCUSSION_REV}:{GATE_PATH}")):
         deny("discussion_boundary_drift")
+    loader_sha256 = digest_bytes(extract_plan_loader(raw))
     return {
         "rev": rev,
         "parent": PLAN_PARENT,
@@ -433,6 +442,10 @@ def validate_plan_anchor(git: Git, *, env: Mapping[str, str] | None = None) -> d
         "source_allowlist": list(source_scope),
         "correction_allowlist": list(corrections),
         "discussion_rev": DISCUSSION_REV,
+        "discussion_tree": DISCUSSION_TREE,
+        "discussion_blob": DISCUSSION_BLOB,
+        "discussion_sha256": DISCUSSION_SHA256,
+        "loader_sha256": loader_sha256,
     }
 
 
@@ -520,15 +533,19 @@ def _verify_current_tree_clean(git: Git, expected_head: str) -> None:
 def _verify_bootstrap_source(git: Git, receipt: Mapping[str, Any], *, env: Mapping[str, str] | None = None) -> dict[str, Any]:
     current = os.environ if env is None else env
     plan = exact_keys(receipt.get("plan"), {"rev", "parent", "tree", "blob", "sha256", "path"}, "bootstrap.plan")
+    discussion = exact_keys(receipt.get("discussion"), {"rev", "tree", "blob", "sha256", "path"}, "bootstrap.discussion")
+    loader = exact_keys(receipt.get("loader"), {"sha256"}, "bootstrap.loader")
     gate = exact_keys(receipt.get("gate"), {"rev", "parent", "tree", "blob", "sha256"}, "bootstrap.gate")
     trusted = exact_keys(receipt.get("trusted_handoff"), {"authority", "plan_rev", "plan_sha256", "gate_rev", "gate_sha256"}, "bootstrap.trusted_handoff")
     root_receipt = exact_keys(receipt.get("repository"), {"root", "git_dir", "branch"}, "bootstrap.repository")
     for label, value in (("plan.rev", plan["rev"]), ("plan.parent", plan["parent"]), ("plan.tree", plan["tree"]), ("plan.blob", plan["blob"]), ("gate.rev", gate["rev"]), ("gate.parent", gate["parent"]), ("gate.tree", gate["tree"]), ("gate.blob", gate["blob"])):
         require_sha(value, label)
-    for label, value in (("plan.sha256", plan["sha256"]), ("gate.sha256", gate["sha256"]), ("trusted.plan_sha256", trusted["plan_sha256"]), ("trusted.gate_sha256", trusted["gate_sha256"])):
+    for label, value in (("plan.sha256", plan["sha256"]), ("discussion.sha256", discussion["sha256"]), ("loader.sha256", loader["sha256"]), ("gate.sha256", gate["sha256"]), ("trusted.plan_sha256", trusted["plan_sha256"]), ("trusted.gate_sha256", trusted["gate_sha256"])):
         require_digest(value, label)
     if plan["rev"] != PLAN_REV or plan["parent"] != PLAN_PARENT or plan["tree"] != PLAN_TREE or plan["blob"] != PLAN_BLOB or plan["sha256"] != PLAN_SHA256 or plan["path"] != PLAN_PATH:
         deny("bootstrap_plan_receipt_mismatch")
+    if discussion != {"rev": DISCUSSION_REV, "tree": DISCUSSION_TREE, "blob": DISCUSSION_BLOB, "sha256": DISCUSSION_SHA256, "path": DISCUSSION_PATH}:
+        deny("bootstrap_discussion_receipt_mismatch")
     gate_rev = current.get("PHASE24_D222_GATE_REV", "")
     gate_digest = current.get("PHASE24_D222_GATE_SHA256", "")
     if not valid_sha(gate_rev) or not valid_sha256(gate_digest):
@@ -544,6 +561,10 @@ def _verify_bootstrap_source(git: Git, receipt: Mapping[str, Any], *, env: Mappi
     }:
         deny("untrusted_bootstrap_handoff")
     validate_plan_anchor(git, env=current)
+    plan_bytes = git.blob(PLAN_REV, PLAN_PATH)
+    expected_loader_digest = digest_bytes(extract_plan_loader(plan_bytes))
+    if loader["sha256"] != expected_loader_digest:
+        deny("bootstrap_loader_digest_mismatch")
     if git.object_type(PLAN_REV) != "commit" or git.tree(PLAN_REV) != PLAN_TREE or git.parents(PLAN_REV) != [PLAN_PARENT]:
         deny("plan_object_mismatch")
     if digest_bytes(git.blob(PLAN_REV, PLAN_PATH)) != PLAN_SHA256 or git.text("rev-parse", f"{PLAN_REV}:{PLAN_PATH}") != PLAN_BLOB:
@@ -559,7 +580,7 @@ def _verify_bootstrap_source(git: Git, receipt: Mapping[str, Any], *, env: Mappi
     gate_bytes = git.blob(gate_rev, GATE_PATH)
     if git.text("rev-parse", f"{gate_rev}:{GATE_PATH}") != entry.new_oid or digest_bytes(gate_bytes) != gate_digest or entry.new_oid != gate["blob"]:
         deny("gate_blob_mismatch")
-    _verify_executing_bytes(gate_bytes, globals().get("__phase24_gate_bytes__"))
+    _verify_executing_bytes(gate_bytes, executing_source_bytes())
     root, git_dir, branch = current_root(git)
     if root_receipt != {"root": root, "git_dir": git_dir, "branch": branch}:
         deny("bootstrap_repository_mismatch")
@@ -581,12 +602,38 @@ def _verify_bootstrap_source(git: Git, receipt: Mapping[str, Any], *, env: Mappi
         "planning_hygiene_sha256": PLANNING_HYGIENE_SHA256,
     }:
         deny("bootstrap_historical_pins_mismatch")
-    return {"plan": dict(plan), "gate": dict(gate), "repository": dict(root_receipt), "scope": dict(scopes)}
+    return {"plan": dict(plan), "discussion": dict(discussion), "loader": dict(loader), "gate": dict(gate), "repository": dict(root_receipt), "scope": dict(scopes)}
 
 
 def _verify_executing_bytes(original_bytes: bytes, executing_bytes: Any) -> None:
     if type(original_bytes) is not bytes or type(executing_bytes) is not bytes or not hmac.compare_digest(original_bytes, executing_bytes):
         deny("executing_gate_bytes_mismatch")
+
+
+def _registered_module_bytes(module_name: str, namespace: Mapping[str, Any]) -> bytes:
+    module = sys.modules.get(module_name)
+    if module is None or module.__dict__ is not namespace:
+        deny("executing_module_not_registered")
+    source = namespace.get("__phase24_gate_bytes__")
+    if type(source) is not bytes:
+        deny("immutable_gate_bytes_missing")
+    return source
+
+
+def executing_source_bytes() -> bytes:
+    module = sys.modules.get(__name__)
+    if module is None or module.__dict__ is not globals():
+        deny("executing_module_not_registered")
+    if __name__ != "__main__":
+        return _registered_module_bytes(__name__, globals())
+    try:
+        source = Path(__file__).read_bytes()
+    except (OSError, TypeError, NameError):
+        deny("direct_gate_source_unreadable")
+    injected = globals().get("__phase24_gate_bytes__")
+    if injected is not None:
+        _verify_executing_bytes(source, injected)
+    return source
 
 
 def extract_plan_loader(plan_bytes: bytes) -> bytes:
@@ -625,13 +672,13 @@ def verify_bootstrap(root: Path, bootstrap_path: str) -> dict[str, Any]:
     git = Git(root)
     _check_ignored(git, bootstrap_path)
     _, receipt, _ = _load_receipt(root, bootstrap_path)
-    exact_keys(receipt, {"schema_version", "kind", "plan", "gate", "repository", "scope", "history_pins", "trusted_handoff"}, "bootstrap")
+    exact_keys(receipt, {"schema_version", "kind", "plan", "discussion", "loader", "gate", "repository", "scope", "history_pins", "trusted_handoff"}, "bootstrap")
     _require_schema_version(receipt, "bootstrap")
     if receipt.get("kind") != "phase24-d222-bootstrap":
         deny("bootstrap_kind")
     result = _verify_bootstrap_source(git, receipt)
     _verify_current_tree_clean(git, str(result["gate"]["rev"]))
-    return {"decision": "ALLOW", "mode": "verify-bootstrap", "plan_rev": PLAN_REV, "gate_rev": result["gate"]["rev"], "gate_sha256": result["gate"]["sha256"]}
+    return {"decision": "ALLOW", "mode": "verify-bootstrap", "plan_rev": PLAN_REV, "plan_sha256": PLAN_SHA256, "loader_sha256": result["loader"]["sha256"], "discussion_sha256": result["discussion"]["sha256"], "gate_rev": result["gate"]["rev"], "gate_sha256": result["gate"]["sha256"]}
 
 
 def _verify_candidate_scope(git: Git, bootstrap: Mapping[str, Any], candidate_sha: str, *, require_checkout: bool = True) -> dict[str, Any]:
@@ -1094,7 +1141,7 @@ def _validate_test_result(root: Path, item: Any, interpreter_path: str, candidat
     return {"name": name, "command": command, "interpreter": test["interpreter"], "transcript_path": transcript_path, "transcript_sha256": test["transcript_sha256"], "exit_code": 0}
 
 
-def _validate_qualification(root: Path, manifest: Mapping[str, Any], provenance: Mapping[str, Any]) -> dict[str, Any]:
+def _validate_qualification(root: Path, manifest: Mapping[str, Any], provenance: Mapping[str, Any], bootstrap: Mapping[str, Any]) -> dict[str, Any]:
     _, qualification, qualification_raw = _manifest_receipt(root, manifest, "qualification")
     exact_keys(qualification, QUALIFICATION_KEYS, "qualification")
     _require_schema_version(qualification, "qualification")
@@ -1150,8 +1197,15 @@ def _validate_qualification(root: Path, manifest: Mapping[str, Any], provenance:
     effects = qualification["fixture_effects"]
     if type(effects) is not list or effects:
         deny("qualification_fixture_effect")
-    pins = exact_keys(qualification["source_pins"], {"d221_exec_rev", "d209_rev", "requirements_blob", "roadmap_blob", "state_forks_blob", "planning_hygiene_sha256", "gate_rev", "gate_sha256"}, "qualification.source_pins")
+    pins = exact_keys(qualification["source_pins"], {"plan_rev", "plan_sha256", "discussion_rev", "discussion_tree", "discussion_blob", "discussion_sha256", "loader_sha256", "d221_exec_rev", "d209_rev", "requirements_blob", "roadmap_blob", "state_forks_blob", "planning_hygiene_sha256", "gate_rev", "gate_sha256"}, "qualification.source_pins")
     if pins != {
+        "plan_rev": PLAN_REV,
+        "plan_sha256": PLAN_SHA256,
+        "discussion_rev": DISCUSSION_REV,
+        "discussion_tree": DISCUSSION_TREE,
+        "discussion_blob": DISCUSSION_BLOB,
+        "discussion_sha256": DISCUSSION_SHA256,
+        "loader_sha256": bootstrap["loader"]["sha256"],
         "d221_exec_rev": D221_EXEC_REV,
         "d209_rev": D209_REV,
         "requirements_blob": REQUIREMENTS_BLOB,
@@ -1241,7 +1295,7 @@ def _load_manifest(root: Path, git: Git, bootstrap: Mapping[str, Any], candidate
         if type(cause["causal_fix_paths"]) is not list or not set(cause["causal_fix_paths"]).issubset(changed):
             deny("candidate_two_fix_not_changed_from_first")
     provenance = _validate_provenance(root, manifest)
-    qualification = _validate_qualification(root, manifest, provenance)
+    qualification = _validate_qualification(root, manifest, provenance, bootstrap)
     code_review = _validate_review(root, manifest, provenance, "gsd-code-reviewer", "CLEAN")
     security_review = _validate_review(root, manifest, provenance, "gsd-security-auditor", "SECURED")
     if code_review["agent"] == security_review["agent"]:
@@ -1975,7 +2029,7 @@ def _run_live(root: Path, args: argparse.Namespace, runner: CommandRunner | None
     bootstrap_path = _receipt_path_under_build(bootstrap_path, "bootstrap receipt")
     _check_ignored(git, bootstrap_path)
     _, bootstrap_receipt, _ = _load_receipt(root, bootstrap_path)
-    exact_keys(bootstrap_receipt, {"schema_version", "kind", "plan", "gate", "repository", "scope", "history_pins", "trusted_handoff"}, "bootstrap")
+    exact_keys(bootstrap_receipt, {"schema_version", "kind", "plan", "discussion", "loader", "gate", "repository", "scope", "history_pins", "trusted_handoff"}, "bootstrap")
     _require_schema_version(bootstrap_receipt, "bootstrap")
     if bootstrap_receipt.get("kind") != "phase24-d222-bootstrap":
         deny("bootstrap_kind")
@@ -2259,6 +2313,31 @@ def _test_protection() -> dict[str, Any]:
 
 
 class PromotionGateContractTests(unittest.TestCase):
+    def test_executing_module_is_registered_before_test_patching(self) -> None:
+        current_module = sys.modules.get(__name__)
+        self.assertTrue(current_module is not None, "executing gate module must be registered before exec")
+        self.assertTrue(current_module.__dict__ is globals(), "module registration must own the executing globals")
+        with mock.patch(__name__ + "._verify_origin") as patched:
+            self.assertIs(sys.modules[__name__]._verify_origin, patched)
+
+    def test_immutable_source_uses_registered_bytes_without_opening_candidate_copy(self) -> None:
+        module_name = "_phase24_immutable_source_control"
+        module = types.ModuleType(module_name)
+        module.__file__ = "<immutable-phase24-gate>"
+        module.__phase24_gate_bytes__ = b"original pinned source bytes"
+        sys.modules[module_name] = module
+        try:
+            with mock.patch.object(Path, "read_bytes", side_effect=AssertionError("candidate source read")):
+                self.assertEqual(_registered_module_bytes(module_name, module.__dict__), b"original pinned source bytes")
+            candidate_namespace = {"__phase24_gate_bytes__": b"candidate checkout bytes"}
+            with self.assertRaises(GateError):
+                _registered_module_bytes(module_name, candidate_namespace)
+            del module.__phase24_gate_bytes__
+            with self.assertRaises(GateError):
+                _registered_module_bytes(module_name, module.__dict__)
+        finally:
+            sys.modules.pop(module_name, None)
+
     def _run_live_fixture(self, action: str, candidate_number: int = 1, fault: str | None = None) -> tuple[dict[str, Any] | None, GateError | None, _RecordingRunner]:
         root = Path.cwd().resolve()
         first_sha, first_tree = "a" * 40, "b" * 40
@@ -2357,7 +2436,7 @@ class PromotionGateContractTests(unittest.TestCase):
             responses[f"repos/{EXPECTED_REPO}/commits/{merge_sha}"] = {"sha": merge_sha, "tree": {"sha": candidate_tree}, "parents": [{"sha": candidate_sha}]}
             responses[f"repos/{EXPECTED_REPO}/commits/{EXPECTED_BASE}"] = {"sha": merge_sha}
         runner = _RecordingRunner(responses, auth_ready=(fault != "auth_missing"))
-        bootstrap_receipt = {"schema_version": 1, "kind": "phase24-d222-bootstrap", "plan": {}, "gate": {}, "repository": {}, "scope": {}, "history_pins": {}, "trusted_handoff": {}}
+        bootstrap_receipt = {"schema_version": 1, "kind": "phase24-d222-bootstrap", "plan": {}, "discussion": {}, "loader": {}, "gate": {}, "repository": {}, "scope": {}, "history_pins": {}, "trusted_handoff": {}}
         args = argparse.Namespace(bootstrap="build/phase24/test-bootstrap.json", candidate=candidate_sha, evidence="build/phase24/test-manifest.json", mode=action)
         action_log: list[str] = []
 
@@ -2491,10 +2570,12 @@ class PromotionGateContractTests(unittest.TestCase):
     def test_strict_manifest_receipts_and_candidate_scope_run_before_actions(self) -> None:
         candidate_sha, candidate_tree = "a" * 40, "b" * 40
         gate_rev, gate_tree = "c" * 40, "d" * 40
-        gate_bytes = Path(__file__).read_bytes()
+        gate_bytes = executing_source_bytes()
         gate_blob = hashlib.sha1(b"blob " + str(len(gate_bytes)).encode("ascii") + b"\0" + gate_bytes).hexdigest()
         gate_sha = digest_bytes(gate_bytes)
         plan_bytes = Git(Path.cwd()).blob(PLAN_REV, PLAN_PATH)
+        discussion_bytes = Git(Path.cwd()).blob(DISCUSSION_REV, DISCUSSION_PATH)
+        loader_sha256 = digest_bytes(extract_plan_loader(plan_bytes))
         with tempfile.TemporaryDirectory(prefix="phase24-manifest-") as temp:
             root = Path(temp).resolve()
             (root / "build/phase24").mkdir(parents=True)
@@ -2540,6 +2621,8 @@ class PromotionGateContractTests(unittest.TestCase):
                         return PLAN_BLOB
                     if len(args) == 2 and args[0] == "rev-parse" and ":" in args[1]:
                         rev, path = args[1].split(":", 1)
+                        if rev == DISCUSSION_REV and path == DISCUSSION_PATH:
+                            return DISCUSSION_BLOB
                         if path in HISTORICAL_PATHS:
                             return HISTORICAL_PATHS[path]
                         if path in PLAN_SOURCE_PATHS:
@@ -2568,6 +2651,8 @@ class PromotionGateContractTests(unittest.TestCase):
                 def blob(self, rev: str, path: str) -> bytes:
                     if rev == PLAN_REV and path == PLAN_PATH:
                         return plan_bytes
+                    if rev == DISCUSSION_REV and path == DISCUSSION_PATH:
+                        return discussion_bytes
                     if rev == gate_rev and path == GATE_PATH:
                         return gate_bytes
                     if path == "tests/scripts/verify-planning-hygiene.py":
@@ -2639,7 +2724,7 @@ class PromotionGateContractTests(unittest.TestCase):
                 "inventory": {"transcript_path": inventory_relative, "transcript_sha256": digest_bytes(inventory_body), "exit_code": 0, "cases": 153, "runner_cases": 0, "build_cases": 0, "configure_cases": 0},
                 "ctest_inventory": {"command": _expected_inventory_command(), "transcript_path": ctest_relative, "transcript_sha256": digest_bytes(ctest_body), "exit_code": 0, "test_count": len(EXPECTED_TESTS), "runner_cases": 0, "build_cases": 0, "configure_cases": 0},
                 "fixture_effects": [],
-                "source_pins": {"d221_exec_rev": D221_EXEC_REV, "d209_rev": D209_REV, "requirements_blob": REQUIREMENTS_BLOB, "roadmap_blob": ROADMAP_BLOB, "state_forks_blob": STATE_FORKS_BLOB, "planning_hygiene_sha256": PLANNING_HYGIENE_SHA256, "gate_rev": gate_rev, "gate_sha256": gate_sha},
+                "source_pins": {"plan_rev": PLAN_REV, "plan_sha256": PLAN_SHA256, "discussion_rev": DISCUSSION_REV, "discussion_tree": DISCUSSION_TREE, "discussion_blob": DISCUSSION_BLOB, "discussion_sha256": DISCUSSION_SHA256, "loader_sha256": loader_sha256, "d221_exec_rev": D221_EXEC_REV, "d209_rev": D209_REV, "requirements_blob": REQUIREMENTS_BLOB, "roadmap_blob": ROADMAP_BLOB, "state_forks_blob": STATE_FORKS_BLOB, "planning_hygiene_sha256": PLANNING_HYGIENE_SHA256, "gate_rev": gate_rev, "gate_sha256": gate_sha},
             }
             qualification_raw = canonical_json(qualification) + b"\n"
             qualification_path = "build/phase24/qualification.json"
@@ -2678,7 +2763,12 @@ class PromotionGateContractTests(unittest.TestCase):
             manifest_raw = canonical_json(manifest) + b"\n"
             manifest_path = "build/phase24/manifest.json"
             (root / manifest_path).write_bytes(manifest_raw)
-            bootstrap = {"gate": {"rev": gate_rev, "blob": gate_blob, "sha256": gate_sha}, "plan": {"rev": PLAN_REV}}
+            bootstrap = {
+                "gate": {"rev": gate_rev, "blob": gate_blob, "sha256": gate_sha},
+                "plan": {"rev": PLAN_REV, "sha256": PLAN_SHA256},
+                "discussion": {"rev": DISCUSSION_REV, "tree": DISCUSSION_TREE, "blob": DISCUSSION_BLOB, "sha256": DISCUSSION_SHA256},
+                "loader": {"sha256": loader_sha256},
+            }
             env = {"PHASE24_D222_EVIDENCE": manifest_path, "PHASE24_D222_EVIDENCE_SHA256": digest_bytes(manifest_raw), "PHASE24_D222_REV": candidate_sha}
             runner = _RecordingRunner()
             loaded, candidate, provenance_loaded, _ = _load_manifest(root, test_git, bootstrap, candidate_sha, manifest_path, env)
@@ -2710,6 +2800,8 @@ class PromotionGateContractTests(unittest.TestCase):
             bootstrap_receipt = {
                 "schema_version": 1, "kind": "phase24-d222-bootstrap",
                 "plan": {"rev": PLAN_REV, "parent": PLAN_PARENT, "tree": PLAN_TREE, "blob": PLAN_BLOB, "sha256": PLAN_SHA256, "path": PLAN_PATH},
+                "discussion": {"rev": DISCUSSION_REV, "tree": DISCUSSION_TREE, "blob": DISCUSSION_BLOB, "sha256": DISCUSSION_SHA256, "path": DISCUSSION_PATH},
+                "loader": {"sha256": loader_sha256},
                 "gate": {"rev": gate_rev, "parent": PLAN_REV, "tree": gate_tree, "blob": gate_blob, "sha256": gate_sha},
                 "repository": {"root": str(root), "git_dir": str(root / ".git"), "branch": "gsd/phase-24-fixture"},
                 "scope": {"source_allowlist": list(source_scope), "correction_allowlist": list(correction_scope)},
@@ -3038,6 +3130,8 @@ class PromotionGateContractTests(unittest.TestCase):
         gate_rev, gate_sha = "a" * 40, "b" * 64
         bootstrap = {
             "plan": {"rev": PLAN_REV, "parent": PLAN_PARENT, "tree": PLAN_TREE, "blob": PLAN_BLOB, "sha256": PLAN_SHA256, "path": PLAN_PATH},
+            "discussion": {"rev": DISCUSSION_REV, "tree": DISCUSSION_TREE, "blob": DISCUSSION_BLOB, "sha256": DISCUSSION_SHA256, "path": DISCUSSION_PATH},
+            "loader": {"sha256": digest_bytes(extract_plan_loader(Git(Path.cwd()).blob(PLAN_REV, PLAN_PATH)))},
             "gate": {"rev": gate_rev, "parent": PLAN_REV, "tree": "c" * 40, "blob": "d" * 40, "sha256": gate_sha},
             "trusted_handoff": {"authority": "gsd-executor", "plan_rev": PLAN_REV, "plan_sha256": PLAN_SHA256, "gate_rev": gate_rev, "gate_sha256": gate_sha},
             "repository": {"root": str(Path.cwd()), "git_dir": str(Path.cwd() / ".git"), "branch": "gsd/phase-24-test"},
@@ -3247,6 +3341,7 @@ def _run_self_test() -> int:
     global _SELF_TEST_ACTIVE
     _SELF_TEST_ACTIVE = True
     loaded = globals().get("__phase24_gate_bytes__")
+    executing_source_bytes()
     if loaded is not None:
         source = Path.cwd()
         git = Git(source)
