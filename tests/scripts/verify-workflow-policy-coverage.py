@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import types
 from pathlib import Path
 
 if not __debug__ or sys.flags.optimize:
@@ -96,6 +97,10 @@ GROUP_BY_WORKFLOW = {
 }
 EXPECTED_TEST_NAMES = set(GROUPS.values()) | {"workflow_policy_coverage", "workflow_policy_coverage_controls"}
 POLICY_TEST_NAMES = EXPECTED_TEST_NAMES | {"workflow_policy_check"}
+PHASE24_GATE_PATH = ".github/scripts/phase24-promotion-gate.py"
+PHASE24_BOOTSTRAP_PATH = "build/phase24/d224-bootstrap.json"
+PHASE24_GATE_REV_RE = re.compile(r"^[0-9a-f]{40}$")
+PHASE24_GATE_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 ALL_PLATFORMS = ("posix", "windows")
 POSIX_ONLY = ("posix",)
 PREVIEW_BUDGET_JOBS = (
@@ -3323,20 +3328,143 @@ def _check(root: Path, build_dir: Path, revision: str) -> None:
     print(f"PASS: workflow policy coverage controls={controls} groups={len(GROUPS)} platform={platform}")
 
 
+def _phase24_object_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            reject(f"Phase 24 bootstrap contains duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _phase24_pinned_gate_source(root: Path, gate_rev: str, gate_sha256: str,
+                                candidate_copy: bytes | None = None) -> bytes:
+    """Load the already-frozen gate by original Git object and bind both local anchors."""
+    if not PHASE24_GATE_REV_RE.fullmatch(gate_rev):
+        reject("Phase 24 gate revision is not a full lowercase commit SHA")
+    if not PHASE24_GATE_DIGEST_RE.fullmatch(gate_sha256):
+        reject("Phase 24 gate digest is not a full lowercase SHA-256")
+
+    receipt = root / PHASE24_BOOTSTRAP_PATH
+    for path in (root / "build", root / "build/phase24", receipt):
+        if path.is_symlink():
+            reject("Phase 24 bootstrap path contains a symlink")
+    if not receipt.is_file() or receipt.stat().st_size > 64 * 1024:
+        reject("Phase 24 bootstrap receipt is missing or oversized")
+    try:
+        bootstrap = json.loads(receipt.read_bytes().decode("utf-8", "strict"),
+                               object_pairs_hook=_phase24_object_pairs)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        reject(f"Phase 24 bootstrap receipt is malformed: {error}")
+    if (type(bootstrap) is not dict or bootstrap.get("kind") != "phase24-d224-bootstrap"
+            or type(bootstrap.get("schema_version")) is not int
+            or bootstrap.get("schema_version") != 1):
+        reject("Phase 24 bootstrap receipt has the wrong identity")
+    gate = bootstrap.get("gate")
+    handoff = bootstrap.get("trusted_handoff")
+    plan = bootstrap.get("plan")
+    if (type(gate) is not dict or type(handoff) is not dict or type(plan) is not dict
+            or gate.get("rev") != gate_rev or gate.get("sha256") != gate_sha256
+            or handoff.get("gate_rev") != gate_rev or handoff.get("gate_sha256") != gate_sha256
+            or handoff.get("plan_rev") != plan.get("rev")
+            or handoff.get("plan_sha256") != plan.get("sha256")
+            or gate.get("parent") != plan.get("rev")):
+        reject("Phase 24 gate pin differs from its trusted bootstrap anchor")
+
+    resolved = resolve_commit(root, gate_rev)
+    if resolved != gate_rev:
+        reject("Phase 24 gate anchor does not name the exact original commit")
+    parent_line = git_read(root, "rev-list", "--parents", "-n", "1", gate_rev)
+    try:
+        commit_and_parents = parent_line.stdout.decode("ascii", "strict").strip().split()
+    except UnicodeDecodeError:
+        reject("Phase 24 gate parent record is malformed")
+    if parent_line.returncode != 0 or commit_and_parents != [gate_rev, gate.get("parent")]:
+        reject("Phase 24 gate anchor is not the bootstrapped single-parent child")
+
+    source = git_text(root, gate_rev, PHASE24_GATE_PATH)
+    if hashlib.sha256(source).hexdigest() != gate_sha256:
+        reject("Phase 24 immutable gate bytes do not match the trusted digest")
+    if candidate_copy is None:
+        checkout_gate = root / PHASE24_GATE_PATH
+        if checkout_gate.is_symlink() or not checkout_gate.is_file():
+            reject("Phase 24 candidate gate copy is missing or redirected")
+        candidate_copy = checkout_gate.read_bytes()
+    if candidate_copy != source:
+        reject("Phase 24 candidate gate copy differs from the immutable anchor")
+    return source
+
+
+def _phase24_promotion_controls(root: Path, gate_rev: str, gate_sha256: str) -> None:
+    source = _phase24_pinned_gate_source(root, gate_rev, gate_sha256)
+    controls = 1
+    for label, bad_rev, bad_digest, candidate_copy in (
+        ("changed revision anchor", "0" * 40, gate_sha256, source),
+        ("changed digest anchor", gate_rev, "0" * 64, source),
+        ("candidate-copy substitution", gate_rev, gate_sha256, source + b"\n"),
+    ):
+        try:
+            _phase24_pinned_gate_source(root, bad_rev, bad_digest, candidate_copy)
+        except CoverageError:
+            controls += 1
+        else:
+            reject(f"Phase 24 promotion control accepted {label}")
+
+    module_name = "_phase24_coverage_gate_" + gate_sha256[:16]
+    if module_name in sys.modules:
+        reject("Phase 24 immutable test module identity is already registered")
+    module = types.ModuleType(module_name)
+    module.__file__ = "<immutable-phase24-gate>"
+    module.__package__ = ""
+    module.__phase24_gate_bytes__ = source
+    sys.modules[module_name] = module
+    env_names = ("PHASE24_D222_GATE_REV", "PHASE24_D222_GATE_SHA256")
+    old_env = {name: os.environ.get(name) for name in env_names}
+    try:
+        os.environ[env_names[0]] = gate_rev
+        os.environ[env_names[1]] = gate_sha256
+        exec(compile(source, module.__file__, "exec"), module.__dict__)
+        if module.__dict__ is not vars(sys.modules[module_name]):
+            reject("Phase 24 gate did not execute in its registered module")
+        if module.main(["--self-test"]) != 0:
+            reject("Phase 24 immutable promotion gate self-test failed")
+    finally:
+        for name, value in old_env.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+        sys.modules.pop(module_name, None)
+    print(f"PASS: phase24-promotion-controls gate={gate_sha256} controls={controls}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="check the frozen IDs and configured CTest listing")
     mode.add_argument("--self-test", action="store_true", help="prove omission, duplication and registration refusals")
+    mode.add_argument("--phase24-promotion-controls", action="store_true",
+                      help="run direct controls against the bootstrapped immutable Phase 24 gate")
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--build-dir", type=Path, default=None)
     parser.add_argument("--rev", default="HEAD", help="immutable candidate commit whose source and registrations are checked")
+    parser.add_argument("--gate-rev", default=None)
+    parser.add_argument("--gate-sha256", default=None)
     args = parser.parse_args()
     try:
         if args.self_test:
+            if args.gate_rev or args.gate_sha256:
+                reject("--self-test does not accept Phase 24 gate pins")
             controls = _self_test(args.root.resolve(), args.rev)
             print(f"PASS: workflow policy coverage self-test controls={controls}")
             return 0
+        if args.phase24_promotion_controls:
+            if not args.gate_rev or not args.gate_sha256 or args.build_dir is not None:
+                reject("--phase24-promotion-controls requires only --gate-rev and --gate-sha256")
+            _phase24_promotion_controls(args.root.resolve(), args.gate_rev, args.gate_sha256)
+            return 0
+        if args.gate_rev or args.gate_sha256:
+            reject("Phase 24 gate pins require --phase24-promotion-controls")
         if args.build_dir is None:
             reject("--check requires --build-dir for the configured CTest listing")
         _check(args.root.resolve(), args.build_dir.resolve(), args.rev)

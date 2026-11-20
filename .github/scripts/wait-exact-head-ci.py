@@ -50,12 +50,21 @@ class TransientError(Exception):
     """A gh/API problem that may clear on the next poll."""
 
 
-def gh_get(path, params=None):
+def gh_get(path, params=None, stop_time=None, clock=time.monotonic):
     """GET one REST endpoint through gh api. Argv list only: no shell, no jq."""
     cmd = ["gh", "api", "-X", "GET", path]
     for key, value in (params or {}).items():
         cmd += ["-f", "{}={}".format(key, value)]
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    timeout = None
+    if stop_time is not None:
+        timeout = stop_time - clock()
+        if timeout <= 0:
+            raise TransientError("original deadline expired before gh api {}".format(path))
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False,
+                                **({} if timeout is None else {"timeout": timeout}))
+    except subprocess.TimeoutExpired:
+        raise TransientError("gh api {} exceeded its remaining deadline".format(path)) from None
     if result.returncode != 0:
         raise TransientError("gh api {} failed: {}".format(path, result.stderr.strip()[:200]))
     try:
@@ -278,17 +287,28 @@ def run_gate(sha, repo, required, deadline_seconds, interval_seconds, clock, sle
     """Poll until PASS or FAIL, or fail closed at the deadline. Returns an exit code."""
     state = {"key": None, "streak": 0, "component_key": None, "component_streak": 0}
     start = clock()
+    stop_time = start + deadline_seconds
+    bind_deadline = fetchers.get("_bind_deadline")
+    if bind_deadline is not None:
+        bind_deadline(stop_time, clock)
     while True:
-        try:
-            verdict, reason, payload = decide(sha, fetchers["list"](), fetchers["detail"],
-                                              fetchers["jobs"], required, state,
-                                              planning_skippable, fail_fast_required_native)
-        except TransientError as exc:
-            state["key"] = None
-            state["streak"] = 0
-            state["component_key"] = None
-            state["component_streak"] = 0
-            verdict, reason, payload = "WAIT", "transport: {}".format(exc), None
+        if clock() >= stop_time:
+            verdict, reason, payload = "WAIT", "original deadline reached", None
+        else:
+            try:
+                verdict, reason, payload = decide(sha, fetchers["list"](), fetchers["detail"],
+                                                  fetchers["jobs"], required, state,
+                                                  planning_skippable, fail_fast_required_native)
+            except TransientError as exc:
+                state["key"] = None
+                state["streak"] = 0
+                state["component_key"] = None
+                state["component_streak"] = 0
+                verdict, reason, payload = "WAIT", "transport: {}".format(exc), None
+        # A successful read can finish at the deadline. Its result is no longer
+        # timely evidence, so never accept or emit a post-expiry verdict.
+        if clock() >= stop_time:
+            verdict, reason, payload = "WAIT", "original deadline reached", None
         if verdict == "PASS":
             attempt = payload["job_attempts"][attempt_job] if attempt_job else payload["run_attempt"]
             if attempt is None:
@@ -312,16 +332,33 @@ def run_gate(sha, repo, required, deadline_seconds, interval_seconds, clock, sle
             print("No completed successful pull-request CI run for {} appeared within {} minutes.".format(
                 sha, deadline_seconds // 60), file=sys.stderr)
             return 1
-        sleep(interval_seconds)
+        remaining = stop_time - clock()
+        if remaining <= 0:
+            continue
+        sleep(min(interval_seconds, remaining))
 
 
 def make_fetchers(repo, sha):
+    deadline = {"stop_time": None, "clock": time.monotonic}
+
+    def bind_deadline(stop_time, clock):
+        deadline["stop_time"] = stop_time
+        deadline["clock"] = clock
+
+    def get(path, params=None):
+        if deadline["stop_time"] is None:
+            # Keep the historical two-argument injection seam usable by tests
+            # and callers that invoke a fetcher outside run_gate.
+            return gh_get(path, params)
+        return gh_get(path, params, deadline["stop_time"], deadline["clock"])
+
     return {
-        "list": lambda: gh_get("repos/{}/actions/workflows/ci.yml/runs".format(repo),
-                               {"head_sha": sha, "event": EVENT, "per_page": 100}),
-        "detail": lambda run_id: gh_get("repos/{}/actions/runs/{}".format(repo, run_id)),
-        "jobs": lambda run_id: gh_get("repos/{}/actions/runs/{}/jobs".format(repo, run_id),
-                                      {"filter": "latest", "per_page": 100}),
+        "list": lambda: get("repos/{}/actions/workflows/ci.yml/runs".format(repo),
+                             {"head_sha": sha, "event": EVENT, "per_page": 100}),
+        "detail": lambda run_id: get("repos/{}/actions/runs/{}".format(repo, run_id)),
+        "jobs": lambda run_id: get("repos/{}/actions/runs/{}/jobs".format(repo, run_id),
+                                   {"filter": "latest", "per_page": 100}),
+        "_bind_deadline": bind_deadline,
     }
 
 
@@ -466,10 +503,24 @@ def _poll_cases():
         ("required job failure under a successful run -> FAIL", req, [
             {"listing": make_listing(done(2, 20, "success")), "details": {2: done(2, 20, "success")},
              "jobs": make_jobs({"required-native": ("failure", 1)}), "expect": "FAIL"}]),
-        ("duplicated required job -> WAIT", req, [
+        ("duplicated required job -> repeated cardinality WAIT", req, [
             {"listing": make_listing(done(2, 20, "success")), "details": {2: done(2, 20, "success")},
              "jobs": {"total_count": 2, "jobs": [
-                 {"name": "required-native", "conclusion": "success", "run_attempt": 1}] * 2},
+                 {"id": 100, "run_id": 2, "head_sha": SELF_SHA, "name": "required-native",
+                  "status": "completed", "conclusion": "success", "run_attempt": 1},
+                 {"id": 101, "run_id": 2, "head_sha": SELF_SHA, "name": "required-native",
+                  "status": "completed", "conclusion": "success", "run_attempt": 1}]},
+             "valid_job_shape": True,
+             "expect_reason": "required job required-native appears 2 times in run 2",
+             "expect": "WAIT"},
+            {"listing": make_listing(done(2, 20, "success")), "details": {2: done(2, 20, "success")},
+             "jobs": {"total_count": 2, "jobs": [
+                 {"id": 100, "run_id": 2, "head_sha": SELF_SHA, "name": "required-native",
+                  "status": "completed", "conclusion": "success", "run_attempt": 1},
+                 {"id": 101, "run_id": 2, "head_sha": SELF_SHA, "name": "required-native",
+                  "status": "completed", "conclusion": "success", "run_attempt": 1}]},
+             "valid_job_shape": True,
+             "expect_reason": "required job required-native appears 2 times in run 2",
              "expect": "WAIT"}]),
         ("truncated run list (total 31, listed 30) -> WAIT", req, [
             {"listing": make_listing(*[done(i, i, "success") for i in range(1, 31)], total_count=31),
@@ -527,6 +578,145 @@ def _gate_case_deadline():
     _check("deadline prints the legacy message", True,
            "No completed successful pull-request CI run for {} appeared within 2 minutes.".format(SELF_SHA)
            in err.getvalue())
+
+
+def _gate_case_subprocess_deadline():
+    """Every child and parent reread gets a shrinking timeout from one absolute deadline."""
+    run = make_run(2, 20, 1, "in_progress", None)
+    jobs = make_dependency_jobs()
+    now = [0.0]
+    timeouts = []
+    calls = []
+    original_run = subprocess.run
+
+    def fake_run(argv, *, capture_output, text, check, timeout):
+        timeouts.append(timeout)
+        calls.append(argv[4])
+        now[0] += 0.75
+        path = argv[4]
+        body = make_listing(run) if path.endswith("/runs") else (
+            jobs if path.endswith("/jobs") else run)
+        return subprocess.CompletedProcess(argv, 0, json.dumps(body), "")
+
+    subprocess.run = fake_run
+    try:
+        fetchers = make_fetchers("o/r", SELF_SHA)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            rc = run_gate(SELF_SHA, "o/r", ["required-native"], 3, 10,
+                          lambda: now[0], lambda seconds: now.__setitem__(0, now[0] + seconds),
+                          fetchers, fail_fast_required_native=True)
+    finally:
+        subprocess.run = original_run
+    _check("deadline-bounded child cycle exits fail-closed", 1, rc)
+    _check("list, detail, jobs and parent reread are all queried", 4, len(calls))
+    _check("every child wait is positive", True, all(timeout > 0 for timeout in timeouts))
+    _check("child timeouts shrink from the original deadline", True,
+           all(left > right for left, right in zip(timeouts, timeouts[1:])))
+    _check("child waits never exceed remaining budget", True,
+           all(timeout <= 3 - index * 0.75 for index, timeout in enumerate(timeouts)))
+    _check("expired child result cannot pass", False, "PASS" in stdout.getvalue())
+    _check("expiry leaves no GitHub output", False, "run_id=" in stdout.getvalue())
+
+
+def _gate_case_timeout_is_transient_and_expiry_starts_no_child():
+    now = [0.0]
+    children = []
+    original_run = subprocess.run
+
+    def timeout_run(argv, *, capture_output, text, check, timeout):
+        children.append(timeout)
+        now[0] = 5.0
+        raise subprocess.TimeoutExpired(argv, timeout)
+
+    subprocess.run = timeout_run
+    try:
+        fetchers = make_fetchers("o/r", SELF_SHA)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            rc = run_gate(SELF_SHA, "o/r", ["required-native"], 5, 10,
+                          lambda: now[0], lambda seconds: now.__setitem__(0, now[0] + seconds),
+                          fetchers)
+    finally:
+        subprocess.run = original_run
+    _check("timed out API wait is uncertainty and original expiry fails closed", 1, rc)
+    _check("one child is launched with the remaining deadline", [5.0], children)
+    _check("timeout cannot produce a PASS", False, "PASS" in stdout.getvalue())
+    _check("timeout produces the original deadline failure", True, "deadline reached" in stderr.getvalue())
+
+
+def _gate_case_zero_deadline_starts_no_child():
+    children = []
+    original_run = subprocess.run
+
+    def unexpected_child(*args, **kwargs):
+        children.append((args, kwargs))
+        raise AssertionError("gh child started with no remaining deadline")
+
+    subprocess.run = unexpected_child
+    try:
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            rc = run_gate(SELF_SHA, "o/r", ["required-native"], 0, 10,
+                          lambda: 5.0, lambda seconds: None,
+                          make_fetchers("o/r", SELF_SHA))
+    finally:
+        subprocess.run = original_run
+    _check("zero remaining budget fails closed", 1, rc)
+    _check("zero remaining budget starts no gh child", [], children)
+    _check("zero remaining budget cannot emit PASS", False, "PASS" in stdout.getvalue())
+    _check("zero remaining budget reports expiry", True, "deadline reached" in stderr.getvalue())
+
+
+def _gate_case_timeout_clears_both_failure_streaks():
+    calls = []
+    original_decide = globals()["decide"]
+
+    def inspect_state(sha, listing, fetch_detail, fetch_jobs, required, state,
+                      planning_skippable=(), fail_fast_required_native=False):
+        calls.append(1)
+        if len(calls) == 1:
+            state.update(key=("terminal",), streak=1,
+                         component_key=("dependency",), component_streak=1)
+            raise TransientError("simulated subprocess timeout")
+        _check("timeout clears both terminal and dependency streaks",
+               (None, 0, None, 0),
+               (state.get("key"), state.get("streak"), state.get("component_key"),
+                state.get("component_streak")))
+        return "PASS", "test-only next observation", {
+            "job_attempts": {}, "run_attempt": 1, "kind": "full", "run_id": 2}
+
+    globals()["decide"] = inspect_state
+    try:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            rc = run_gate(SELF_SHA, "o/r", ["required-native"], 10, 0,
+                          lambda: 0.0, lambda seconds: None,
+                          {"list": lambda: {}, "detail": lambda _id: {}, "jobs": lambda _id: {}})
+    finally:
+        globals()["decide"] = original_decide
+    _check("transient uncertainty clears state before next observation", (0, 2), (rc, len(calls)))
+    _check("recovered poll can pass only after the reset", True, "PASS" in output.getvalue())
+
+
+def _gate_case_duplicate_pending_name_is_valid_and_inconclusive():
+    run = make_run(2, 20, 1, "in_progress", None)
+    jobs = make_dependency_jobs()
+    duplicate = dict(next(item for item in jobs["jobs"] if item["name"] == "native-linux-x64"))
+    duplicate["id"] = max(item["id"] for item in jobs["jobs"]) + 1
+    jobs["jobs"].append(duplicate)
+    jobs["total_count"] += 1
+    _check("duplicate pending dependency passes API shape validation", True,
+           _valid_jobs_response(jobs) is not None)
+    state = {"key": ("old",), "streak": 1, "component_key": ("old",), "component_streak": 1}
+    poll = _active_failure_poll(jobs, run=run)
+    for index in range(2):
+        verdict, reason, _ = _decide_poll(poll, state, ["required-native"])
+        _check("duplicate pending dependency is WAIT poll {}".format(index + 1), "WAIT", verdict)
+        _check("duplicate pending dependency names its cardinality",
+               "required dependency native-linux-x64 appears 2 times", reason)
+        _check("duplicate pending dependency clears both streaks", (None, 0, None, 0),
+               (state.get("key"), state.get("streak"), state.get("component_key"), state.get("component_streak")))
 
 
 def _gate_case_player_output():
@@ -872,14 +1062,38 @@ def _bad_sha_cases():
 def run_self_test():
     count = 0
     for label, required, polls, *rest in _poll_cases():
-        state = {"key": None, "streak": 0}
+        duplicate_case = "duplicated required job" in label
+        state = {"key": ("old",) if duplicate_case else None,
+                 "streak": 1 if duplicate_case else 0,
+                 "component_key": ("old",) if duplicate_case else None,
+                 "component_streak": 1 if duplicate_case else 0}
         for index, poll in enumerate(polls):
-            _check("{} (poll {})".format(label, index + 1), poll["expect"],
-                   _decide_poll(poll, state, required, rest[0] if rest else ())[0])
+            if poll.get("valid_job_shape"):
+                _check("{} has valid duplicate-name API shape".format(label), True,
+                       _valid_jobs_response(poll["jobs"]) is not None)
+            result = _decide_poll(poll, state, required, rest[0] if rest else ())
+            _check("{} (poll {})".format(label, index + 1), poll["expect"], result[0])
+            if "expect_reason" in poll:
+                _check("{} (poll {}) reports exact cardinality".format(label, index + 1),
+                       poll["expect_reason"], result[1])
+                _check("{} (poll {}) clears both streaks".format(label, index + 1),
+                       (None, 0, None, 0),
+                       (state.get("key"), state.get("streak"), state.get("component_key"),
+                        state.get("component_streak")))
         print("PASS: {}".format(label))
         count += 1
     for fn, label in ((_bad_sha_cases, "invalid SHA or repo exits 2 before any fetch"),
                       (_gate_case_deadline, "deadline fails closed with the legacy message"),
+                      (_gate_case_subprocess_deadline,
+                       "list/detail/jobs/reread children use shrinking monotonic timeout"),
+                      (_gate_case_timeout_is_transient_and_expiry_starts_no_child,
+                       "TimeoutExpired is transient and expiry prevents later children"),
+                      (_gate_case_zero_deadline_starts_no_child,
+                       "zero remaining deadline starts no API child"),
+                      (_gate_case_timeout_clears_both_failure_streaks,
+                       "transport timeout clears both debounce streaks"),
+                      (_gate_case_duplicate_pending_name_is_valid_and_inconclusive,
+                       "valid duplicate pending dependency repeatedly waits on cardinality"),
                       (_gate_case_player_output, "player mode writes the job-level run_attempt"),
                       (_gate_case_planning_output, "planning run writes kind=planning and excuses the skipped player job"),
                       (_gate_case_unknown_skippable, "--planning-skippable must name a required job"),
