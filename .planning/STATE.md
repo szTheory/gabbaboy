@@ -2,29 +2,29 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: Phase 24 D-222 context gathered; sole plan replan and independent check next
-last_updated: "2026-11-20T12:21:32.765Z"
-state_head: 3ef551f7176b016c36302acb003701f105f58081
+stopped_at: Phase 24 D-222 plan independently checked; commit the aligned planning boundary before autonomous execution
+last_updated: "2026-11-20T13:47:39Z"
+state_head: e264687b7548d2ef02467eb72d46de0030e716ca
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 33
   completed_plans: 32
 milestone_name: Evidence Floor
-last_activity: 2026-11-19
+last_activity: 2026-11-20
 current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: Phase 24 Plan 24-01 D-221 T21–T23 authorized; resolve route-finalization EXEC_REV and verify committed pins
+current_plan: Phase 24 Plan 24-01 D-222 T24–T26 integrated gate, waiter corrections, and guarded qualification
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone stage:** v0.4 remains administratively closed with D-209 gaps; this D-221 execution authorization preserves the separate phase and milestone closure boundaries.
+**Milestone stage:** v0.4 remains administratively closed with D-209 gaps; D-222 continues the separately authorized Phase 24 recovery without changing phase or milestone closure boundaries.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
-**Phase state:** Phase 24 remains incomplete. Candidate f19d5ae2f5819d18074a68e1e80d959dc31b1302 passed both fresh code/security reviews, then its single D-220 protected matrix failed: required-native and preview-package-smoke failed; fixture-repro passed. See [hosted matrix evidence](../build/phase24/f19d5ae2f5819d18074a68e1e80d959dc31b1302-hosted-matrix.md). No retry or merge occurred.
-**Next route:** Immutable PLAN_REV remains 688864a. Prior 06fc6e0 records the owner's execution authority but is not a source baseline because T21 correctly refused its archive pin mismatch. Commit 16a139 restored the exact D-209 archive. The independently checked route-finalization commit containing this record is the effective EXEC_REV and candidate diff base; pending T21 source edits remain outside this documentation boundary. The agent resolves the committed EXEC_REV and verifies its committed planning/authority/route/archive pins, then continues `$gsd-autonomous --from 24` for T21–T23 only. No additional route-edit commit or owner acknowledgment is required after this record is committed. Local qualification, fresh code/security reviews, at most two changed protected candidates under D-221's causal-fix condition, and conditional identical-head protected merge remain authorized. Root STATE.md/ROADMAP.md carry the active route; the archived roadmap stays byte-identical to D-209. Keep this worktree and both automatic-advance flags false.
+**Phase state:** Phase 24 remains incomplete. Candidate f19d5ae2f5819d18074a68e1e80d959dc31b1302 passed both fresh code/security reviews, then its single D-220 protected matrix failed: required-native and preview-package-smoke failed; fixture-repro passed. Candidate 9bab99b6af2462291d8481ce5da14fa72c1777e4 completed the D-221 local checks but received a fresh review NO-GO; it was not pushed. See the retained Phase 24 evidence. No retry or merge occurred for either candidate.
+**Next route:** D-222 replaces the active T21–T23 route with the revised sole Phase 24 plan: T24 freezes an immutable local promotion guard, T25 repairs the duplicate-job fixture and bounds each waiter subprocess, and T26 qualifies and conditionally promotes only a freshly reviewed exact head. The independent plan check and planning-boundary commit come next; then continue the already authorized `$gsd-autonomous --from 24`. The guard must pass current readback/auth before reservation and push; no external protection change is authorized. Up to two changed candidates remain allowed, with candidate two requiring a concrete in-scope first-matrix failure and causal fix. Root STATE.md/ROADMAP.md and the Phase 24 continuation note carry this route; the archived roadmap remains byte-identical to D-209. Keep this worktree and both automatic-advance flags false.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -52,13 +52,13 @@ Two items had already been acknowledged by an earlier closeout; the audit record
 
 FIXT-01 remains Pending: neither Potion Panic nor µCity has a complete source/build/ROM/header/mode/runtime chain. Do not introduce a third game candidate under the v0.4 requirement. Do not replay the Acid2 comparison or claim its cause. The v0.4.0 tag/assets and published claims remain unchanged. No hardware, perception, mode-3 timing, general compatibility, Linux player, Steam Deck, or live Playstead claim is established by this closeout.
 
-The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 verification is stale; Phase 24 Task 7 is incomplete. These remain gaps, not passes. D-211 and D-214 through D-219 failures remain preserved. D-220 T18–T20 completed with clean code/security reviews and local qualification on candidate f19, but its protected matrix failed required-native and preview-package-smoke; fixture-repro passed. No retry or merge occurred, so its execution authority is spent. Candidate c7a7cc1 and earlier NO-GO findings remain candidate-specific history in Phase 24 records. D-221 adds only the seven-path f19 timeout/Windows fixture/preview-waiter recovery and permits at most two changed, locally qualified, freshly code/security-reviewed matrix candidates; candidate two requires a concrete in-scope first-matrix failure and causal fix. D-221 execution is now explicitly authorized after the independent plan check and committed planning boundary; verify its separate documentation-only EXEC_REV before T21–T23. Preserve the same-head protected merge condition, D-209 dispositions, FIXT-01 Pending, the failed unreplayed Acid2 result, D-103, Task 7, released bytes, administrative closeout, and all phase/milestone stops. Keep both automatic-advance flags false.
+The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 verification is stale; Phase 24 Task 7 is incomplete. These remain gaps, not passes. D-211 and D-214 through D-219 failures remain preserved. D-220 T18–T20 completed with clean code/security reviews and local qualification on candidate f19, but its protected matrix failed required-native and preview-package-smoke; fixture-repro passed. No retry or merge occurred. Candidate c7a7cc1 and earlier NO-GO findings remain candidate-specific history in Phase 24 records. D-221 candidate 9bab completed its local qualification but received review NO-GO and was never pushed. D-222 now governs the active T24–T26 route, with at most two changed, locally qualified, freshly code/security-reviewed matrix candidates; candidate two requires a concrete in-scope first-matrix failure and causal fix. Preserve the same-head protected merge condition, D-209 dispositions, FIXT-01 Pending, the failed unreplayed Acid2 result, D-103, Task 7, released bytes, administrative closeout, and all phase/milestone stops. Keep both automatic-advance flags false.
 
 ## Owner Handoff
 
-Current stage: Phase 24 D-221 planning remains complete at immutable PLAN_REV 688864a; the owner's explicit execution authority remains recorded in prior 06fc6e0, which failed T21's archive prerequisite. Commit 16a139 restored the exact D-209 archive. The independently checked route-finalization commit containing this record is the effective EXEC_REV and candidate diff base. Pending T21 source edits remain outside that documentation boundary.
+Current stage: The D-222 discussion and sole-plan replan are recorded. The revised plan is awaiting the final independent check and planning-boundary commit. Phase 24 remains the active phase; no new phase or milestone has started.
 
-Next actor: the agent resolves the committed route-finalization EXEC_REV, verifies its committed planning/authority/route/archive pins, then continues `$gsd-autonomous --from 24` for T21–T23 only. No additional route-edit commit or owner acknowledgment is required after this record is committed. Generated .planning/state.json remains unstaged and undiscarded.
+Next actor: the agent completes the independent plan check, commits only the intended planning boundary, then continues the already authorized `$gsd-autonomous --from 24` for T24–T26. No new owner action is needed for this route. Generated `.planning/state.json` remains unstaged and undiscarded.
 
 Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-103, D-209 dispositions, v0.4 administrative closeout, required branch protection, and all phase/milestone closure boundaries. Keep this worktree and both automatic-advance flags false.
 ## Accumulated Context
@@ -114,13 +114,14 @@ Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-10
 - [Phase 24]: D-218 authorizes one correction for three D-217 static-proof blockers, one new review, and one protected matrix after clean review; no retry or phase closure — Close the reviewed runtime namespace/regex mutation and validated-revision rebinding gaps while preserving all D-209, D-103, Task 7, CI coverage, and milestone boundaries.
 - [Phase 24, historical]: D-219 authorized the sole-plan integrated recovery after D-218, including its two-pass review limit. D-219's final candidate was NO-GO; D-220 supersedes that exhausted limit for the same fixed trust boundary.
 - [Phase 24, historical planning checkpoint]: D-220 initially authorized planning only for scope-bounded convergence within the six-checker source boundary. The sole plan passed independent checking and the owner later authorized execution; T18/T19 and initial T20 work are complete. The current exact-head review NO-GO and continuation route are recorded above. Preserve D-209 gaps, FIXT-01 Pending, failed unreplayed Acid2, Task 7, D-103 and separate closure boundaries.
+- [Phase 24]: D-222 replaces the active D-221 route with a sole-plan integrated recovery: T24 freezes the immutable local promotion gate, T25 fixes valid duplicate-name fixtures and bounds waiter subprocesses, and T26 qualifies the exact reviewed head for protected promotion. The local gate does not claim server-side enforcement; candidate two still requires a concrete in-scope first-matrix failure and causal fix. Continue the already authorized `$gsd-autonomous --from 24` after the independent plan check and planning-boundary commit; preserve D-209 and all closure/execution exclusions.
 
 ## Session
 
-**Last session:** 2026-11-20T12:21:32.132Z
-**Stopped at:** Phase 24 D-222 context gathered; sole plan replan and independent check next
+**Last session:** 2026-11-20T13:43:10Z
+**Stopped at:** D-222 plan and research resolutions independently checked; commit the aligned planning boundary next
 **Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md
 
 ### Blockers
 
-- Candidate f19d5ae2f5819d18074a68e1e80d959dc31b1302 passed fresh code/security review but its single D-220 matrix failed: required-native and preview-package-smoke failed, fixture-repro passed. D-221's checked T21–T23 scope remains explicitly authorized through GSD Autonomous. T21 source edits are pending after the archive prerequisite refused prior 06fc6e0. Commit 16a139 restored the exact D-209 archive; the independently checked route-finalization commit containing this record is the effective EXEC_REV. Resolve that committed boundary and verify its pins, then continue the authorized route. Up to two changed candidate matrices remain allowed; candidate two requires a concrete in-scope failure, causal fix, local qualification, and fresh code/security reviews. Required gates and all closure exclusions remain.
+- Candidate f19d5ae2f5819d18074a68e1e80d959dc31b1302 passed fresh code/security review but its single D-220 matrix failed: required-native and preview-package-smoke failed, fixture-repro passed. D-221 candidate 9bab99b6af2462291d8481ce5da14fa72c1777e passed local checks but received review NO-GO and was never pushed. D-222 now governs the active T24–T26 route; its sole plan is awaiting independent check and commit. The existing two-candidate maximum, causal-fix requirement for candidate two, required contexts and all closure exclusions remain.

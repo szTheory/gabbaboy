@@ -7,9 +7,15 @@ wave_0_complete: false
 created: "2026-11-18"
 ---
 
-# Phase 24 — Historical D-220 Validation Strategy
+# Phase 24 — Historical D-220/D-221 Validation Strategy
 
-**Superseded by D-221:** This document preserves the former D-220 planning/validation contract and its point-in-time sign-off only. It is removed from the active plan context and does not dispatch T18–T20 or govern current scope, authorization, qualification commands, review gates or candidate limits. The current [24-01-PLAN.md](24-01-PLAN.md) is the executable D-221 validation contract for T21–T23; [24-CONTEXT.md](24-CONTEXT.md) and its execution-authorization addendum establish the current boundary. Read the six-path/single-matrix/pending-task wording below as historical D-220 facts, never current authority. No historical checkboxes or outcomes below are promoted by this supersession.
+**Superseded by D-222:** The material below preserves D-220/D-221 validation history only; it does not dispatch T18–T23 or govern current scope, authorization, commands, review gates, or candidate limits. The revised [24-01-PLAN.md](24-01-PLAN.md) is the executable D-222 contract for T24–T26; [24-CONTEXT.md](24-CONTEXT.md), [24-RESEARCH.md](24-RESEARCH.md), and the Phase 24 continuation note establish the current boundary. Do not use historical commands or checkboxes below as current authorization or evidence.
+
+## Current D-222 Validation Route
+
+After the revised sole plan passes independent checking and is committed, continue the already authorized `$gsd-autonomous --from 24` route. T24 implements and freezes the immutable local promotion gate, with direct offline allow/deny controls and a gate-only source commit before candidate corrections. T25 corrects the valid duplicate-name fixtures, bounds every waiter child by the existing monotonic deadline, and exercises the pinned gate through the existing test seam. T26 runs cheap identity/scope/direct controls before the ten existing focused CTests serially, obtains fresh independent same-head code/security reviews, then uses the pinned gate for current protected-context qualification and any conditional promotion. Exact commands, CTest order/floors/deadlines, candidate limits and stop conditions live in [24-01-PLAN.md](24-01-PLAN.md).
+
+Current protection read access has not been verified; unavailable or ambiguous readback stops before reservation/push. The gate controls the authorized local GSD route and does not claim server-side enforcement. Do not change live protection, add credentials or weaken existing contexts. Preserve D-209 dispositions, FIXT-01 Pending, failed unreplayed Acid2, Task 7, D-103, fixture exclusions, and the separate phase/milestone closure boundary.
 
 Updated for D-220 on 2026-11-19. This is planning evidence only. The independently checked and committed planning boundary must be followed by separate owner execution authorization before source work, tests or CI. D-220 supersedes stale D-219 recovery limits; the fixed six-checker source allowlist and sole plan remain unchanged.
 
