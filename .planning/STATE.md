@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: "Phase 24 D-224 planning: roadmap route reconciled after plan-check finding; independent plan check rerun next; T24 stays held until the checked plan is committed."
-last_updated: "2026-11-20T17:41:54.553Z"
-state_head: 346d689cd197abde01e0f540dee3ad41966844c2
+stopped_at: Phase 24 D-225 discussion complete; same-plan replan and independent check in progress
+last_updated: "2026-11-20T19:51:01.109Z"
+state_head: 7761be6f90041efd0bb6928279c002a369962d7f
 progress:
   total_phases: 6
   completed_phases: 5
@@ -14,17 +14,17 @@ milestone_name: Evidence Floor
 last_activity: 2026-11-20
 current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: Phase 24 Plan 24-01 D-224 sole-plan recovery — roadmap route reconciled; independent plan check rerun next; T24 only after checked commit.
+current_plan: Phase 24 Plan 24-01 D-225 recovery replan and independent check in progress
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone stage:** v0.4 remains administratively closed under D-209 while its owner-authorized Phase 24 D-224 recovery proceeds. The sole plan is being updated and independently checked; T24 execution stays held until the checked boundary is committed.
+**Milestone stage:** v0.4 remains administratively closed under D-209 while the owner-authorized D-225 Phase 24 recovery is replanned and independently checked.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
-**Phase state:** Phase 24 remains incomplete at T24. D-223's frozen gate still has its recorded discussion_boundary_drift failure and is not changed or repinned. D-224 now authorizes one sole-plan replan, independent plan check, and one replacement gate-only commit. No D-224 gate/bootstrap exists yet; T25/T26 and external actions remain held until its frozen bootstrap and immutable self-test pass.
-**Next route:** Independently check and commit the D-224 sole-plan update, then execute only T24 through local causal controls and one frozen gate/bootstrap/immutable self-test. If those pass, continue the previously authorized $gsd-autonomous --from 24 route under its existing limits; otherwise stop without repinning.
+**Phase state:** Phase 24 is incomplete. Preserve the D-224 T26 no_phase_paths failure. D-225 authorizes one same-plan update, one independent plan check, and one gate-only replacement; its frozen bootstrap and immutable tests must pass before T25/T26 resume.
+**Next route:** Complete the D-225 same-plan replan and independent check, commit the docs boundary, and make one gate-only replacement after cheap resolver, direct, and no_phase_paths preflight checks. Require bootstrap and immutable self-tests before the existing T25/T26 route; stop on any frozen failure.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -56,9 +56,9 @@ The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 veri
 
 ## Owner Handoff
 
-Current stage: D-224 recovery scope is authorized. The sole-plan update is in progress; the independent plan check and planning-boundary commit are next. T24 may begin only after that checked boundary is committed.
+Current stage: D-225 sole-plan and route-pointer corrections are complete; the independent plan check passed with no blockers or warnings. The D-224 no_phase_paths failure remains preserved; no source edit or qualification has started.
 
-Next actor: The orchestrator performs the independent plan check and commits the D-224 planning boundary, then executes only T24. T25/T26 remain held until the one frozen gate passes bootstrap verification and immutable self-test; no user action is needed while those authorized steps pass.
+Next actor: The orchestrator commits the D-225 documentation boundary, excluding generated .planning/state.json, then executes only T24 under the existing autonomous authorization. T25/T26 resume only after the frozen gate passes its direct, bootstrap, and immutable checks.
 
 Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-103, D-209 dispositions, v0.4 administrative closeout, required branch protection, and all phase/milestone closure boundaries. Keep this worktree and both automatic-advance flags false.
 ## Accumulated Context
@@ -117,13 +117,14 @@ Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-10
 - [Phase 24, historical]: D-219 authorized the sole-plan integrated recovery after D-218, including its two-pass review limit. D-219's final candidate was NO-GO; D-220 supersedes that exhausted limit for the same fixed trust boundary.
 - [Phase 24, historical planning checkpoint]: D-220 initially authorized planning only for scope-bounded convergence within the six-checker source boundary. The sole plan passed independent checking and the owner later authorized execution; T18/T19 and initial T20 work are complete. The current exact-head review NO-GO and continuation route are recorded above. Preserve D-209 gaps, FIXT-01 Pending, failed unreplayed Acid2, Task 7, D-103 and separate closure boundaries.
 - [Phase 24]: D-222 replaces the active D-221 route with a sole-plan integrated recovery: T24 freezes the immutable local promotion gate, T25 fixes valid duplicate-name fixtures and bounds waiter subprocesses, and T26 qualifies the exact reviewed head for protected promotion. The local gate does not claim server-side enforcement; candidate two still requires a concrete in-scope first-matrix failure and causal fix. Continue the already authorized `$gsd-autonomous --from 24` after the independent plan check and planning-boundary commit; preserve D-209 and all closure/execution exclusions.
+- [Phase 24]: D-225 replaces the active D-224 gate path: keep the lexical scanner strict, use pinned raw-tree lookup, preserve the D-221 source baseline and two-file T25 correction allowlist, and make one gate-only replacement. — The D-224 frozen gate failed the required no_phase_paths check. After T24 passes, T25 may adapt only the existing direct receipt seam; inherited waiter logic stays verification-only. Continue the existing autonomous Phase 24 authorization and preserve all D-209 and protected-matrix limits.
+- [Phase 24]: D-225 is the active Phase 24 recovery route. D-222 promotion conditions remain inherited: at most two changed, locally qualified and freshly reviewed candidates; candidate two requires a concrete in-scope first-matrix failure and causal fix. D-225 adds one gate-only replacement before T25/T26 and does not reset candidate, review, matrix, D-209, D-103 or Task 7 limits.
 
 ## Session
 
-**Last session:** 2026-11-20T17:41:53.749Z
-**Stopped at:** Phase 24 D-224 planning: roadmap route reconciled after plan-check finding; independent plan check rerun next; T24 stays held until the checked plan is committed.
-**Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md
+**Last session:** 2026-11-20T19:23:24.789Z
+**Stopped at:** Phase 24 D-225 discussion complete; same-plan replan and independent check in progress
+**Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md
 
 ### Blockers
-
-- Candidate f19d5ae2f5819d18074a68e1e80d959dc31b1302 passed fresh code/security review but its single D-220 matrix failed: required-native and preview-package-smoke failed, fixture-repro passed. D-221 candidate 9bab99b6af2462291d8481ce5da14fa72c1777e passed local checks but received review NO-GO and was never pushed. D-222 now governs the active T24–T26 route; its sole plan is awaiting independent check and commit. The existing two-candidate maximum, causal-fix requirement for candidate two, required contexts and all closure exclusions remain.
+None
