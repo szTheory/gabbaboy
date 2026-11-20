@@ -3,9 +3,9 @@
 > **Audit trail only.** Do not use as input to planning, research, or execution agents.
 > Decisions are captured in `24-CONTEXT.md` — this log preserves the alternatives considered.
 
-**Date:** 2026-11-17; updated 2026-11-18
+**Date:** 2026-11-17; updated 2026-11-20
 **Phase:** 24-Resolve remaining v0.4 evidence and verification gaps
-**Areas discussed:** Additive verification evidence, Read-only candidate research, Phase exit with gaps, BOM normalization and plan-cap regression, post-T6 Acid2 mismatch, literal RIGHTS-01/DIAG-01/DIAG-02 reconciliation, FIXT-01 execution boundary, D-211 protected CI boundary, D-213 integrated recovery, D-215 post-review correction scope, review limits, CI efficiency and conditional merge, and D-216's four exact-head path/Git/census findings and execution extension
+**Areas discussed:** Additive verification evidence, requirement closure with gaps, bounded recovery, Python immutable-loader execution context, source provenance, review and protected-CI controls, CI efficiency, automated verification, conditional merge, and D-209-compatible milestone closeout
 
 ---
 
@@ -421,3 +421,36 @@ Primary references: [GitHub secure-use guidance](https://docs.github.com/en/acti
 **Retained limits:** One existing Phase 24 plan; no external protection/app/credential changes; preserve three required contexts and at most two changed protected matrix candidates. Candidate two requires a concrete in-scope first-matrix failure and causal fix. Keep FIXT-01 Pending, the Acid2 mismatch failed and unreplayed, D-103, Task 7, all ROM/fixture exclusions, no broad suite, and separate phase/milestone closure.
 
 **Next route:** `$gsd-plan-phase 24` updates and independently checks the sole plan. Then continue `$gsd-autonomous --from 24` only if the repo-only guard can be independently reviewed without an unresolved security finding. If the stronger external gate is required, stop and ask before changing GitHub settings or creating an app.
+
+## D-223 — Repair the immutable gate launcher and finish the owner-authorized milestone route
+
+**Date:** 2026-11-20
+**Areas discussed:** Python module execution context; immutable source and test provenance; phase/milestone closeout boundaries
+
+| Option | Description | Selected |
+|---|---|---|
+| Keep D-222 stopped | Preserve its direct test pass and immutable-loader failure without another gate attempt | |
+| Same-plan loader correction and one replacement gate | Fix module registration and pinned-byte self-test behavior, independently check/commit the existing sole plan, then freeze one replacement gate and retain all promotion limits | ✓ |
+| Repeatedly repin until it passes | Permit multiple committed replacement gates if fresh-process tests keep failing | |
+
+**Owner's choice:** The owner authorized the recommended D-223 replan and directed GSD Autonomous through the v0.4 milestone finish. The existing sole plan is the only plan to update.
+
+### Evidence and root cause
+
+The direct command `python3 -I .github/scripts/phase24-promotion-gate.py --self-test` passed all 26 controls. The same original gate bytes run through the immutable loader failed 17 subcases. The loader passed a fresh globals dictionary named `__main__`, but `unittest.mock.patch` resolves the registered module from `sys.modules`; the test fixture also expects `__file__`. The remedy must make the executing namespace a real, registered module without reading candidate files. `build/phase24/d222-t24-red.json` captures an earlier red-stage failure where `fixed_push_argv` was incomplete; it remains historical and is not the latest direct-test result.
+
+### Cross-role synthesis
+
+| Lens | Finding | Selected recommendation |
+|---|---|---|
+| Python runtime | `exec` can populate an explicit namespace, but that dictionary is not automatically the registered import target. Reusing `__main__` would put gate internals in the wrapper namespace. | Create a unique `types.ModuleType`; inject the already verified gate bytes and a sentinel `__file__`, set `__package__`, register it before execution, execute into its `__dict__`, then call `module.main()` with the intended argv. |
+| Security | A correct module context must not permit a second source read from the candidate checkout or execute bytes different from the pinned digest. | Immutable self-tests use `__phase24_gate_bytes__`; only direct `__main__` mode may read the local script. A missing injected byte value in immutable mode denies. Controls cover exact byte identity, module registration, mock target resolution, candidate-copy refusal, and zero mutation. |
+| Test engineering | The runtime loader path itself is the failed seam, so a direct self-test cannot prove it. | Run cheap syntax/source-identity checks, the direct suite, then the exact fresh-process immutable loader suite before freezing. After one replacement gate commit, verify its receipt and repeat immutable self-test against the original object. No protected matrix slot is consumed by this local fix. |
+| Operations / CI | A deterministic local loader error does not justify hosted CI or a workflow redesign. | Keep current contexts and all ten T26 CTests. Measure queue/job/step/dependency waits and timeout headroom if the authorized protected matrix runs; do not trade away coverage. `act` may be useful only where its semantics match the relevant workflow and can never replace hosted required checks. |
+| Product / milestone | The owner's broad authorization supersedes the earlier prohibition on milestone audit/completion/cleanup, but accepted D-209 evidence gaps remain accepted. | After exact merge reconciliation, run objective automated Phase 24 verification and the milestone audit/completion/cleanup. Keep FIXT-01 Pending, Task 7 deferred, D-103 unfulfilled, the Acid2 result failed/unreplayed, and v0.4 claims/assets unchanged. Do not run the historical source/rights/ROM work or start v0.5. |
+
+### Authorization boundary
+
+First independently check and commit the D-223 update to the sole plan. Before the replacement gate is frozen, local diagnosis and retesting may correct the known module-context issue within the exact gate/loader boundary. Commit one gate-only child, write `build/phase24/d223-bootstrap.json` without replacing the D-222 receipt, and require both direct and immutable tests to pass. A frozen replacement failure stops without a second repin. Then resume existing T25/T26: valid duplicate-name fixtures, absolute-deadline subprocess behavior, cheap checks before the same ten serial CTests, distinct clean same-SHA/tree code and security reviews, current protection readback, existing candidate/matrix limits, and conditional exact-head merge. No live protection/app/credential change, new dependency, CTest identity, replay, broad suite, or weaker gate.
+
+**Next route:** Independent plan check and planning-boundary commit; then `$gsd-autonomous --from 24`. After successful T24–T26 and exact merge, run automated phase verification and D-209-compatible milestone audit/completion/cleanup, reconcile onto main, and finish with clean status. No user action is needed while these gates pass; a fresh blocker or failed protected check stops at its gate.

@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: Phase 24 D-222 plan independently checked; commit the aligned planning boundary before autonomous execution
-last_updated: "2026-11-20T13:47:39Z"
-state_head: e264687b7548d2ef02467eb72d46de0030e716ca
+stopped_at: D-223 plan awaiting independent check; then authorized autonomous T24–T26, verification, and v0.4 closeout
+last_updated: "2026-11-20T16:31:24.976Z"
+state_head: 2125f3df0e24e0bb3a37c4338c70838af129d9f0
 progress:
   total_phases: 6
   completed_phases: 5
@@ -14,17 +14,17 @@ milestone_name: Evidence Floor
 last_activity: 2026-11-20
 current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: Phase 24 Plan 24-01 D-222 T24–T26 integrated gate, waiter corrections, and guarded qualification
+current_plan: Phase 24 Plan 24-01 D-223 T24–T26 recovery, automated verification, and v0.4 closeout
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone stage:** v0.4 remains administratively closed with D-209 gaps; D-222 continues the separately authorized Phase 24 recovery without changing phase or milestone closure boundaries.
+**Milestone stage:** The v0.4 release remains administratively closed under D-209; Phase 24 D-223 recovery is active under explicit owner authorization for automated verification and D-209-compatible lifecycle closeout after the exact protected merge is reconciled.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
-**Phase state:** Phase 24 remains incomplete. Candidate f19d5ae2f5819d18074a68e1e80d959dc31b1302 passed both fresh code/security reviews, then its single D-220 protected matrix failed: required-native and preview-package-smoke failed; fixture-repro passed. Candidate 9bab99b6af2462291d8481ce5da14fa72c1777e4 completed the D-221 local checks but received a fresh review NO-GO; it was not pushed. See the retained Phase 24 evidence. No retry or merge occurred for either candidate.
-**Next route:** D-222 replaces the active T21–T23 route with the revised sole Phase 24 plan: T24 freezes an immutable local promotion guard, T25 repairs the duplicate-job fixture and bounds each waiter subprocess, and T26 qualifies and conditionally promotes only a freshly reviewed exact head. The independent plan check and planning-boundary commit come next; then continue the already authorized `$gsd-autonomous --from 24`. The guard must pass current readback/auth before reservation and push; no external protection change is authorized. Up to two changed candidates remain allowed, with candidate two requiring a concrete in-scope first-matrix failure and causal fix. Root STATE.md/ROADMAP.md and the Phase 24 continuation note carry this route; the archived roadmap remains byte-identical to D-209. Keep this worktree and both automatic-advance flags false.
+**Phase state:** Phase 24 remains incomplete. Candidate f19 passed fresh reviews but its D-220 protected matrix failed required-native and preview-package-smoke; fixture-repro passed. Candidate 9bab completed D-221 local checks but review returned NO-GO; it was not pushed. No candidate correction, push, or matrix has occurred since D-220. D-223 now governs the sole plan and permits one replacement gate-only bootstrap; preserve the two-candidate maximum, same-head protected merge, and all D-209/D-103/Task 7 boundaries.
+**Next route:** D-223 replaces the failed D-222 loader route. Independently check and commit the sole plan, then continue `$gsd-autonomous --from 24` through T24–T26, automated verification, and the authorized v0.4 closeout after exact merge reconciliation. Do not start v0.5 in this route.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -56,9 +56,9 @@ The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 veri
 
 ## Owner Handoff
 
-Current stage: The D-222 discussion and sole-plan replan are recorded. The revised plan is awaiting the final independent check and planning-boundary commit. Phase 24 remains the active phase; no new phase or milestone has started.
+Current stage: D-223 discussion, sole-plan replan, and CI/verification boundary are recorded. The plan awaits independent checking and its planning-boundary commit; no replacement gate, candidate correction, push, or matrix has started.
 
-Next actor: the agent completes the independent plan check, commits only the intended planning boundary, then continues the already authorized `$gsd-autonomous --from 24` for T24–T26. No new owner action is needed for this route. Generated `.planning/state.json` remains unstaged and undiscarded.
+Next actor: The orchestrator obtains the independent Phase 24 plan check, commits only the intended D-223 planning boundary, then resumes the already authorized `$gsd-autonomous --from 24` through T24–T26, automated Phase 24 verification, and the D-209-compatible v0.4 lifecycle after merge/reconciliation. No owner action is needed unless a real gate fails or scope changes.
 
 Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-103, D-209 dispositions, v0.4 administrative closeout, required branch protection, and all phase/milestone closure boundaries. Keep this worktree and both automatic-advance flags false.
 ## Accumulated Context
@@ -119,7 +119,7 @@ Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-10
 ## Session
 
 **Last session:** 2026-11-20T13:43:10Z
-**Stopped at:** D-222 plan and research resolutions independently checked; commit the aligned planning boundary next
+**Stopped at:** D-223 plan awaiting independent check; then authorized autonomous T24–T26, verification, and v0.4 closeout
 **Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md
 
 ### Blockers
