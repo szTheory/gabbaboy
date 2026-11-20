@@ -1,8 +1,12 @@
 # Phase 24: Resolve remaining v0.4 evidence and verification gaps — Research
 
+**Current route note (D-224):** D-222-era material below is historical. The active D-224 replan is based on the actual single-parent Git history: the checked planning commit inherits the prior gate unchanged, while the replacement gate commit modifies that same path. Use complete original-object raw NUL diffs with `--no-renames`, pin the exact parent and old regular-file blob/mode, and exercise the production predicates with fixtures matching those transitions. No new Git framework or parser dependency is justified. The canonical launcher was verified as `@opengsd/gsd-core` 1.21.0 for this route; the earlier 1.20.0 observation remains historical.
+
 **Researched:** 2026-11-20 (D-222 integrated recovery)
 **Domain:** Immutable local promotion gating, protected PR qualification, exact-head review evidence, and bounded GitHub CLI polling
 **Confidence:** HIGH for current in-repository decisions and source seams; MEDIUM for implementation patterns grounded in official Python, Git, and GitHub documentation
+
+**D-224 primary-source addendum:** Git commits store snapshots; proving that a path was inherited unchanged requires comparing the pinned parent and commit, while merge comparisons have separate semantics. Git's official [`diff-tree` documentation](https://git-scm.com/docs/git-diff-tree) specifies raw change records, modes/status, NUL-terminated path output, and merge handling. The official [`git replace` documentation](https://git-scm.com/docs/git-replace) describes `--no-replace-objects` for original-object reads. These facts support the narrow single-parent/raw-diff contract in the active plan. The plan keeps the standard library and existing Git adapter; it adds no dependency, CTest identity, or CI topology change.
 
 <user_constraints>
 ## User Constraints (from CONTEXT.md)

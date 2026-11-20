@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: "Phase 24 T24 D-223 frozen gate stopped: bootstrap denied discussion_boundary_drift; no repin. Owner decision needed before any new recovery scope."
-last_updated: "2026-11-20T17:03:25.135Z"
-state_head: d6c33eca114715d10ca46a92c033fda4327be92c
+stopped_at: "Phase 24 D-224 planning: roadmap route reconciled after plan-check finding; independent plan check rerun next; T24 stays held until the checked plan is committed."
+last_updated: "2026-11-20T17:41:54.553Z"
+state_head: 346d689cd197abde01e0f540dee3ad41966844c2
 progress:
   total_phases: 6
   completed_phases: 5
@@ -14,17 +14,17 @@ milestone_name: Evidence Floor
 last_activity: 2026-11-20
 current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: Phase 24 Plan 24-01 D-223 T24–T26 recovery — stopped at the frozen gate bootstrap boundary
+current_plan: Phase 24 Plan 24-01 D-224 sole-plan recovery — roadmap route reconciled; independent plan check rerun next; T24 only after checked commit.
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone stage:** v0.4 remains administratively closed under D-209. Its Phase 24 D-223 recovery is now stopped at the frozen T24 gate after a bootstrap-boundary denial; no phase verification or new v0.4 closeout is authorized until the owner decides whether to open a new bounded discussion.
+**Milestone stage:** v0.4 remains administratively closed under D-209 while its owner-authorized Phase 24 D-224 recovery proceeds. The sole plan is being updated and independently checked; T24 execution stays held until the checked boundary is committed.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
-**Phase state:** Phase 24 remains incomplete at T24. Gate commit d6c33eca114715d10ca46a92c033fda4327be92c passed 28 direct and pre-freeze immutable controls. Its post-freeze bootstrap preflight failed `discussion_boundary_drift` because the pinned D-223 discussion commit tree contains the inherited D-222 gate path; that discussion commit changed no gate bytes. No d223-bootstrap.json, T25/T26 work, push, or CI matrix exists. The D-223 no-repin stop is active; preserve D-209 requirements, archive snapshots, FIXT-01 Pending, failed unreplayed Acid2, Task 7 deferral, and D-103.
-**Next route:** The frozen D-223 gate cannot bootstrap because its pinned discussion commit tree contains the inherited gate path, although that commit did not modify the gate. The D-223 plan forbids a second pin. Owner next chooses whether to authorize a new bounded `$gsd-discuss-phase 24` recovery scope. No T25/T26, push, CI, phase verification, or v0.4 closeout proceeds before that decision.
+**Phase state:** Phase 24 remains incomplete at T24. D-223's frozen gate still has its recorded discussion_boundary_drift failure and is not changed or repinned. D-224 now authorizes one sole-plan replan, independent plan check, and one replacement gate-only commit. No D-224 gate/bootstrap exists yet; T25/T26 and external actions remain held until its frozen bootstrap and immutable self-test pass.
+**Next route:** Independently check and commit the D-224 sole-plan update, then execute only T24 through local causal controls and one frozen gate/bootstrap/immutable self-test. If those pass, continue the previously authorized $gsd-autonomous --from 24 route under its existing limits; otherwise stop without repinning.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -56,9 +56,9 @@ The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 veri
 
 ## Owner Handoff
 
-Current stage: Phase 24 T24 is stopped after the sole D-223 gate was frozen. Direct and pre-freeze immutable controls passed; frozen bootstrap denied because the discussion-boundary check rejects an inherited gate path. No bootstrap receipt or candidate exists.
+Current stage: D-224 recovery scope is authorized. The sole-plan update is in progress; the independent plan check and planning-boundary commit are next. T24 may begin only after that checked boundary is committed.
 
-Next actor: The owner decides whether to authorize a new bounded recovery scope through `$gsd-discuss-phase 24`. Until then, make no further gate, T25/T26, push, CI, phase verification, milestone closeout, or branch-switch changes. Keep D-209 archives and generated .planning/state.json unchanged.
+Next actor: The orchestrator performs the independent plan check and commits the D-224 planning boundary, then executes only T24. T25/T26 remain held until the one frozen gate passes bootstrap verification and immutable self-test; no user action is needed while those authorized steps pass.
 
 Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-103, D-209 dispositions, v0.4 administrative closeout, required branch protection, and all phase/milestone closure boundaries. Keep this worktree and both automatic-advance flags false.
 ## Accumulated Context
@@ -76,6 +76,8 @@ Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-10
 - Phase 23.1 verification stopped: Task 11 and the sole D-203 independent review are complete and clean; Nyquist/security pass and the existing Phase 23 UAT has no gaps. Stop at Phase 23.1's configured regression gate because it runs the broad phase1 build and full CTest suite, prohibited by D-103/D-203. Owner next: -discuss-phase 23.1 to decide a bounded gate or explicit scope change; no phase verifier ran.
 - Phase 23.1 verification stopped: Task 11 and the sole D-203 independent review are complete and clean; Nyquist/security pass and the existing Phase 23 UAT has no gaps. Stop at Phase 23.1 regression gate because the configured command runs the broad full preset suite prohibited by D-103/D-203. Owner next: $gsd-discuss-phase 23.1 to decide a bounded gate or explicit scope change; no phase verifier ran.
 - Phase 23.1 focused regression gate passed: The approved one-time gate override ran only plan_cap and planning_hygiene_controls; both passed. The original full-suite workflow.test_command was restored, the prohibited broad suite did not run, and the phase verifier is next. All four requirements remain Pending and v0.4 open.
+- Phase 24 edited: edited fields: goal, success_criteria, plan_label for D-224 exact inherited-gate and replacement-diff recovery; phase number and all other phase/roadmap text preserved.
+- Phase 24 edited: reconciled active Phase 24 Status and root Next route to D-224 after independent plan check found stale D-223 guidance; no other milestone/phase content changed.
 
 ## Performance Metrics
 
@@ -118,8 +120,8 @@ Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-10
 
 ## Session
 
-**Last session:** 2026-11-20T13:43:10Z
-**Stopped at:** Phase 24 T24 D-223 frozen gate stopped: bootstrap denied discussion_boundary_drift; no repin. Owner decision needed before any new recovery scope.
+**Last session:** 2026-11-20T17:41:53.749Z
+**Stopped at:** Phase 24 D-224 planning: roadmap route reconciled after plan-check finding; independent plan check rerun next; T24 stays held until the checked plan is committed.
 **Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md
 
 ### Blockers

@@ -454,3 +454,36 @@ The direct command `python3 -I .github/scripts/phase24-promotion-gate.py --self-
 First independently check and commit the D-223 update to the sole plan. Before the replacement gate is frozen, local diagnosis and retesting may correct the known module-context issue within the exact gate/loader boundary. Commit one gate-only child, write `build/phase24/d223-bootstrap.json` without replacing the D-222 receipt, and require both direct and immutable tests to pass. A frozen replacement failure stops without a second repin. Then resume existing T25/T26: valid duplicate-name fixtures, absolute-deadline subprocess behavior, cheap checks before the same ten serial CTests, distinct clean same-SHA/tree code and security reviews, current protection readback, existing candidate/matrix limits, and conditional exact-head merge. No live protection/app/credential change, new dependency, CTest identity, replay, broad suite, or weaker gate.
 
 **Next route:** Independent plan check and planning-boundary commit; then `$gsd-autonomous --from 24`. After successful T24–T26 and exact merge, run automated phase verification and D-209-compatible milestone audit/completion/cleanup, reconcile onto main, and finish with clean status. No user action is needed while these gates pass; a fresh blocker or failed protected check stops at its gate.
+
+## D-224 — Inherited gate commit-boundary proof
+
+**Date:** 2026-11-20
+**Areas discussed:** Discussion-boundary tree inheritance; exact replacement-gate diff and causal fixture fidelity
+
+| Option | Description | Selected |
+|---|---|---|
+| Reject any discussion commit tree containing the gate; require the next gate diff to be an addition | Simple checks, but incompatible with this history because the planning commit inherits the prior gate and the replacement modifies it | |
+| Trust pinned commit/tree/blob values without checking the parent delta | Minimal logic, but does not directly prove the gate stayed unchanged between the pinned parent and discussion commit | |
+| Pin a single parent; compare complete original-object diffs; allow unchanged inheritance and require one exact old-to-new regular-file modification | Matches actual Git history, proves the discussion commit left the gate unchanged, and binds the replacement transition to its expected old blob | ✓ |
+| Generalize to arbitrary roots, merges, renames, and file types | More flexible but broadens the trusted boundary without serving this recovery | |
+
+**Owner's choice:** The owner authorized one D-224 recovery scope. The synthesized recommendation is to correct both adjacent predicates and test the true inherited-file transition together in the sole plan.
+
+### Evidence and exact boundary
+
+The D-223 planning commit `06d2e06…` inherited `.github/scripts/phase24-promotion-gate.py` from its parent; its gate entry was unchanged. The frozen D-223 replacement at `d6c33ec…` remains at the current Phase 24 head as regular file mode `100644`, blob `575b450769b395f7df6b28caabed294f32b3efee`, SHA-256 `8820ce491597d98d9985b474602c28890e20349d28746b119cc65efb57f1f64a`. Thus checking for path absence rejects the real discussion boundary, and expecting `A` rejects the real gate-only replacement. The existing test fixture hid both contradictions by modeling no inherited gate and a fabricated add.
+
+### Cross-role synthesis
+
+| Lens | Finding | Recommendation |
+|---|---|---|
+| Git/object model | A commit tree is a snapshot, so inherited path presence does not imply the commit changed the path. Comparing two trees/commits exposes mode/content transitions; merge comparisons have different semantics. | Pin the discussion commit's exact single parent and compare the full parent-to-commit delta. Reject any change to the gate entry while allowing the identical pinned file to be inherited. |
+| Security/trust boundary | Tree pinning alone leaves the no-change claim implicit; ambiguous rename/type/mode transitions or a wrong base blob could otherwise satisfy an incomplete predicate. | Use original-object reads and the existing full raw NUL diff with `--no-renames`; require the exact D-223 old blob/mode and reject merge/root topology, gate deletion/rename/type/mode changes, malformed diff, and replacement refs. |
+| Test engineering | The current `FixtureGit` claims the gate is absent and synthesizes an added file, so the self-test does not match the production history. | Add production-predicate positives for inherited unchanged gate and one exact `M 100644→100644`; add causal negatives for changed/deleted/renamed/type/mode-changed discussion file, wrong prior blob, `A`/`D`/`T`, extra path, invalid parent count, and malformed diff; prove rejected cases call no action. |
+| Operations/OpenGSD | A post-freeze failure cannot be repaired by silently changing the pinned source; CI is not useful to detect an offline deterministic predicate failure. | Diagnose and test both seams locally before the single freeze; after freeze, verify the receipt and stop without repinning if any gate check fails. Keep T25/T26 and all promotion gates behind success. |
+| Product/scope | This is a recovery-path defect, not a reason to reopen v0.4 requirements or change release claims. | Preserve D-209 status, FIXT-01 Pending, Acid2 failed/unreplayed, Task 7, D-103, current branch protection, and later exact-merge/phase/milestone boundaries. |
+| Maintainability/CI | The existing Git adapter and standard library can express the contract; speculative parser or workflow changes create risk without evidence. | Reuse the original-object/raw-diff seam, add no dependency, CTest identity, or CI topology change. If a hosted matrix is later reached, measure actual queue, job/step, dependency-wait and package-work timing without weakening checks. `act` can assist locally but cannot replace hosted protected results. |
+
+Official [Git `diff-tree` documentation](https://git-scm.com/docs/git-diff-tree) describes raw changes, file modes/status, NUL-terminated path output, and special merge behavior. Official [replacement-ref documentation](https://git-scm.com/docs/git-replace) supports explicit `--no-replace-objects` for original-object reads. These primary sources support the narrow comparison; no dependency or generalized Git framework is needed.
+
+**Authorization boundary:** This scope authorizes the same-plan D-224 replan, independent plan check, and one gate-only replacement commit. It does not authorize T25/T26 until that frozen gate passes bootstrap verification and immutable self-test. Once those gates pass, the earlier GSD Autonomous authorization continues under its existing matrix, review, merge, requirement, and closeout limits. No additional gate freeze, repin, CI run, matrix, or branch switch is created by this discussion.

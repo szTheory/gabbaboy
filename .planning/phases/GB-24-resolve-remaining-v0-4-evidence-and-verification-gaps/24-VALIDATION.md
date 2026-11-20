@@ -7,11 +7,13 @@ wave_0_complete: false
 created: "2026-11-18"
 ---
 
-# Phase 24 — Historical D-220/D-221 Validation Strategy
+# Phase 24 — Validation Strategy and Historical Evidence
 
-**Superseded by D-222:** The material below preserves D-220/D-221 validation history only; it does not dispatch T18–T23 or govern current scope, authorization, commands, review gates, or candidate limits. The revised [24-01-PLAN.md](24-01-PLAN.md) is the executable D-222 contract for T24–T26; [24-CONTEXT.md](24-CONTEXT.md), [24-RESEARCH.md](24-RESEARCH.md), and the Phase 24 continuation note establish the current boundary. Do not use historical commands or checkboxes below as current authorization or evidence.
+**Current route — D-224:** The revised [24-01-PLAN.md](24-01-PLAN.md) is the sole executable contract for T24–T26. First independently check and commit the D-224 plan boundary; then execute only T24 until its one replacement gate passes frozen bootstrap verification and immutable self-test. T25/T26 remain held until both pass. Afterward, the prior GSD Autonomous authorization continues under its existing review, protected-matrix, merge, and closeout limits. [24-CONTEXT.md](24-CONTEXT.md), [24-DISCUSSION-LOG.md](24-DISCUSSION-LOG.md), and the Phase 24 continuation note record the authorized scope and exact D-224 Git-boundary findings. Preserve D-209 requirement dispositions, FIXT-01 Pending, failed unreplayed Acid2, Task 7 deferral, D-103, all candidate limits, and the separate phase/milestone closure boundary.
 
-## Current D-222 Validation Route
+**Historical material:** All D-220/D-221 commands, checkboxes, task rows, and validation conclusions below preserve history only. They do not dispatch T18–T23 or authorize work. The former D-222 and D-223 route summaries are superseded; use only the sole plan for current commands and checks.
+
+## Historical D-222 Validation Route (superseded by D-224)
 
 After the revised sole plan passes independent checking and is committed, continue the already authorized `$gsd-autonomous --from 24` route. T24 implements and freezes the immutable local promotion gate, with direct offline allow/deny controls and a gate-only source commit before candidate corrections. T25 corrects the valid duplicate-name fixtures, bounds every waiter child by the existing monotonic deadline, and exercises the pinned gate through the existing test seam. T26 runs cheap identity/scope/direct controls before the ten existing focused CTests serially, obtains fresh independent same-head code/security reviews, then uses the pinned gate for current protected-context qualification and any conditional promotion. Exact commands, CTest order/floors/deadlines, candidate limits and stop conditions live in [24-01-PLAN.md](24-01-PLAN.md).
 
