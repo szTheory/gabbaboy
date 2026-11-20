@@ -488,6 +488,7 @@ Official [Git `diff-tree` documentation](https://git-scm.com/docs/git-diff-tree)
 
 **Authorization boundary:** This scope authorizes the same-plan D-224 replan, independent plan check, and one gate-only replacement commit. It does not authorize T25/T26 until that frozen gate passes bootstrap verification and immutable self-test. Once those gates pass, the earlier GSD Autonomous authorization continues under its existing matrix, review, merge, requirement, and closeout limits. No additional gate freeze, repin, CI run, matrix, or branch switch is created by this discussion.
 
+
 ## D-225 — Preserve the lexical path gate with immutable tree lookup
 
 **Date:** 2026-11-20
@@ -568,10 +569,48 @@ The source-pin audit also inspected candidate qualification: `_verify_candidate_
 | Architecture / Git boundary | The D-226 documentation boundary is a child of the D-225 stop commit, while source corrections originate at 7761. Treating these as one parent would confuse execution-route identity with source provenance. | Pin separate constants: D-226 plan revision and immediate parent for the route boundary; source parent/tree 7761 for the two correction blobs; D-221 remains the five-file baseline. |
 | Candidate qualification | The current candidate validator compares candidate blobs to `PLAN_REV` and permits only the two fixed correction paths; the candidate-two rule independently requires an in-scope first-matrix failure and causal path. | Leave `_verify_candidate_scope`, source allowlist, correction allowlist and candidate-two rules unchanged. Do not claim a full re-anchor is required to keep candidate two eligible. |
 | Test engineering | A broad positive could mask accepting arbitrary bytes at correction paths; a fixture-only test could miss production use. | Exercise the production `validate_plan_anchor` path. Prove exact parent-bound positives plus causal refusal for wrong parent/tree, changed correction OID, wrong mode/type, any of five non-correction drift, allowlist drift, and redirected/malformed Git reads; assert zero promotion calls. |
-| Operations / GSD | The frozen failure has a strict stop; expensive local CTests or CI cannot fix it after freeze. | Before the single new replacement, run syntax/scope/direct controls and the unchanged cheap scanner. After freeze, run direct, bootstrap and immutable checks; only if all pass continue T25/T26. Any failure stops with no further replacement. |
+| Operations / GSD | The frozen failure has a strict stop; expensive local CTests or CI cannot fix it after freeze. | Before the single new replacement, run syntax/scope/direct controls and the unchanged cheap scanner. After freeze, T27 requires direct and bootstrap checks; T28 then runs the existing receipt seam against the immutable D-227 gate. Only if all pass continue T29. Any failure stops with no further replacement. |
 | Maintainability / cost | A new package, manifest, or scanner exception would widen the trust surface. | Add the two exact pins to the existing standard-library gate and reuse its current test seam. Add no dependency, CTest, CI context, or workflow topology change. |
 | Product / release | This is a promotion-proof defect, not new emulation evidence. | Keep D-209 dispositions, FIXT-01 Pending, failed unreplayed Acid2, Task 7, D-103, release bytes, archives, branch protection and milestone boundary unchanged. |
 
 **Owner's choice:** The owner selected **Authorize D226** on 2026-11-20. The approved bounded scope is one same-plan update, one independent plan check, and one gate-only replacement using D-221 for five files and exact parent-bound objects for two correction files.
 
 **Authorization boundary:** D-226 supersedes D-225's no-further-replacement stop only for one new gate-only replacement after the D-226 checked planning boundary. It does not alter the failed D-225 replacement or receipt state. Pre-freeze local diagnosis may converge within the described gate proof. After freeze, any direct, bootstrap, immutable, or required qualification failure stops without another replacement. T25/T26 stay held until frozen direct/bootstrap/immutable checks pass. All D-209, D-103, Task 7, Acid2, candidate, review, matrix, CI, merge and cleanup limits remain unchanged. If T24 passes, resume the existing authorized `$gsd-autonomous --from 24` route.
+
+## D-227 — Correct the frozen direct-control marker contract
+
+**Date:** 2026-11-20
+
+**Areas discussed:** Raw marker contract; immutable recovery boundary; final qualification and stop behavior
+
+### Trigger
+
+D-226's exact final candidate `febaa91c969daf2f82ac85424eb4623684ecdfc7` (tree `5f903b66071ec9f2bdbc6d007e9b917c4079c45c`) failed the frozen gate's `promotion_coverage_controls` direct-control check. The exact fixed command exited zero and its preserved raw transcript `build/phase24/d226-t26-promotion_coverage_controls.log` contains `PASS: phase24-promotion-controls gate=<64 lowercase hex> controls=<integer>`. The gate's matcher instead expects `phase24-promotion-controls pass gate=… controls=…`; `_validate_direct_control` refuses with `qualification_direct_marker_missing`. The D-226 gate replacement is `f9ccf6b4a211bc33270f6f8172e40a4e4cb22cba`, blob `d37be8847ca654b0b318103fef07e130ad918a56`, SHA-256 `ea6c281eee7f3161235b235d6d67e9f4d11ebcbb230f42b9a51ee491a85afb9e`. The final-candidate CTests did not start. Preserve the candidate, gate, raw transcript, digest and ignored stop report without edits.
+
+### Options considered
+
+| Option | Benefits | Cost / failure mode | Decision |
+|---|---|---|---|
+| Change the immutable gate consumer/sample to match the actual raw PASS line, then rebind the existing direct coverage seam to D-227's receipt after freeze | Fixes the stale marker and keeps the existing direct seam connected to the new immutable gate receipt; preserves producer output and raw evidence | Requires one gate-only freeze followed by one already-allowlisted correction-path update | **Select** |
+| Change the coverage checker to emit the gate's stale synthetic wording | Satisfies the existing expression | Changes a correct producer and increases scope across the already-qualified correction seam | Reject |
+| Rewrite/normalize/append transcript text before validation | Can manufacture a matching line | Digest would no longer attest to exact command output; weakens evidence provenance | Reject |
+| Retry the unchanged D-226 candidate or remove the control | Avoids a new gate commit | Repeats deterministic failure or weakens the gate | Reject |
+
+### Cross-role synthesis
+
+| Lens | Concern | Selected control |
+|---|---|---|
+| Security/provenance | A transformed transcript or loosely matched substring could accept output different from the fixed command's exact evidence. | Anchor the complete expected line: literal `PASS:`, exact marker name, 64 lowercase hex gate digest and integer count. Preserve exact command, raw transcript bytes, SHA-256, exit code and declared marker list. |
+| Architecture/integration | Only the gate's marker grammar is stale, but the existing coverage seam also pins the D-226 receipt and gate identities. Updating only the matcher would leave the next actual direct-control command bound to old bootstrap evidence. | Keep producer output unchanged; after the D-227 gate freeze, update only the coverage seam receipt path/kind/schema/plan/gate pins in its existing correction allowance. Preserve D-226's receipt and leave waiter logic untouched. |
+| Test engineering | The embedded sample shared the same stale grammar, so the direct suite was self-consistent but not representative. | Use the actual captured line as a positive and reject the former synthetic line, missing marker, bad digest, nonzero result and altered fixed command. Assert no reservation/promotion side effect on refusal. |
+| Operations/CI | The mismatch was found before CTest and remote qualification. Hosted CI adds no diagnostic value until the frozen local gate is clean. | Run cheap syntax/scope/direct controls plus the unchanged scanner check before freeze. After freeze T27 requires direct self-test and bootstrap verification; T28 then runs the existing receipt seam against original immutable bytes, followed by the existing ten CTests serially. Measure real queue/job/step/dependency/package time only if the protected matrix runs; preserve every required check. |
+| Maintainability/supply chain | New parsing dependencies, transcript filters or CTest identities add maintenance and trust surface without recurring value. | Use the existing Python standard library and current self-test/CTest seams; add no dependency or workflow change. |
+| Product/release | A gate-format defect does not create new PPU/emulator evidence or change the accepted milestone gaps. | Retain D-209 requirement dispositions, FIXT-01 Pending, failed unreplayed Acid2, Task 7, D-103, released bytes and archive pins. |
+
+### Owner direction and bounded route
+
+The owner instructed the agent to follow the synthesized recommendations and continue through the milestone. The D-227 scope is one same-plan update, one independent plan check and one gate-only replacement after the checked documentation boundary. That boundary is a single-parent child of the D-226 stop candidate and proves inherited D-226 gate blob `d37be8847ca654b0b318103fef07e130ad918a56`/mode `100644` unchanged while revalidating the historical D-225→D-226 chain. The replacement is its single-parent child with exactly one raw NUL-diff `M 100644→100644` entry on `.github/scripts/phase24-promotion-gate.py`. Refresh gate plan/discussion pins from the checked boundary; do not change the raw-path resolver or source baseline. After T27 freezes D-227 and its direct self-test plus bootstrap verification pass, T28 updates only the existing coverage direct seam to consume `d227-bootstrap.json` and exact D-227 pins. That call executes the immutable self-test against original gate bytes; preserve the D-226 receipt and do not replay waiter code.
+
+D-227 does not reset candidate, review, matrix, required-context, or merge limits. A failed frozen direct/bootstrap/immutable check ends the attempt without another replacement, retry, CI run, promotion or closure claim. Once the existing receipt seam passes with D-227 evidence, resume exact-head qualification, all ten existing focused CTests, fresh independent code/security reviews, the one existing protected matrix, and conditional merge of the identical reviewed head. Then run active-scope automated Phase 24 verification and D-209-compatible milestone audit/completion/cleanup after approved reconciliation to `main`. Do not start v0.5, run D-103, replay ROM/Acid2, execute Task 7, change requirements, or alter protected coverage.
+
+**Canonical references:** `.github/scripts/phase24-promotion-gate.py`; `tests/scripts/verify-workflow-policy-coverage.py`; `build/phase24/d226-t26-promotion_coverage_controls.log`; `build/phase24/d226-t26-frozen-gate-marker-stop.json`; `.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md`; `.planning/context/WORKFLOW.md#cicd-efficiency`.

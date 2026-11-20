@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: Phase 24 D-226 plan check passed; planning boundary commit is next
-last_updated: "2026-11-20T21:00:26.265Z"
-state_head: e16873ad03c725e3564d857d8a5ae4850c2049e1
+stopped_at: Phase 24 D-227 plan check passed; commit checked planning boundary next
+last_updated: "2026-11-20T23:29:47.332Z"
+state_head: febaa91c969daf2f82ac85424eb4623684ecdfc7
 progress:
   total_phases: 6
   completed_phases: 5
@@ -12,19 +12,19 @@ progress:
   completed_plans: 32
 milestone_name: Evidence Floor
 last_activity: 2026-11-20
-current_plan: "Phase 24 Plan 24-01: D-226 plan checked; commit planning boundary before the single T24 gate replacement"
 current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
+current_plan: "Phase 24 Plan 24-01: D-227 boundary checked; commit before T27 gate-only replacement"
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone stage:** v0.4 remains administratively closed under D-209 while the owner-authorized D-226 Phase 24 recovery is replanned and independently checked.
+**Milestone stage:** v0.4 remains administratively closed under D-209 while the owner-authorized D-227 Phase 24 recovery proceeds; accepted requirement gaps and release bytes remain unchanged.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
-**Phase state:** Phase 24 is incomplete. Preserve the D-224 no_phase_paths failure and D-225 frozen d221_source_drift bootstrap failure. D-226 authorizes one same-plan update, one independent plan check, and one gate-only replacement. Keep D-221 for the five non-correction source files and pin the two correction files to exact original objects in parent 7761; frozen direct/bootstrap/immutable checks must pass before T25/T26.
-**Next route:** The sole Phase 24 plan passed its independent D-226 check with no blockers or warnings. Commit the D-226 documentation boundary as the sole-parent child of D-225 stop commit e16873ad03c725e3564d857d8a5ae4850c2049e1. Then run only T24 under the authorized autonomous route: one gate-only replacement with cheap pre-freeze controls, followed by frozen direct/bootstrap/immutable checks. T25/T26 remain held until all frozen checks pass; any frozen failure stops without another replacement.
+**Phase state:** Phase 24 is incomplete. Preserve the D-224 and D-225 failures plus the D-226 frozen marker refusal and raw evidence. D-227 authorizes one same-plan update/check and one gate-only replacement after a checked boundary on D-226 stop candidate febaa91. Keep the five D-221 source pins and two D-226 exact parent-bound correction objects unchanged. T27 frozen direct/bootstrap checks must pass, then the existing T28 receipt seam must pass its immutable D-227 control before T29 qualification.
+**Next route:** The independent D-227 plan check passed. Commit the checked D-227 boundary as the sole-parent child of febaa91c969daf2f82ac85424eb4623684ecdfc7, proving the inherited D-226 gate blob and D-225-to-D-226 history. Then execute T27 gate-only replacement through frozen direct/bootstrap checks; T28 receipt-seam immutable check gates T29. Any frozen failure stops without replacement or retry.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -56,9 +56,9 @@ The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 veri
 
 ## Owner Handoff
 
-Current stage: The D-226 same-plan update has passed its independent plan check with no blockers or warnings. No gate replacement or Phase 24 task execution has started. The D-225 frozen bootstrap denial remains preserved.
+Current stage: D-227 discussion and sole-plan update are recorded; the independent plan checker passed. The D-226 frozen marker refusal and raw receipts remain preserved.
 
-Next actor: The GSD orchestrator commits the independently checked D-226 planning boundary and records its exact identities. Then execute only T24 for the one gate-only replacement. T25/T26 stay held until frozen direct, bootstrap, and immutable checks pass; any frozen failure stops without another replacement.
+Next actor: The orchestrator commits the independently checked planning boundary on febaa91, then executes T27. T28 and T29 remain gated by their recorded checks; no owner action is needed.
 
 Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-103, D-209 dispositions, v0.4 administrative closeout, required branch protection, and all phase/milestone closure boundaries. Keep this worktree and both automatic-advance flags false.
 ## Accumulated Context
@@ -78,6 +78,8 @@ Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-10
 - Phase 23.1 focused regression gate passed: The approved one-time gate override ran only plan_cap and planning_hygiene_controls; both passed. The original full-suite workflow.test_command was restored, the prohibited broad suite did not run, and the phase verifier is next. All four requirements remain Pending and v0.4 open.
 - Phase 24 edited: edited fields: goal, success_criteria, plan_label for D-224 exact inherited-gate and replacement-diff recovery; phase number and all other phase/roadmap text preserved.
 - Phase 24 edited: reconciled active Phase 24 Status and root Next route to D-224 after independent plan check found stale D-223 guidance; no other milestone/phase content changed.
+- Phase 24 updated: Reconciled active Phase 24 route from D-226 to D-227. The checked boundary, exact raw-marker contract, staged direct/bootstrap and receipt-seam immutable gates, unchanged source pins, and downstream T29 qualification route are recorded; prior evidence and all limits remain unchanged.
+- Phase 24 edited: D-227 plan check passed; next commit checked boundary on febaa91, then run T27 direct/bootstrap and gated T28 receipt control
 
 ## Performance Metrics
 
@@ -125,7 +127,7 @@ Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-10
 ## Session
 
 **Last session:** 2026-11-20T19:23:24.789Z
-**Stopped at:** Phase 24 D-226 plan check passed; planning boundary commit is next
+**Stopped at:** Phase 24 D-227 plan check passed; commit checked planning boundary next
 **Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md
 
 ### Blockers
