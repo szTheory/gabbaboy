@@ -34,15 +34,20 @@ PLAN_PATH = ".planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verifica
 CLOSEOUT_PATH = ".planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md"
 DISCUSSION_PATH = ".planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-DISCUSSION-LOG.md"
 GATE_PATH = ".github/scripts/phase24-promotion-gate.py"
-PLAN_REV = "06d2e06cef78c8802fd4208198dabf571115bb55"
-PLAN_PARENT = "2125f3df0e24e0bb3a37c4338c70838af129d9f0"
-PLAN_TREE = "4e4e722a87bdac3be253fc9048ca060aefd8938f"
-PLAN_BLOB = "0ffd71880d55e1d76a517c07a86b8e76f4702260"
-PLAN_SHA256 = "ae550ca58336bb299290bf8f883a7f47ff089798a81c60f43f1c2ca8c24e3550"
-DISCUSSION_REV = "06d2e06cef78c8802fd4208198dabf571115bb55"
-DISCUSSION_TREE = "4e4e722a87bdac3be253fc9048ca060aefd8938f"
-DISCUSSION_BLOB = "8cb3ce6c54f24e67e2ce6d23c857309eb42b05f9"
-DISCUSSION_SHA256 = "9c959658488730bdfa219fc48d1adcd1aa2bec44a985f1f8d9626de5e80ad5b5"
+PLAN_REV = "9b0023fd4954fcbd970ce33fe599a029e51701a5"
+PLAN_PARENT = "346d689cd197abde01e0f540dee3ad41966844c2"
+PLAN_TREE = "b32237f8c9fe51d2d556bc522f623a0e7ef6cec1"
+PLAN_BLOB = "e7df48610d52d056d56f421e59f01f5448031a84"
+PLAN_SHA256 = "2dc04f3d53fbdc0760335ab1c52f3a802f32a0f509ca1b980d48a748ab00c1db"
+DISCUSSION_REV = "9b0023fd4954fcbd970ce33fe599a029e51701a5"
+DISCUSSION_TREE = "b32237f8c9fe51d2d556bc522f623a0e7ef6cec1"
+DISCUSSION_BLOB = "f02a39603f1146a3ac7cb3da655349decc3b3aab"
+DISCUSSION_SHA256 = "312510ba1b6fbb46ee8006c80b4c3080061e8d17fa1503fb438b29b77c3350b3"
+D223_GATE_REV = "d6c33eca114715d10ca46a92c033fda4327be92c"
+D223_GATE_PARENT = "06d2e06cef78c8802fd4208198dabf571115bb55"
+D223_GATE_TREE = "46ac726493cd1ec8d542cdb272dfa853f27078dc"
+D223_GATE_BLOB = "575b450769b395f7df6b28caabed294f32b3efee"
+D223_GATE_SHA256 = "8820ce491597d98d9985b474602c28890e20349d28746b119cc65efb57f1f64a"
 D209_REV = "96d502d4733ac54aa8bf7fbfd7813065143771dc"
 D220_SHA = "f19d5ae2f5819d18074a68e1e80d959dc31b1302"
 D221_SHA = "9bab99b6af2462291d8481ce5da14fa72c1777e4"
@@ -360,6 +365,26 @@ class Git:
         raw = self.run("diff", "--no-ext-diff", "--no-renames", "--raw", "-z", "--no-abbrev", before, after)
         return parse_raw_nul_diff(raw)
 
+    def tree_entry(self, rev: str, path: str) -> tuple[str, str, str]:
+        require_sha(rev, "tree revision")
+        raw = self.run("ls-tree", "-r", "-z", rev, "--", path)
+        if not raw.endswith(b"\0"):
+            deny("malformed_tree_entry")
+        records = raw[:-1].split(b"\0") if raw else []
+        if len(records) != 1:
+            deny("tree_entry_cardinality")
+        header, separator, raw_path = records[0].partition(b"\t")
+        fields = header.split(b" ")
+        if not separator or len(fields) != 3 or raw_path != path.encode("utf-8"):
+            deny("malformed_tree_entry")
+        try:
+            mode, object_type, oid = (field.decode("ascii", errors="strict") for field in fields)
+        except UnicodeDecodeError:
+            deny("malformed_tree_entry")
+        if re.fullmatch(r"[0-7]{6}", mode) is None or object_type != "blob" or re.fullmatch(r"[0-9a-f]{40}", oid) is None:
+            deny("malformed_tree_entry")
+        return mode, object_type, oid
+
 
 def _candidate_contains(git: Git, base_sha: str, candidate_sha: str) -> bool:
     return git.is_ancestor(base_sha, candidate_sha)
@@ -398,6 +423,44 @@ def current_root(git: Git) -> tuple[str, str, str]:
     return root, absolute_git_dir, branch
 
 
+def _validate_inherited_gate_boundary(git: Git) -> dict[str, str]:
+    """Prove D-224 inherited the exact frozen D-223 gate without editing it."""
+    if (git.object_type(D223_GATE_REV) != "commit" or git.tree(D223_GATE_REV) != D223_GATE_TREE
+            or git.parents(D223_GATE_REV) != [D223_GATE_PARENT]):
+        deny("d223_gate_baseline_mismatch")
+    if (git.tree_entry(D223_GATE_REV, GATE_PATH) != ("100644", "blob", D223_GATE_BLOB)
+            or digest_bytes(git.blob(D223_GATE_REV, GATE_PATH)) != D223_GATE_SHA256):
+        deny("d223_gate_blob_mismatch")
+    if git.parents(PLAN_REV) != [PLAN_PARENT]:
+        deny("plan_parent_mismatch")
+    if git.tree_entry(PLAN_PARENT, GATE_PATH) != ("100644", "blob", D223_GATE_BLOB):
+        deny("inherited_gate_parent_mismatch")
+    for before, after, reason in (
+        (D223_GATE_REV, PLAN_PARENT, "inherited_gate_history_drift"),
+        (PLAN_PARENT, PLAN_REV, "plan_changed_inherited_gate"),
+    ):
+        if any(entry.path == GATE_PATH for entry in git.raw_diff(before, after)):
+            deny(reason)
+    return {
+        "rev": D223_GATE_REV,
+        "tree": D223_GATE_TREE,
+        "blob": D223_GATE_BLOB,
+        "sha256": D223_GATE_SHA256,
+        "mode": "100644",
+    }
+
+
+def _validate_gate_replacement_diff(entries: Sequence[DiffEntry]) -> str:
+    if len(entries) != 1:
+        deny("bootstrap_diff_not_one_file")
+    entry = entries[0]
+    if (entry.path, entry.status, entry.old_mode, entry.new_mode, entry.old_oid) != (
+        GATE_PATH, "M", "100644", "100644", D223_GATE_BLOB,
+    ):
+        deny("bootstrap_diff_scope")
+    return entry.new_oid
+
+
 def validate_plan_anchor(git: Git, *, env: Mapping[str, str] | None = None) -> dict[str, Any]:
     current = os.environ if env is None else env
     rev = current.get("PHASE24_D222_PLAN_REV", "")
@@ -428,10 +491,11 @@ def validate_plan_anchor(git: Git, *, env: Mapping[str, str] | None = None) -> d
     if not git.is_ancestor(D221_EXEC_REV, rev):
         deny("d221_boundary_not_ancestor")
     if (git.object_type(DISCUSSION_REV) != "commit" or git.tree(DISCUSSION_REV) != DISCUSSION_TREE
+            or git.parents(DISCUSSION_REV) != [PLAN_PARENT]
             or git.text("rev-parse", f"{DISCUSSION_REV}:{DISCUSSION_PATH}") != DISCUSSION_BLOB
-            or digest_bytes(git.blob(DISCUSSION_REV, DISCUSSION_PATH)) != DISCUSSION_SHA256
-            or git.exists("cat-file", "-e", f"{DISCUSSION_REV}:{GATE_PATH}")):
+            or digest_bytes(git.blob(DISCUSSION_REV, DISCUSSION_PATH)) != DISCUSSION_SHA256):
         deny("discussion_boundary_drift")
+    inherited_gate = _validate_inherited_gate_boundary(git)
     loader_sha256 = digest_bytes(extract_plan_loader(raw))
     return {
         "rev": rev,
@@ -445,6 +509,7 @@ def validate_plan_anchor(git: Git, *, env: Mapping[str, str] | None = None) -> d
         "discussion_tree": DISCUSSION_TREE,
         "discussion_blob": DISCUSSION_BLOB,
         "discussion_sha256": DISCUSSION_SHA256,
+        "inherited_gate": inherited_gate,
         "loader_sha256": loader_sha256,
     }
 
@@ -535,10 +600,11 @@ def _verify_bootstrap_source(git: Git, receipt: Mapping[str, Any], *, env: Mappi
     plan = exact_keys(receipt.get("plan"), {"rev", "parent", "tree", "blob", "sha256", "path"}, "bootstrap.plan")
     discussion = exact_keys(receipt.get("discussion"), {"rev", "tree", "blob", "sha256", "path"}, "bootstrap.discussion")
     loader = exact_keys(receipt.get("loader"), {"sha256"}, "bootstrap.loader")
-    gate = exact_keys(receipt.get("gate"), {"rev", "parent", "tree", "blob", "sha256"}, "bootstrap.gate")
+    inherited_gate = exact_keys(receipt.get("inherited_gate"), {"rev", "tree", "blob", "sha256", "mode"}, "bootstrap.inherited_gate")
+    gate = exact_keys(receipt.get("gate"), {"rev", "parent", "tree", "blob", "sha256", "old_blob", "old_mode"}, "bootstrap.gate")
     trusted = exact_keys(receipt.get("trusted_handoff"), {"authority", "plan_rev", "plan_sha256", "gate_rev", "gate_sha256"}, "bootstrap.trusted_handoff")
     root_receipt = exact_keys(receipt.get("repository"), {"root", "git_dir", "branch"}, "bootstrap.repository")
-    for label, value in (("plan.rev", plan["rev"]), ("plan.parent", plan["parent"]), ("plan.tree", plan["tree"]), ("plan.blob", plan["blob"]), ("gate.rev", gate["rev"]), ("gate.parent", gate["parent"]), ("gate.tree", gate["tree"]), ("gate.blob", gate["blob"])):
+    for label, value in (("plan.rev", plan["rev"]), ("plan.parent", plan["parent"]), ("plan.tree", plan["tree"]), ("plan.blob", plan["blob"]), ("inherited_gate.rev", inherited_gate["rev"]), ("inherited_gate.tree", inherited_gate["tree"]), ("inherited_gate.blob", inherited_gate["blob"]), ("gate.rev", gate["rev"]), ("gate.parent", gate["parent"]), ("gate.tree", gate["tree"]), ("gate.blob", gate["blob"]), ("gate.old_blob", gate["old_blob"])):
         require_sha(value, label)
     for label, value in (("plan.sha256", plan["sha256"]), ("discussion.sha256", discussion["sha256"]), ("loader.sha256", loader["sha256"]), ("gate.sha256", gate["sha256"]), ("trusted.plan_sha256", trusted["plan_sha256"]), ("trusted.gate_sha256", trusted["gate_sha256"])):
         require_digest(value, label)
@@ -546,12 +612,16 @@ def _verify_bootstrap_source(git: Git, receipt: Mapping[str, Any], *, env: Mappi
         deny("bootstrap_plan_receipt_mismatch")
     if discussion != {"rev": DISCUSSION_REV, "tree": DISCUSSION_TREE, "blob": DISCUSSION_BLOB, "sha256": DISCUSSION_SHA256, "path": DISCUSSION_PATH}:
         deny("bootstrap_discussion_receipt_mismatch")
+    if inherited_gate != {"rev": D223_GATE_REV, "tree": D223_GATE_TREE, "blob": D223_GATE_BLOB, "sha256": D223_GATE_SHA256, "mode": "100644"}:
+        deny("bootstrap_inherited_gate_mismatch")
     gate_rev = current.get("PHASE24_D222_GATE_REV", "")
     gate_digest = current.get("PHASE24_D222_GATE_SHA256", "")
     if not valid_sha(gate_rev) or not valid_sha256(gate_digest):
         deny("missing_trusted_gate_handoff")
     if gate["rev"] != gate_rev or gate["sha256"] != gate_digest or gate["parent"] != PLAN_REV:
         deny("bootstrap_gate_receipt_mismatch")
+    if gate["old_blob"] != D223_GATE_BLOB or gate["old_mode"] != "100644":
+        deny("bootstrap_old_gate_mismatch")
     if trusted != {
         "authority": "gsd-executor",
         "plan_rev": PLAN_REV,
@@ -571,14 +641,12 @@ def _verify_bootstrap_source(git: Git, receipt: Mapping[str, Any], *, env: Mappi
         deny("plan_blob_mismatch")
     if git.object_type(gate_rev) != "commit" or git.tree(gate_rev) != gate["tree"] or git.parents(gate_rev) != [PLAN_REV]:
         deny("gate_object_mismatch")
-    entries = git.raw_diff(PLAN_REV, gate_rev)
-    if len(entries) != 1:
-        deny("bootstrap_diff_not_one_file")
-    entry = entries[0]
-    if (entry.path, entry.status, entry.old_mode, entry.new_mode) != (GATE_PATH, "A", "000000", "100644"):
-        deny("bootstrap_diff_scope")
+    inherited = _validate_inherited_gate_boundary(git)
+    if inherited != {key: inherited_gate[key] for key in ("rev", "tree", "blob", "sha256", "mode")}:
+        deny("bootstrap_inherited_gate_drift")
+    new_gate_blob = _validate_gate_replacement_diff(git.raw_diff(PLAN_REV, gate_rev))
     gate_bytes = git.blob(gate_rev, GATE_PATH)
-    if git.text("rev-parse", f"{gate_rev}:{GATE_PATH}") != entry.new_oid or digest_bytes(gate_bytes) != gate_digest or entry.new_oid != gate["blob"]:
+    if git.text("rev-parse", f"{gate_rev}:{GATE_PATH}") != new_gate_blob or digest_bytes(gate_bytes) != gate_digest or new_gate_blob != gate["blob"]:
         deny("gate_blob_mismatch")
     _verify_executing_bytes(gate_bytes, executing_source_bytes())
     root, git_dir, branch = current_root(git)
@@ -602,7 +670,7 @@ def _verify_bootstrap_source(git: Git, receipt: Mapping[str, Any], *, env: Mappi
         "planning_hygiene_sha256": PLANNING_HYGIENE_SHA256,
     }:
         deny("bootstrap_historical_pins_mismatch")
-    return {"plan": dict(plan), "discussion": dict(discussion), "loader": dict(loader), "gate": dict(gate), "repository": dict(root_receipt), "scope": dict(scopes)}
+    return {"plan": dict(plan), "discussion": dict(discussion), "loader": dict(loader), "inherited_gate": dict(inherited_gate), "gate": dict(gate), "repository": dict(root_receipt), "scope": dict(scopes)}
 
 
 def _verify_executing_bytes(original_bytes: bytes, executing_bytes: Any) -> None:
@@ -672,9 +740,9 @@ def verify_bootstrap(root: Path, bootstrap_path: str) -> dict[str, Any]:
     git = Git(root)
     _check_ignored(git, bootstrap_path)
     _, receipt, _ = _load_receipt(root, bootstrap_path)
-    exact_keys(receipt, {"schema_version", "kind", "plan", "discussion", "loader", "gate", "repository", "scope", "history_pins", "trusted_handoff"}, "bootstrap")
+    exact_keys(receipt, {"schema_version", "kind", "plan", "discussion", "loader", "inherited_gate", "gate", "repository", "scope", "history_pins", "trusted_handoff"}, "bootstrap")
     _require_schema_version(receipt, "bootstrap")
-    if receipt.get("kind") != "phase24-d222-bootstrap":
+    if receipt.get("kind") != "phase24-d224-bootstrap":
         deny("bootstrap_kind")
     result = _verify_bootstrap_source(git, receipt)
     _verify_current_tree_clean(git, str(result["gate"]["rev"]))
@@ -1146,7 +1214,7 @@ def _validate_qualification(root: Path, manifest: Mapping[str, Any], provenance:
     exact_keys(qualification, QUALIFICATION_KEYS, "qualification")
     _require_schema_version(qualification, "qualification")
     expected = {
-        "kind": "phase24-d222-qualification",
+        "kind": "phase24-d224-qualification",
         "candidate_sha": manifest["candidate_sha"],
         "candidate_tree": manifest["candidate_tree"],
         "plan_rev": PLAN_REV,
@@ -1197,7 +1265,7 @@ def _validate_qualification(root: Path, manifest: Mapping[str, Any], provenance:
     effects = qualification["fixture_effects"]
     if type(effects) is not list or effects:
         deny("qualification_fixture_effect")
-    pins = exact_keys(qualification["source_pins"], {"plan_rev", "plan_sha256", "discussion_rev", "discussion_tree", "discussion_blob", "discussion_sha256", "loader_sha256", "d221_exec_rev", "d209_rev", "requirements_blob", "roadmap_blob", "state_forks_blob", "planning_hygiene_sha256", "gate_rev", "gate_sha256"}, "qualification.source_pins")
+    pins = exact_keys(qualification["source_pins"], {"plan_rev", "plan_sha256", "discussion_rev", "discussion_tree", "discussion_blob", "discussion_sha256", "loader_sha256", "d223_gate_rev", "d223_gate_tree", "d223_gate_blob", "d223_gate_sha256", "d223_gate_mode", "d221_exec_rev", "d209_rev", "requirements_blob", "roadmap_blob", "state_forks_blob", "planning_hygiene_sha256", "gate_rev", "gate_sha256"}, "qualification.source_pins")
     if pins != {
         "plan_rev": PLAN_REV,
         "plan_sha256": PLAN_SHA256,
@@ -1206,6 +1274,11 @@ def _validate_qualification(root: Path, manifest: Mapping[str, Any], provenance:
         "discussion_blob": DISCUSSION_BLOB,
         "discussion_sha256": DISCUSSION_SHA256,
         "loader_sha256": bootstrap["loader"]["sha256"],
+        "d223_gate_rev": D223_GATE_REV,
+        "d223_gate_tree": D223_GATE_TREE,
+        "d223_gate_blob": D223_GATE_BLOB,
+        "d223_gate_sha256": D223_GATE_SHA256,
+        "d223_gate_mode": "100644",
         "d221_exec_rev": D221_EXEC_REV,
         "d209_rev": D209_REV,
         "requirements_blob": REQUIREMENTS_BLOB,
@@ -2029,9 +2102,9 @@ def _run_live(root: Path, args: argparse.Namespace, runner: CommandRunner | None
     bootstrap_path = _receipt_path_under_build(bootstrap_path, "bootstrap receipt")
     _check_ignored(git, bootstrap_path)
     _, bootstrap_receipt, _ = _load_receipt(root, bootstrap_path)
-    exact_keys(bootstrap_receipt, {"schema_version", "kind", "plan", "discussion", "loader", "gate", "repository", "scope", "history_pins", "trusted_handoff"}, "bootstrap")
+    exact_keys(bootstrap_receipt, {"schema_version", "kind", "plan", "discussion", "loader", "inherited_gate", "gate", "repository", "scope", "history_pins", "trusted_handoff"}, "bootstrap")
     _require_schema_version(bootstrap_receipt, "bootstrap")
-    if bootstrap_receipt.get("kind") != "phase24-d222-bootstrap":
+    if bootstrap_receipt.get("kind") != "phase24-d224-bootstrap":
         deny("bootstrap_kind")
     bootstrap = _verify_bootstrap_source(git, bootstrap_receipt)
     manifest, candidate, provenance, evidence = _load_manifest(root, git, bootstrap, args.candidate, args.evidence)
@@ -2313,6 +2386,116 @@ def _test_protection() -> dict[str, Any]:
 
 
 class PromotionGateContractTests(unittest.TestCase):
+    def test_d224_inherited_gate_boundary_accepts_only_the_pinned_unchanged_entry(self) -> None:
+        real_git = Git(Path.cwd())
+        expected = {"rev": D223_GATE_REV, "tree": D223_GATE_TREE, "blob": D223_GATE_BLOB, "sha256": D223_GATE_SHA256, "mode": "100644"}
+        self.assertEqual(_validate_inherited_gate_boundary(real_git), expected)
+
+        class MutatedBoundary:
+            def __init__(self, fault: str) -> None:
+                self.fault = fault
+                self.action_calls: list[str] = []
+            def __getattr__(self, name: str) -> Any:
+                return getattr(real_git, name)
+            def tree_entry(self, rev: str, path: str) -> tuple[str, str, str]:
+                actual = real_git.tree_entry(rev, path)
+                if self.fault == "parent_mode" and rev == PLAN_PARENT:
+                    return "100755", "blob", D223_GATE_BLOB
+                if self.fault == "parent_blob" and rev == PLAN_PARENT:
+                    return "100644", "blob", "0" * 40
+                if self.fault == "parent_type" and rev == PLAN_PARENT:
+                    return "120000", "blob", D223_GATE_BLOB
+                if self.fault == "parent_object_type" and rev == PLAN_PARENT:
+                    return "100644", "tree", D223_GATE_BLOB
+                return actual
+            def blob(self, rev: str, path: str) -> bytes:
+                if self.fault == "baseline_content" and rev == D223_GATE_REV and path == GATE_PATH:
+                    return b"substituted gate content"
+                return real_git.blob(rev, path)
+            def parents(self, rev: str) -> list[str]:
+                if self.fault == "root" and rev == PLAN_REV:
+                    return []
+                if self.fault == "merge" and rev == PLAN_REV:
+                    return [PLAN_PARENT, D223_GATE_REV]
+                return real_git.parents(rev)
+            def raw_diff(self, before: str, after: str) -> list[DiffEntry]:
+                if self.fault == "history_diff" and (before, after) == (D223_GATE_REV, PLAN_PARENT):
+                    return [DiffEntry("100644", "100644", D223_GATE_BLOB, D223_GATE_BLOB, "M", GATE_PATH)]
+                if self.fault == "history_add" and (before, after) == (D223_GATE_REV, PLAN_PARENT):
+                    return [DiffEntry("000000", "100644", "0" * 40, D223_GATE_BLOB, "A", GATE_PATH)]
+                if self.fault == "history_delete" and (before, after) == (D223_GATE_REV, PLAN_PARENT):
+                    return [DiffEntry("100644", "000000", D223_GATE_BLOB, "0" * 40, "D", GATE_PATH)]
+                if self.fault == "history_type" and (before, after) == (D223_GATE_REV, PLAN_PARENT):
+                    return [DiffEntry("100644", "120000", D223_GATE_BLOB, "0" * 40, "T", GATE_PATH)]
+                if self.fault == "history_rename" and (before, after) == (D223_GATE_REV, PLAN_PARENT):
+                    return [
+                        DiffEntry("100644", "000000", D223_GATE_BLOB, "0" * 40, "D", GATE_PATH),
+                        DiffEntry("000000", "100644", "0" * 40, "3" * 40, "A", "renamed-gate.py"),
+                    ]
+                if self.fault == "plan_diff" and (before, after) == (PLAN_PARENT, PLAN_REV):
+                    return [DiffEntry("100644", "100644", D223_GATE_BLOB, D223_GATE_BLOB, "M", GATE_PATH)]
+                if self.fault == "malformed_diff" and (before, after) == (PLAN_PARENT, PLAN_REV):
+                    deny("malformed_raw_diff")
+                return real_git.raw_diff(before, after)
+
+        for fault in ("parent_mode", "parent_blob", "parent_type", "parent_object_type", "baseline_content", "history_diff", "history_add", "history_delete", "history_type", "history_rename", "plan_diff", "malformed_diff", "root", "merge"):
+            with self.subTest(fault=fault):
+                mutated = MutatedBoundary(fault)
+                with self.assertRaises(GateError):
+                    _validate_inherited_gate_boundary(mutated)
+                self.assertEqual(mutated.action_calls, [])
+
+    def test_d224_gate_only_diff_requires_exact_old_to_new_regular_file_modification(self) -> None:
+        exact = DiffEntry("100644", "100644", D223_GATE_BLOB, "a" * 40, "M", GATE_PATH)
+        self.assertEqual(_validate_gate_replacement_diff([exact]), exact.new_oid)
+        rejected = (
+            [DiffEntry("000000", "100644", "0" * 40, exact.new_oid, "A", GATE_PATH)],
+            [DiffEntry("100644", "000000", D223_GATE_BLOB, "0" * 40, "D", GATE_PATH)],
+            [DiffEntry("100644", "100644", D223_GATE_BLOB, exact.new_oid, "T", GATE_PATH)],
+            [DiffEntry("100755", "100644", D223_GATE_BLOB, exact.new_oid, "M", GATE_PATH)],
+            [DiffEntry("100644", "100755", D223_GATE_BLOB, exact.new_oid, "M", GATE_PATH)],
+            [DiffEntry("100644", "100644", "0" * 40, exact.new_oid, "M", GATE_PATH)],
+            [exact, DiffEntry("100644", "100644", "1" * 40, "2" * 40, "M", "extra.txt")],
+        )
+        for entries in rejected:
+            with self.subTest(entries=entries):
+                with self.assertRaises(GateError):
+                    _validate_gate_replacement_diff(entries)
+        with self.assertRaises(GateError):
+            _validate_gate_replacement_diff([])
+        with self.assertRaises(GateError):
+            _validate_gate_replacement_diff([
+                DiffEntry("100644", "000000", D223_GATE_BLOB, "0" * 40, "D", GATE_PATH),
+                DiffEntry("000000", "100644", "0" * 40, "3" * 40, "A", "renamed-gate.py"),
+            ])
+
+    def test_git_adapter_ignores_replacement_refs_for_original_object_reads(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="phase24-replace-ref-") as temp:
+            root = Path(temp)
+            env = source_git_env()
+            env.pop("GIT_NO_REPLACE_OBJECTS", None)
+            def run(*args: str) -> bytes:
+                result = subprocess.run(["git", "-C", str(root), *args], env=env, capture_output=True, check=True, timeout=15)
+                return result.stdout
+            run("init", "--quiet")
+            run("config", "user.name", "Phase 24 test")
+            run("config", "user.email", "phase24-test@example.invalid")
+            target = root / "gate.py"
+            target.write_bytes(b"original pinned bytes\n")
+            run("add", "gate.py")
+            run("commit", "--quiet", "-m", "original")
+            original = run("rev-parse", "HEAD").decode("ascii").strip()
+            target.write_bytes(b"replacement object bytes\n")
+            run("commit", "--quiet", "-am", "replacement")
+            replacement = run("rev-parse", "HEAD").decode("ascii").strip()
+            run("replace", original, replacement)
+            self.assertEqual(run("show", f"{original}:gate.py"), b"replacement object bytes\n")
+            reader = Git(root)
+            self.assertEqual(reader.blob(original, "gate.py"), b"original pinned bytes\n")
+            self.assertNotEqual(reader.tree(original), run("rev-parse", f"{original}^{{tree}}").decode("ascii").strip())
+            changed = reader.raw_diff(original, replacement)
+            self.assertEqual([(entry.path, entry.status) for entry in changed], [("gate.py", "M")])
+
     def test_executing_module_is_registered_before_test_patching(self) -> None:
         current_module = sys.modules.get(__name__)
         self.assertTrue(current_module is not None, "executing gate module must be registered before exec")
@@ -2436,7 +2619,7 @@ class PromotionGateContractTests(unittest.TestCase):
             responses[f"repos/{EXPECTED_REPO}/commits/{merge_sha}"] = {"sha": merge_sha, "tree": {"sha": candidate_tree}, "parents": [{"sha": candidate_sha}]}
             responses[f"repos/{EXPECTED_REPO}/commits/{EXPECTED_BASE}"] = {"sha": merge_sha}
         runner = _RecordingRunner(responses, auth_ready=(fault != "auth_missing"))
-        bootstrap_receipt = {"schema_version": 1, "kind": "phase24-d222-bootstrap", "plan": {}, "discussion": {}, "loader": {}, "gate": {}, "repository": {}, "scope": {}, "history_pins": {}, "trusted_handoff": {}}
+        bootstrap_receipt = {"schema_version": 1, "kind": "phase24-d224-bootstrap", "plan": {}, "discussion": {}, "loader": {}, "inherited_gate": {}, "gate": {}, "repository": {}, "scope": {}, "history_pins": {}, "trusted_handoff": {}}
         args = argparse.Namespace(bootstrap="build/phase24/test-bootstrap.json", candidate=candidate_sha, evidence="build/phase24/test-manifest.json", mode=action)
         action_log: list[str] = []
 
@@ -2575,6 +2758,7 @@ class PromotionGateContractTests(unittest.TestCase):
         gate_sha = digest_bytes(gate_bytes)
         plan_bytes = Git(Path.cwd()).blob(PLAN_REV, PLAN_PATH)
         discussion_bytes = Git(Path.cwd()).blob(DISCUSSION_REV, DISCUSSION_PATH)
+        d223_gate_bytes = Git(Path.cwd()).blob(D223_GATE_REV, GATE_PATH)
         loader_sha256 = digest_bytes(extract_plan_loader(plan_bytes))
         with tempfile.TemporaryDirectory(prefix="phase24-manifest-") as temp:
             root = Path(temp).resolve()
@@ -2583,7 +2767,9 @@ class PromotionGateContractTests(unittest.TestCase):
             class FixtureGit:
                 def __init__(self) -> None:
                     self.root = root
-                    self.discussion_gate_present = False
+                    self.plan_gate_changed = False
+                    self.gate_parent_override: list[str] | None = None
+                    self.replacement_diff = [DiffEntry("100644", "100644", D223_GATE_BLOB, gate_blob, "M", GATE_PATH)]
                 def run_result(self, *args: str, **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
                     if args[:2] == ("check-ignore", "--quiet") or args[:3] == ("diff", "--cached", "--quiet"):
                         return subprocess.CompletedProcess(list(args), 0, b"", b"")
@@ -2617,6 +2803,8 @@ class PromotionGateContractTests(unittest.TestCase):
                         return gate_blob
                     if args == ("rev-parse", f"{gate_rev}:{GATE_PATH}"):
                         return gate_blob
+                    if args == ("rev-parse", f"{D223_GATE_REV}:{GATE_PATH}") or args == ("rev-parse", f"{PLAN_PARENT}:{GATE_PATH}") or args == ("rev-parse", f"{PLAN_REV}:{GATE_PATH}"):
+                        return D223_GATE_BLOB
                     if args == ("rev-parse", f"{PLAN_REV}:{PLAN_PATH}"):
                         return PLAN_BLOB
                     if len(args) == 2 and args[0] == "rev-parse" and ":" in args[1]:
@@ -2637,14 +2825,16 @@ class PromotionGateContractTests(unittest.TestCase):
                 def object_type(self, rev: str) -> str:
                     return "commit"
                 def exists(self, *args: str) -> bool:
-                    return self.discussion_gate_present and args[-1] == f"{DISCUSSION_REV}:{GATE_PATH}"
+                    return args[-1] == f"{DISCUSSION_REV}:{GATE_PATH}"
                 def tree(self, rev: str) -> str:
-                    return {candidate_sha: candidate_tree, PLAN_REV: PLAN_TREE, gate_rev: gate_tree, D221_SHA: D221_TREE}.get(rev, D221_TREE)
+                    return {candidate_sha: candidate_tree, PLAN_REV: PLAN_TREE, DISCUSSION_REV: DISCUSSION_TREE, D223_GATE_REV: D223_GATE_TREE, gate_rev: gate_tree, D221_SHA: D221_TREE}.get(rev, D221_TREE)
                 def parents(self, rev: str) -> list[str]:
-                    if rev == PLAN_REV:
+                    if rev in {PLAN_REV, DISCUSSION_REV}:
                         return [PLAN_PARENT]
                     if rev == gate_rev:
-                        return [PLAN_REV]
+                        return [PLAN_REV] if self.gate_parent_override is None else list(self.gate_parent_override)
+                    if rev == D223_GATE_REV:
+                        return [D223_GATE_PARENT]
                     return []
                 def is_ancestor(self, ancestor: str, descendant: str) -> bool:
                     return True
@@ -2653,20 +2843,34 @@ class PromotionGateContractTests(unittest.TestCase):
                         return plan_bytes
                     if rev == DISCUSSION_REV and path == DISCUSSION_PATH:
                         return discussion_bytes
+                    if rev == D223_GATE_REV and path == GATE_PATH:
+                        return d223_gate_bytes
                     if rev == gate_rev and path == GATE_PATH:
                         return gate_bytes
                     if path == "tests/scripts/verify-planning-hygiene.py":
                         return (Path.cwd() / path).read_bytes()
                     deny("fixture_git_blob", path)
+                def tree_entry(self, rev: str, path: str) -> tuple[str, str, str]:
+                    if path != GATE_PATH:
+                        deny("fixture_tree_entry_path")
+                    if rev in {D223_GATE_REV, PLAN_PARENT, PLAN_REV}:
+                        return "100644", "blob", D223_GATE_BLOB
+                    if rev in {gate_rev, candidate_sha}:
+                        return "100644", "blob", gate_blob
+                    deny("fixture_tree_entry_revision")
                 def raw_diff(self, before: str, after: str) -> list[DiffEntry]:
                     correction = DiffEntry("100644", "100644", "1" * 40, "2" * 40, "M", EXPECTED_CANDIDATE_CORRECTIONS[0])
-                    added_gate = DiffEntry("000000", "100644", "0" * 40, gate_blob, "A", GATE_PATH)
+                    gate_change = self.replacement_diff
+                    if before == D223_GATE_REV and after == PLAN_PARENT:
+                        return []
+                    if before == PLAN_PARENT and after == PLAN_REV:
+                        return gate_change if self.plan_gate_changed else []
                     if before == PLAN_REV and after == gate_rev:
-                        return [added_gate]
+                        return gate_change
                     if before == gate_rev:
                         return [correction]
-                    if before == PLAN_REV:
-                        return [added_gate, correction]
+                    if before == PLAN_REV and after == candidate_sha:
+                        return [*gate_change, correction]
                     return [correction]
 
             test_git = FixtureGit()
@@ -2717,14 +2921,14 @@ class PromotionGateContractTests(unittest.TestCase):
             ctest_relative = "build/phase24/ctest-inventory.json"
             (root / ctest_relative).write_bytes(ctest_body)
             qualification = {
-                "schema_version": 1, "kind": "phase24-d222-qualification", "candidate_sha": candidate_sha,
+                "schema_version": 1, "kind": "phase24-d224-qualification", "candidate_sha": candidate_sha,
                 "candidate_tree": candidate_tree, "plan_rev": PLAN_REV, "gate_rev": gate_rev, "gate_sha256": gate_sha,
                 "interpreter": {"path": sys.executable, "version": sys.version.split()[0], "configured_path": sys.executable},
                 "tests": test_rows, "direct_controls": direct_rows,
                 "inventory": {"transcript_path": inventory_relative, "transcript_sha256": digest_bytes(inventory_body), "exit_code": 0, "cases": 153, "runner_cases": 0, "build_cases": 0, "configure_cases": 0},
                 "ctest_inventory": {"command": _expected_inventory_command(), "transcript_path": ctest_relative, "transcript_sha256": digest_bytes(ctest_body), "exit_code": 0, "test_count": len(EXPECTED_TESTS), "runner_cases": 0, "build_cases": 0, "configure_cases": 0},
                 "fixture_effects": [],
-                "source_pins": {"plan_rev": PLAN_REV, "plan_sha256": PLAN_SHA256, "discussion_rev": DISCUSSION_REV, "discussion_tree": DISCUSSION_TREE, "discussion_blob": DISCUSSION_BLOB, "discussion_sha256": DISCUSSION_SHA256, "loader_sha256": loader_sha256, "d221_exec_rev": D221_EXEC_REV, "d209_rev": D209_REV, "requirements_blob": REQUIREMENTS_BLOB, "roadmap_blob": ROADMAP_BLOB, "state_forks_blob": STATE_FORKS_BLOB, "planning_hygiene_sha256": PLANNING_HYGIENE_SHA256, "gate_rev": gate_rev, "gate_sha256": gate_sha},
+                "source_pins": {"plan_rev": PLAN_REV, "plan_sha256": PLAN_SHA256, "discussion_rev": DISCUSSION_REV, "discussion_tree": DISCUSSION_TREE, "discussion_blob": DISCUSSION_BLOB, "discussion_sha256": DISCUSSION_SHA256, "loader_sha256": loader_sha256, "d223_gate_rev": D223_GATE_REV, "d223_gate_tree": D223_GATE_TREE, "d223_gate_blob": D223_GATE_BLOB, "d223_gate_sha256": D223_GATE_SHA256, "d223_gate_mode": "100644", "d221_exec_rev": D221_EXEC_REV, "d209_rev": D209_REV, "requirements_blob": REQUIREMENTS_BLOB, "roadmap_blob": ROADMAP_BLOB, "state_forks_blob": STATE_FORKS_BLOB, "planning_hygiene_sha256": PLANNING_HYGIENE_SHA256, "gate_rev": gate_rev, "gate_sha256": gate_sha},
             }
             qualification_raw = canonical_json(qualification) + b"\n"
             qualification_path = "build/phase24/qualification.json"
@@ -2764,10 +2968,11 @@ class PromotionGateContractTests(unittest.TestCase):
             manifest_path = "build/phase24/manifest.json"
             (root / manifest_path).write_bytes(manifest_raw)
             bootstrap = {
-                "gate": {"rev": gate_rev, "blob": gate_blob, "sha256": gate_sha},
+                "gate": {"rev": gate_rev, "parent": PLAN_REV, "tree": gate_tree, "blob": gate_blob, "sha256": gate_sha, "old_blob": D223_GATE_BLOB, "old_mode": "100644"},
                 "plan": {"rev": PLAN_REV, "sha256": PLAN_SHA256},
                 "discussion": {"rev": DISCUSSION_REV, "tree": DISCUSSION_TREE, "blob": DISCUSSION_BLOB, "sha256": DISCUSSION_SHA256},
                 "loader": {"sha256": loader_sha256},
+                "inherited_gate": {"rev": D223_GATE_REV, "tree": D223_GATE_TREE, "blob": D223_GATE_BLOB, "sha256": D223_GATE_SHA256, "mode": "100644"},
             }
             env = {"PHASE24_D222_EVIDENCE": manifest_path, "PHASE24_D222_EVIDENCE_SHA256": digest_bytes(manifest_raw), "PHASE24_D222_REV": candidate_sha}
             runner = _RecordingRunner()
@@ -2798,18 +3003,47 @@ class PromotionGateContractTests(unittest.TestCase):
             (root / manifest_path).write_bytes(manifest_raw)
             source_scope, correction_scope = parse_plan_scopes(plan_bytes)
             bootstrap_receipt = {
-                "schema_version": 1, "kind": "phase24-d222-bootstrap",
+                "schema_version": 1, "kind": "phase24-d224-bootstrap",
                 "plan": {"rev": PLAN_REV, "parent": PLAN_PARENT, "tree": PLAN_TREE, "blob": PLAN_BLOB, "sha256": PLAN_SHA256, "path": PLAN_PATH},
                 "discussion": {"rev": DISCUSSION_REV, "tree": DISCUSSION_TREE, "blob": DISCUSSION_BLOB, "sha256": DISCUSSION_SHA256, "path": DISCUSSION_PATH},
                 "loader": {"sha256": loader_sha256},
-                "gate": {"rev": gate_rev, "parent": PLAN_REV, "tree": gate_tree, "blob": gate_blob, "sha256": gate_sha},
+                "inherited_gate": {"rev": D223_GATE_REV, "tree": D223_GATE_TREE, "blob": D223_GATE_BLOB, "sha256": D223_GATE_SHA256, "mode": "100644"},
+                "gate": {"rev": gate_rev, "parent": PLAN_REV, "tree": gate_tree, "blob": gate_blob, "sha256": gate_sha, "old_blob": D223_GATE_BLOB, "old_mode": "100644"},
                 "repository": {"root": str(root), "git_dir": str(root / ".git"), "branch": "gsd/phase-24-fixture"},
                 "scope": {"source_allowlist": list(source_scope), "correction_allowlist": list(correction_scope)},
                 "history_pins": {"d209_rev": D209_REV, "d220_candidate": D220_SHA, "d221_candidate": D221_SHA, "d221_tree": D221_TREE, "d221_exec_rev": D221_EXEC_REV, "requirements_blob": REQUIREMENTS_BLOB, "roadmap_blob": ROADMAP_BLOB, "state_forks_blob": STATE_FORKS_BLOB, "planning_hygiene_sha256": PLANNING_HYGIENE_SHA256},
                 "trusted_handoff": {"authority": "gsd-executor", "plan_rev": PLAN_REV, "plan_sha256": PLAN_SHA256, "gate_rev": gate_rev, "gate_sha256": gate_sha},
             }
-            bootstrap_path = "build/phase24/bootstrap.json"
+            bootstrap_path = "build/phase24/d224-bootstrap.json"
             (root / bootstrap_path).write_bytes(canonical_json(bootstrap_receipt) + b"\n")
+            bootstrap_env = {
+                "PHASE24_D222_PLAN_REV": PLAN_REV,
+                "PHASE24_D222_PLAN_SHA256": PLAN_SHA256,
+                "PHASE24_D222_GATE_REV": gate_rev,
+                "PHASE24_D222_GATE_SHA256": gate_sha,
+            }
+            verified_bootstrap = _verify_bootstrap_source(test_git, bootstrap_receipt, env=bootstrap_env)
+            self.assertEqual(verified_bootstrap["inherited_gate"], bootstrap_receipt["inherited_gate"])
+            exact_replacement_diff = test_git.replacement_diff
+            for bad_entry in (
+                DiffEntry("000000", "100644", "0" * 40, gate_blob, "A", GATE_PATH),
+                DiffEntry("100644", "000000", D223_GATE_BLOB, "0" * 40, "D", GATE_PATH),
+                DiffEntry("100644", "100644", "0" * 40, gate_blob, "M", GATE_PATH),
+            ):
+                test_git.replacement_diff = [bad_entry]
+                with self.subTest(replacement_diff=bad_entry):
+                    with self.assertRaises(GateError):
+                        _verify_bootstrap_source(test_git, bootstrap_receipt, env=bootstrap_env)
+            test_git.replacement_diff = [*exact_replacement_diff, DiffEntry("100644", "100644", "1" * 40, "2" * 40, "M", "extra.txt")]
+            with self.assertRaises(GateError):
+                _verify_bootstrap_source(test_git, bootstrap_receipt, env=bootstrap_env)
+            for bad_parents in ([], [PLAN_REV, D223_GATE_REV]):
+                test_git.gate_parent_override = bad_parents
+                with self.subTest(gate_parents=bad_parents):
+                    with self.assertRaises(GateError):
+                        _verify_bootstrap_source(test_git, bootstrap_receipt, env=bootstrap_env)
+            test_git.gate_parent_override = None
+            test_git.replacement_diff = exact_replacement_diff
             initial_pr = {
                 "number": EXPECTED_PR, "state": "open", "draft": False,
                 "head": {"sha": "f" * 40, "ref": "phase24-candidate", "repo": {"full_name": EXPECTED_REPO}},
@@ -2850,7 +3084,7 @@ class PromotionGateContractTests(unittest.TestCase):
             self.assertEqual(malformed_runner.action_calls, [])
             (root / bootstrap_path).write_bytes(canonical_json(bootstrap_receipt) + b"\n")
 
-            test_git.discussion_gate_present = True
+            test_git.plan_gate_changed = True
             discussion_runner = _RecordingRunner(responses)
             with mock.patch(__name__ + ".Git", return_value=test_git), \
                     mock.patch.dict(globals(), {"__phase24_gate_bytes__": gate_bytes}), \
@@ -2859,7 +3093,23 @@ class PromotionGateContractTests(unittest.TestCase):
                     _run_live(root, live_args, runner=discussion_runner)
             self.assertEqual(discussion_runner.calls, [])
             self.assertEqual(discussion_runner.action_calls, [])
-            test_git.discussion_gate_present = False
+            test_git.plan_gate_changed = False
+
+            for bad_entry in (
+                DiffEntry("000000", "100644", "0" * 40, gate_blob, "A", GATE_PATH),
+                DiffEntry("100644", "000000", D223_GATE_BLOB, "0" * 40, "D", GATE_PATH),
+                DiffEntry("100644", "100644", "0" * 40, gate_blob, "M", GATE_PATH),
+            ):
+                test_git.replacement_diff = [bad_entry]
+                invalid_runner = _RecordingRunner(responses)
+                with self.subTest(live_replacement_diff=bad_entry):
+                    with mock.patch(__name__ + ".Git", return_value=test_git), \
+                            mock.patch.dict(globals(), {"__phase24_gate_bytes__": gate_bytes}), \
+                            mock.patch.dict(os.environ, live_env, clear=True):
+                        with self.assertRaises(GateError):
+                            _run_live(root, live_args, runner=invalid_runner)
+                    self.assertEqual(invalid_runner.action_calls, [])
+            test_git.replacement_diff = exact_replacement_diff
 
             with mock.patch(__name__ + ".Git", return_value=test_git), \
                     mock.patch.dict(globals(), {"__phase24_gate_bytes__": gate_bytes}), \
@@ -3132,7 +3382,8 @@ class PromotionGateContractTests(unittest.TestCase):
             "plan": {"rev": PLAN_REV, "parent": PLAN_PARENT, "tree": PLAN_TREE, "blob": PLAN_BLOB, "sha256": PLAN_SHA256, "path": PLAN_PATH},
             "discussion": {"rev": DISCUSSION_REV, "tree": DISCUSSION_TREE, "blob": DISCUSSION_BLOB, "sha256": DISCUSSION_SHA256, "path": DISCUSSION_PATH},
             "loader": {"sha256": digest_bytes(extract_plan_loader(Git(Path.cwd()).blob(PLAN_REV, PLAN_PATH)))},
-            "gate": {"rev": gate_rev, "parent": PLAN_REV, "tree": "c" * 40, "blob": "d" * 40, "sha256": gate_sha},
+            "inherited_gate": {"rev": D223_GATE_REV, "tree": D223_GATE_TREE, "blob": D223_GATE_BLOB, "sha256": D223_GATE_SHA256, "mode": "100644"},
+            "gate": {"rev": gate_rev, "parent": PLAN_REV, "tree": "c" * 40, "blob": "d" * 40, "sha256": gate_sha, "old_blob": D223_GATE_BLOB, "old_mode": "100644"},
             "trusted_handoff": {"authority": "gsd-executor", "plan_rev": PLAN_REV, "plan_sha256": PLAN_SHA256, "gate_rev": gate_rev, "gate_sha256": gate_sha},
             "repository": {"root": str(Path.cwd()), "git_dir": str(Path.cwd() / ".git"), "branch": "gsd/phase-24-test"},
             "scope": {"source_allowlist": list((*PLAN_SOURCE_PATHS, GATE_PATH)), "correction_allowlist": list(EXPECTED_CANDIDATE_CORRECTIONS)},
