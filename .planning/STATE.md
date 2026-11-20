@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: Phase 24 D-221 sole plan passed independent checking; documentation-only boundary commit pending
-last_updated: "2026-11-20T03:04:37Z"
-state_head: f19d5ae2f5819d18074a68e1e80d959dc31b1302
+stopped_at: Phase 24 D-221 checked planning boundary 688864a committed; owner execution authorization pending
+last_updated: "2026-11-20T03:10:29Z"
+state_head: 688864aef779a78bb2289705f5fd1524a1e8f3c6
 progress:
   total_phases: 6
   completed_phases: 5
@@ -14,7 +14,7 @@ milestone_name: Evidence Floor
 last_activity: 2026-11-19
 current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: Phase 24 Plan 24-01 D-221 integrated recovery; planning only, fresh plan check required before execution
+current_plan: Phase 24 Plan 24-01 D-221 checked and committed; execution authorization pending
 ---
 
 # Project State
@@ -24,7 +24,7 @@ current_plan: Phase 24 Plan 24-01 D-221 integrated recovery; planning only, fres
 **Milestone stage:** v0.4 remains administratively closed with D-209 gaps; no phase or milestone closure is authorized by this stop.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
 **Phase state:** Phase 24 remains incomplete. Candidate f19d5ae2f5819d18074a68e1e80d959dc31b1302 passed both fresh code/security reviews, then its single D-220 protected matrix failed: required-native and preview-package-smoke failed; fixture-repro passed. See [hosted matrix evidence](../build/phase24/f19d5ae2f5819d18074a68e1e80d959dc31b1302-hosted-matrix.md). No retry or merge occurred.
-**Next route:** The sole 24-01 plan passed independent checking. Commit only the checked planning files as the documentation-only boundary, excluding generated .planning/state.json. The owner must explicitly authorize execution afterward. No source changes, qualification, review, push, CI, or merge is authorized yet. Keep this worktree and automatic advance false.
+**Next route:** The checked D-221 planning boundary is committed as 688864a. The owner acts next to explicitly authorize execution. After authorization, run $gsd-execute-phase 24 for T21–T23 only. No source changes, qualification, review, push, CI, or merge is authorized until then. Keep this worktree and automatic advance false.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -56,9 +56,9 @@ The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 veri
 
 ## Owner Handoff
 
-Current stage: Phase 24 D-221 planning and independent plan checking are complete; the documentation-only boundary commit is next. Candidate f19 passed fresh code/security reviews but its only D-220 protected matrix failed required-native and preview-package-smoke while fixture-repro passed. No retry or merge followed.
+Current stage: Phase 24 D-221 planning and independent plan checking are complete; boundary commit 688864a is on this branch. The next actor is the owner, who must explicitly authorize execution before any source or test task begins.
 
-Next actor: the orchestrator commits only the independently checked plan, refreshed research, and reconciled route documents, excluding generated .planning/state.json. The owner acts next to explicitly authorize execution; after authorization, the command is $gsd-execute-phase 24.
+Next actor: the owner explicitly authorizes Phase 24 execution. After that authorization, run $gsd-execute-phase 24 for T21–T23 only. No source or test task starts before then. Generated .planning/state.json remains unstaged and undiscarded.
 
 Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-103, D-209 dispositions, v0.4 administrative closeout, required branch protection, and all phase/milestone closure boundaries. Keep this worktree and both automatic-advance flags false.
 ## Accumulated Context

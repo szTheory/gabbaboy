@@ -495,7 +495,7 @@ Run syntax, exact-input/scope checks, and causal self-tests before existing focu
 
 D-209 remains authoritative. FIXT-01 stays Pending; the Acid2 mismatch remains failed and unreplayed; Task 7, D-103, stale Phase 20/21/23.1 verification, and the administrative v0.4 closeout remain unchanged. Do not run ROM/fixture or Acid2 cases, the broad suite, phase/milestone verification or closure, milestone archival, v0.5 work, or worktree cleanup under this discussion.
 
-**Next route:** The sole 24-01 plan and D-221 research define T21–T23, and the plan passed independent checking. Commit the documentation-only boundary next; the owner must explicitly authorize execution afterward. Until then, no implementation, local qualification, review, protected matrix, or merge is authorized. Keep both automatic-advance flags false.
+**Next route:** The sole 24-01 plan passed independent checking and is committed in boundary 688864a. The owner acts next to explicitly authorize execution; after authorization, run `$gsd-execute-phase 24`. Until then, no implementation, local qualification, review, protected matrix, or merge is authorized. Keep both automatic-advance flags false.
 
 ### Canonical references for D-221
 

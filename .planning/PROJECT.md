@@ -12,7 +12,7 @@ GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game 
 
 **Diagnostic results:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. Do not replay that lane or claim a proven cause. One `div_inc_timing_a` case is admitted and passed for the DMG-CPU-B software model; 512 other names remain excluded. [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md) and the [milestone audit](v0.4-MILESTONE-AUDIT.md) retain the full scope.
 
-**Next direction:** The sole Phase 24 plan and D-221 research describe T21–T23, and the independent plan check passed. Commit the documentation-only boundary next. The owner must explicitly authorize execution afterward; then run $gsd-execute-phase 24.
+**Next direction:** The sole Phase 24 plan and D-221 research describe T21–T23; the plan passed independent checking and the documentation-only boundary is committed as 688864a. The owner acts next to explicitly authorize execution. After authorization, run $gsd-execute-phase 24. Until then, do not edit source or start qualification, reviews, push, or CI. Keep all 201 path controls, existing timeouts, required contexts and package/artifact gates. Preserve D-209, FIXT-01 Pending, the failed unreplayed Acid2 result, Task 7, D-103, and the v0.4 administrative closeout; retain this worktree and keep v0.5 unstarted.
 
 ## Closed Milestone: v0.4 Evidence Floor
 
