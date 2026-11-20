@@ -9,13 +9,13 @@
 
 ## Next
 
-No new milestone is active. v0.4 remains administratively closed under D-209; Phase 24 recovery stays in its sole existing plan. D-221 scopes T21–T23 to measured path-control runtime, Windows Git/newline-path fixture failures, and exact-head preview waiter waste. Preserve existing coverage, timeouts, required contexts, aggregate/player/artifact gates and D-209 dispositions. The checked documentation-only planning boundary is committed as 688864a. The owner acts next to explicitly authorize execution; only then run $gsd-execute-phase 24. Until then no source changes, reviews, push, hosted CI, merge, phase/milestone closure, or v0.5 work is authorized. Keep this worktree and both automatic-advance flags false.
+No new milestone is active. v0.4 remains administratively closed under D-209; Phase 24 recovery stays in its sole existing plan. D-221 scopes T21–T23 to measured path-control runtime, Windows Git/newline-path fixture failures, and exact-head preview waiter waste. Preserve existing coverage, timeouts, required contexts, aggregate/player/artifact gates and D-209 dispositions. The checked documentation-only planning boundary remains 688864a. The owner explicitly authorized execution through GSD Autonomous on 2026-11-19. The agent independently checks and commits the separate documentation-only authorization boundary, then continues `$gsd-autonomous --from 24` for T21–T23 and their existing protected qualification/conditional merge gates. Phase/milestone closure and v0.5 remain excluded. Keep this worktree and both automatic-advance flags false.
 
 ## Recovery Phase
 
 ### Phase 24: Resolve remaining v0.4 evidence and verification gaps
 
-**Status:** The sole Phase 24 plan is amended for D-221 T21–T23, passed independent checking, and was committed in the documentation-only boundary 688864a. T18–T20 and f19 remain completed candidate history; f19 passed fresh reviews but its D-220 protected matrix failed. The owner must explicitly authorize execution before source changes, local qualification, reviews, protected matrices, or merge. Preserve D-209 dispositions and v0.4 administrative closeout.
+**Status:** The sole Phase 24 plan for D-221 T21–T23 passed independent checking at documentation-only boundary 688864a. T18–T20 and f19 remain completed candidate history; f19 passed fresh reviews but its D-220 protected matrix failed. The owner has explicitly authorized T21–T23 execution through GSD Autonomous, including the existing qualification/review/protected-matrix/conditional-merge route. Independently check and commit the authorization reconciliation before source execution. Preserve D-209 dispositions, v0.4 administrative closeout and all closure exclusions.
 **Goal:** Make the six existing checker contracts prove runtime binding, exact archive/revision identity, original-object Git selection and inventory-mode exclusivity, then qualify only the identical reviewed head through existing branch protection while preserving D-209 dispositions.
 **Requirements:** []
 **Requirement boundary:** This recovery does not reassign requirements or change their statuses; the archived v0.4 tracker remains authoritative.

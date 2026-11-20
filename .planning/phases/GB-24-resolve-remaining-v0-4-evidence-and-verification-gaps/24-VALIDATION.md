@@ -1,13 +1,15 @@
 ---
 phase: "24"
 slug: "resolve-remaining-v0-4-evidence-and-verification-gaps"
-status: draft
+status: superseded
 nyquist_compliant: false
 wave_0_complete: false
 created: "2026-11-18"
 ---
 
-# Phase 24 — Validation Strategy
+# Phase 24 — Historical D-220 Validation Strategy
+
+**Superseded by D-221:** This document preserves the former D-220 planning/validation contract and its point-in-time sign-off only. It is removed from the active plan context and does not dispatch T18–T20 or govern current scope, authorization, qualification commands, review gates or candidate limits. The current [24-01-PLAN.md](24-01-PLAN.md) is the executable D-221 validation contract for T21–T23; [24-CONTEXT.md](24-CONTEXT.md) and its execution-authorization addendum establish the current boundary. Read the six-path/single-matrix/pending-task wording below as historical D-220 facts, never current authority. No historical checkboxes or outcomes below are promoted by this supersession.
 
 Updated for D-220 on 2026-11-19. This is planning evidence only. The independently checked and committed planning boundary must be followed by separate owner execution authorization before source work, tests or CI. D-220 supersedes stale D-219 recovery limits; the fixed six-checker source allowlist and sole plan remain unchanged.
 

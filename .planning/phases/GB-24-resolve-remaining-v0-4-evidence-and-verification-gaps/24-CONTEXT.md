@@ -1,7 +1,7 @@
 # Phase 24: Resolve remaining v0.4 evidence and verification gaps - Context
 
-**Gathered:** 2026-11-19; updated after the f19 matrix and D-221 owner decision
-**Status:** Candidate f19d5ae2f5819d18074a68e1e80d959dc31b1302 failed the single D-220 protected matrix: required-native and preview-package-smoke failed, while fixture-repro passed. The owner approved D-221 planning for one integrated recovery and up to two new protected matrix candidates. Each candidate must be changed, locally qualified, and independently reviewed by code and security reviewers; a second matrix is allowed only after the first reveals a concrete in-scope failure and a causal fix. Planning only is authorized here; source changes and hosted CI remain separately gated. Full evidence is in the [f19 hosted matrix report](../../../build/phase24/f19d5ae2f5819d18074a68e1e80d959dc31b1302-hosted-matrix.md).
+**Gathered:** 2026-11-19; updated after the f19 matrix, D-221 owner decision and explicit execution authorization
+**Status:** Candidate f19d5ae2f5819d18074a68e1e80d959dc31b1302 failed the single D-220 protected matrix: required-native and preview-package-smoke failed, while fixture-repro passed. The owner approved D-221 planning for one integrated recovery and up to two new protected matrix candidates. Each candidate must be changed, locally qualified, and independently reviewed by code and security reviewers; a second matrix is allowed only after the first reveals a concrete in-scope failure and a causal fix. After checked planning boundary 688864a, the owner explicitly authorized T21–T23 through GSD Autonomous on 2026-11-19. Record that authorization in a separately checked and committed documentation-only EXEC_REV before execution; the original planning boundary and all scope/closure exclusions remain intact. Full evidence is in the [f19 hosted matrix report](../../../build/phase24/f19d5ae2f5819d18074a68e1e80d959dc31b1302-hosted-matrix.md).
 
 <domain>
 ## Phase Boundary
@@ -495,7 +495,7 @@ Run syntax, exact-input/scope checks, and causal self-tests before existing focu
 
 D-209 remains authoritative. FIXT-01 stays Pending; the Acid2 mismatch remains failed and unreplayed; Task 7, D-103, stale Phase 20/21/23.1 verification, and the administrative v0.4 closeout remain unchanged. Do not run ROM/fixture or Acid2 cases, the broad suite, phase/milestone verification or closure, milestone archival, v0.5 work, or worktree cleanup under this discussion.
 
-**Next route:** The sole 24-01 plan passed independent checking and is committed in boundary 688864a. The owner acts next to explicitly authorize execution; after authorization, run `$gsd-execute-phase 24`. Until then, no implementation, local qualification, review, protected matrix, or merge is authorized. Keep both automatic-advance flags false.
+**Next route:** The sole 24-01 plan passed independent checking at boundary 688864a. The owner subsequently explicitly authorized D-221 T21–T23 through GSD Autonomous on 2026-11-19. Independently check and commit the documentation-only authorization reconciliation as EXEC_REV, then the agent continues `$gsd-autonomous --from 24` under the existing qualification/review/protected-matrix/conditional-merge gates and all closure exclusions. No further owner acknowledgment is needed. Keep both automatic-advance flags false.
 
 ### Canonical references for D-221
 
