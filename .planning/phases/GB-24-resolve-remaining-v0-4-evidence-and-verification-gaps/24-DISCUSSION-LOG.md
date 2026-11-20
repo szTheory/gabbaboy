@@ -359,3 +359,36 @@ The CI/CD efficiency policy is already discoverable from `AGENTS.md` through `.p
 **Retained limits:** one existing Phase 24 plan; same six checker files plus additive closeout evidence; no new dependency, CTest identity, timeout, weakened control floor, broad suite, ROM/fixture/Acid2 replay, Task 7, phase/milestone closure, v0.5, or worktree cleanup. D-209 dispositions remain unchanged; FIXT-01 stays Pending and Acid2 remains failed/unreplayed.
 
 **Next route:** `$gsd-plan-phase 24` updates the existing plan. Execution requires a separately authorized handoff after plan review.
+
+
+## D-221 failure-informed recovery scope
+
+**Date:** 2026-11-19
+**Areas discussed:** portable hosted-test failures; exact-head package-waiter efficiency; bounded qualification authority
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Raise the path timeout or trim controls | Quickest way to suppress one failure, but hides variance or reduces coverage | |
+| Preserve 201 controls and current timeout; remove measured duplicate work | Diagnose first and reuse the existing parsed AST only where it addresses the measured hot path | ✓ |
+| Rebuild the Git fixture with an owned object database | Avoid alternates and verify the exact pinned commit is available | ✓ |
+| Keep a filesystem newline filename | Works on POSIX but cannot be created on Windows for control characters | |
+| Represent the newline path directly in Git index/tree data | Retain the manifest refusal contract without an OS-invalid file | ✓ |
+| Wait only for the final aggregate | Preserves semantics but repeats 69–73 minutes of known package-runner waste | |
+| Fail fast on a debounced exact-head required-component failure | Saves wait time but keeps aggregate/player success as the only path to package work | ✓ |
+| One new protected matrix candidate | Cheapest, but an unrelated in-scope platform failure would stop recovery again | |
+| Up to two changed, reviewed matrix candidates | Permit one concrete in-scope correction after the first new matrix; never replay an unchanged head | ✓ |
+| Uncounted matrix convergence | Allows ongoing recovery but leaves hosted compute spend open-ended | |
+
+**Owner's choice:** Follow the recommendation and use up to two matrix candidates under D-221. The second is permitted only after a concrete in-scope failure, a causal fix, focused qualification, and fresh independent code/security review of the changed candidate. No execution or matrix has yet been authorized by this discussion response; the plan must be updated and independently checked first.
+
+### Cross-role synthesis
+
+| Lens | Recommendation | Trade-off |
+|---|---|---|
+| Test engineering | Preserve all 201 path controls and the 60-second timeout; remove demonstrated duplicate parsing before considering broader optimization. | Reusing AST state needs source/tree identity discipline; profiling must confirm it addresses runtime variance. |
+| Windows/Git portability | Own the required pinned object in the temporary fixture; exercise newline paths through Git index/tree plumbing. | More fixture setup, but deterministic across OS filesystems and no missing alternate object store. |
+| CI operations | Debounce current-attempt component failures and stop preview waiters early; require aggregate and player receipts for success. | Polling can save runner time; incomplete API data must still wait and fail closed at the existing deadline. |
+| Security/release | Preserve all three protected contexts, exact-head binding, artifact receipts, and branch protection. | No gate reduction; only earlier failure reporting changes. |
+| Product/scope | Keep this in Phase 24's sole plan and preserve D-209/v0.4 closeout dispositions. | Fixes the blocked closeout path without reopening FIXT-01 or v0.5. |
+
+**Deferred:** No matrix topology, required-context, timeout, trigger, cache or concurrency change; no dependency, new CTest identity, broad suite, ROM replay, Task 7, phase closure, milestone closure, v0.5 start or worktree cleanup.

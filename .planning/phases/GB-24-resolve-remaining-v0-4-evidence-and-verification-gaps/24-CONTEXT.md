@@ -1,29 +1,37 @@
 # Phase 24: Resolve remaining v0.4 evidence and verification gaps - Context
 
-**Gathered:** 2026-11-19; updated after the D-219 pass-two review
-**Status:** The final exact-head review of candidate `28ab38f2346a12ef68a07e8a2d403dbfd81b8ba5` (tree `7b872747c42fb214be72e793d2e1eaec542d3b4a`) returned NO-GO for two Critical variants of the same Python proof bypass: aliased `getattr` with split attribute strings can alter proof-sensitive globals or a guarded revision through `frame.f_locals`. D-219's two review passes are spent; no push or protected matrix ran. The owner selected D-220 scope-bounded convergence in the existing one-plan Phase 24 boundary. This discussion authorizes context and plan updates only; implementation still requires an independently checked plan and a separate execution authorization. One protected matrix and conditional merge of the identical passing head remain gated on a clean fresh exact-head review. The candidate and all prior NO-GO reports remain immutable history.
+**Gathered:** 2026-11-19; updated after the f19 matrix and D-221 owner decision
+**Status:** Candidate f19d5ae2f5819d18074a68e1e80d959dc31b1302 failed the single D-220 protected matrix: required-native and preview-package-smoke failed, while fixture-repro passed. The owner approved D-221 planning for one integrated recovery and up to two new protected matrix candidates. Each candidate must be changed, locally qualified, and independently reviewed by code and security reviewers; a second matrix is allowed only after the first reveals a concrete in-scope failure and a causal fix. Planning only is authorized here; source changes and hosted CI remain separately gated. Full evidence is in the [f19 hosted matrix report](../../../build/phase24/f19d5ae2f5819d18074a68e1e80d959dc31b1302-hosted-matrix.md).
 
 <domain>
 ## Phase Boundary
 
-Replan the sole existing Phase 24 plan to close the two remaining D-219 pass-two proof gaps within the same six-checker trust boundary. Prefer a fail-closed standard-library proof contract over an expanding spelling denylist or a general alias-analysis framework. Add causal source-only controls for aliased reflection, constructed attribute names, protected-global replacement, and post-guard revision mutation; keep exact approved positives and require the specific proof refusal before any Git read. Preserve all prior original-object Git, replacement-ref, sanitized-environment, archive-pin, inventory-mode, path, and 153-case census contracts.
+Continue the sole existing Phase 24 recovery plan after the failed f19 protected matrix. Preserve the original v0.4 evidence dispositions and address only the following integration blockers: reduce the repeated no_phase_paths_controls runtime variance while retaining its 201 controls and 60-second timeout; repair the Windows Git object fixture and represent newline-bearing Git paths through Git metadata rather than an OS-invalid filename; and add exact-head fail-fast behavior for preview waiters without weakening aggregate, player, artifact, or branch-protection gates. The owner permits up to two new protected matrix candidates on changed, locally qualified, freshly code/security-reviewed heads. Candidate two requires a concrete in-scope failure and causal fix. Phase 24 and v0.4 remain open/administratively closed respectively; no requirement disposition changes.
 
-Use local diagnose/fix/retest convergence bounded by the declared checker files and proof invariant rather than a numerical review-pass count. Each review finding must lead to a changed candidate and a causal control; do not resubmit an unchanged candidate. Pause for owner discussion if closure requires a new trust boundary, files beyond the existing six-checker allowlist plus additive Phase 24 closeout evidence, a dependency, a new CTest identity, weakened requirements, or if a cycle makes no concrete progress. After local qualification, obtain a fresh independent exact-head review; only a clean review permits the one protected PR matrix. Any failed, skipped, stale, or missing required matrix context stops with no matrix retry. Merge only the identical reviewed and fully passing head through existing branch protection.
+Keep local diagnosis and targeted retesting within this exact scope, and stop if a correction needs a new trust boundary, dependency, CTest identity, reduced coverage, timeout increase, or unsupported claim. Each candidate needs a clean independent code review and security review of the same SHA/tree before hosted CI. Preserve the existing required contexts and success gates; no unchanged-head retry. A failed second candidate or any out-of-scope blocker returns to owner discussion.
 
-Keep D-209's requirement dispositions and v0.4 milestone state unchanged. FIXT-01 remains Pending; the Acid2 mismatch remains failed and unreplayed. No broad suite, ROM/fixture replay, Task 7, UAT/SUMMARY closure, phase verification, D-103 suite, milestone audit/archive, v0.5 work, release/tag change, or worktree cleanup is included. The owner's D-220 selection authorizes discussion and replanning only, not implementation or CI.
-
-The following D-214 through D-219 records preserve prior decisions and outcomes; the D-220 addendum below is authoritative for the current recovery route.
-
-After the fresh review found Critical CR-01, the owner directed us to follow the bounded recovery recommendation. Address only the BOM-prefixed plan-classification bypass within the existing 24-01 plan: normalize exactly one leading UTF-8 BOM before checking the canonical frontmatter fence, fail closed on a second consecutive BOM, and add production-CLI controls for the Phase 24 D-205 guard. The bypassing gap plan must fail for the specific D-205 gap-plan reason; its otherwise identical ordinary-plan twin must pass. Use one same-plan correction task, one clean independent review of its exact committed candidate, and only the existing plan_cap and planning_hygiene_controls CTests after cheap direct checks. The configured focused regression hook must pass before Phase 24 verification can resume. Any Critical/correctness/security finding or new blocker in the fresh review stops the phase before verification.
-
-This recovery adds no plan, dependency, or CTest identity and does not reset any earlier test-suite, lifecycle, release, fixture, rights, or milestone limit. Keep the actual 40-plan ceiling, preserve the 30-second CTest timeout and 125-control floor, and retain D-209's current requirement dispositions under their original owners. Do not run the broad suite, third lifecycle retest, phase verifier before recovery gates pass, milestone close, archival, or cleanup while blocked.
-
-D-214 completed its local recovery gates at `feb195f5e50eb4669b5bdb8b62e50459ec84121d` (tree `a28ca6b6644e90bde15b7ecc5c6e10bc94e7e0a6`). The fresh exact-head review at that candidate found three path-contract bypasses, an archive-pair fallback that skips current-route validation, and two candidate-Git validation weaknesses. The owner selected one integrated same-plan correction for all six findings. This new scope is planning-only until the updated plan is checked and execution is separately authorized.
-
-The findings are specifically: CR-01, decoded/escaped string values can name protected paths without a lexical spelling; CR-02, a protected path passed through a local helper parameter is not tracked to its reader; CR-03, a path syntactically rooted at a temporary directory can add components that escape that root; CR-04, removing both archived v0.4 files selects legacy validation and skips current-route checks; WR-01, text-mode Git output can normalize a bare CR in an admission pin; WR-02, inherited `GIT_DIR`, `GIT_WORK_TREE`, and related variables can redirect temporary-repository commands. The full review artifact is `/private/tmp/24-D214-REVIEW.md` in the current environment.
-
-The correction proposal is limited to those six findings and their direct positive/negative controls. It requests a Phase 24-only exception to the already-spent normal review-fix/gap limits, without changing global caps; allows up to two post-correction review-fix passes and uncapped in-scope local diagnosis/retests; allows one full protected PR matrix only after a clean review; and permits merging the exact reviewed head only if every required protected context passes. If a review is unavailable, remains blocked after the two passes, or finds a new out-of-scope issue, or if any required matrix context fails/is skipped/is stale/is missing, stop. Use existing PR #154 and merge only the exact reviewed/tested head through branch protection after all required checks pass. Task 7, requirement changes, phase verification, milestone audit/archive, D-103, excluded-ROM replay, release changes, and worktree cleanup remain separate or prohibited boundaries.
+Do not run the broad suite, ROM/fixture/Acid2 replay, Task 7, phase verification, D-103 suite, UAT/SUMMARY closure, milestone audit/archive, v0.5 work, release/tag change, or worktree cleanup. Keep FIXT-01 Pending and the unreplayed Acid2 mismatch failed. D-219/D-220 history below is immutable except for the explicit D-221 matrix-budget supersession.
 </domain>
+
+<code_context>
+## Existing Code Insights
+
+### Reusable Assets
+- verify-no-phase-paths.py already parses checker source into an AST and has the 201-control self-test surface; profiling can determine whether reusing the parsed tree reduces repeated work.
+- verify-planning-hygiene.py already creates the D-209 Git fixture; the fixture can own the exact pinned commit instead of depending on an alternate object path.
+- verify-state-forks.py has the census/refusal controls; raw Git index/tree entries can represent a newline-bearing pathname without a Windows filesystem operation.
+- wait-exact-head-ci.py has injected API fetchers and a poll-driven self-test. CI already runs its self-test, and CTest has wait_exact_head_ci_controls.
+
+### Established Patterns
+- Python standard-library checkers use exact positive and negative controls and preserve existing CTest identities.
+- Preview package jobs bind to the exact pull-request SHA and require the required-native aggregate; the player lane additionally verifies a run-scoped artifact and receipt.
+- .planning/context/WORKFLOW.md requires measured CI efficiency review while preserving qualification coverage and release gates.
+
+### Integration Points
+- The new waiter behavior belongs in the existing exact-head helper and its preview.yml call sites.
+- Workflow-policy checks and their existing self-tests must protect the new opt-in mode and unchanged protected contexts.
+- The sole 24-01 plan and its closeout evidence own the recovery; no new phase or plan is permitted.
+</code_context>
 
 <decisions>
 ## Implementation Decisions
@@ -461,3 +469,44 @@ The confirmed findings remain inside D-220's immutable Git evidence invariant:
 The existing source allowlist already contains all affected files. The owner-selected scope-bounded convergence and existing execution authorization permit local corrections within this fixed six-checker set; the sole plan's current T20 file ownership must be amended and independently checked before source edits. The recommended correction pins the exact raw bytes of the proof-bearing planning checker in the path checker while retaining its AST diagnostics, executes only the exact in-memory clean source already validated, binds the full reader witness and route values, requires the specific structural refusal, and checks unpeeled Git object type for commit IDs. Add causal negatives and exact positives through existing controls; no path, dependency, CTest identity, fixture scope, requirement, timeout, floor, or CI topology is added.
 
 After the checked documentation boundary, rerun cheap exact-candidate controls and the same seven CTests serially with existing deadlines. Fresh independent exact-head code and security reviews of the same frozen candidate SHA/tree both must return clean verdicts before any push or the one protected matrix. Preserve every failed review and timeout; no matrix retry follows any failed, skipped, stale, or missing required context. Local timing differences justify no speculative CI change; measure hosted queue, step, dependency-wait, package, and timeout data during the authorized matrix under the existing CI/CD guidance. FIXT-01, the unreplayed Acid2 mismatch, D-103, Task 7, v0.4 dispositions and all phase/milestone closure stops remain unchanged.
+
+
+## D-221 — Failure-informed Phase 24 recovery (owner-selected, 2026-11-19)
+
+The f19 matrix outcome is recorded in ../../../build/phase24/f19d5ae2f5819d18074a68e1e80d959dc31b1302-hosted-matrix.md. It is the completed D-220 matrix, not a retryable run. The owner selected the recommended integrated recovery and up to two new matrix candidates. D-221 supersedes only D-220's one-matrix/no-retry limit for the new, explicitly listed recovery; it does not reset project-wide review limits or other Phase 24 limits.
+
+### Portable test controls
+
+- Keep all 201 controls in no_phase_paths_controls and its existing 60-second timeout. Diagnose the hot path first; reuse the already parsed AST when evidence shows duplicate parsing is material. Do not remove cases or inflate the timeout to hide variance.
+- Give the Windows D-209 Git fixture an owned object database containing the exact pinned commit; validate the expected object ID and commit type. Avoid a fragile alternate-object dependency. Git documents that shared clones can borrow objects through objects/info/alternates and may become corrupt if the source loses objects ([git clone](https://git-scm.com/docs/git-clone)); a full object ID is a supported fetch source ([git fetch](https://git-scm.com/docs/git-fetch)).
+- Preserve newline-path refusal semantics without creating the control-character filename on Windows. Write the test Git index/tree entry with NUL-delimited index-info input and assert the existing exact refusal. Windows forbids filename control characters 0x01–0x1f ([Microsoft filename rules](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/2917da5c-253c-4c0e-aaf6-9dddc37d2e6e)); Git supports NUL-delimited paths for update-index index-info ([git update-index](https://git-scm.com/docs/git-update-index)).
+
+### Exact-head waiter behavior and efficiency
+
+Add an opt-in fail-fast mode to the existing exact-head waiter and enable it for all three preview consumers. It may fail only when the newest exact SHA pull-request run at its current attempt has the same terminal failure from a required-native dependency on two consecutive polls. A run/job success, skipped result, stale attempt, missing or duplicate record, truncated or malformed response, or transport error never proves failure or success early; inconclusive data keeps waiting and the existing deadline fails closed. Reconcile the current truncated-list behavior with the documented fail-closed waiting contract and add adversarial self-tests.
+
+A component failure can end a package waiter early, but no child pass may turn the waiter green. Package configuration/build remains gated by successful completion of the exact CI run, the required-native aggregate, and the macOS player receipt where required. Keep the fixture-repro, required-native, and preview-package-smoke required contexts, matrix membership, triggers, concurrency, caches, and timeouts unchanged. GitHub documents that skipped jobs may report success and that failed/skipped dependencies can suppress downstream jobs; keep the existing explicit aggregate and exact-head checks ([status checks](https://docs.github.com/en/pull-requests/reference/status-checks), [workflow dependencies](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)).
+
+The observed matrix spent about 213 runner-minutes across four full native/floor streams and held three preview runners for roughly 69–73 minutes while package steps were skipped. The two-candidate budget does not permit replaying an unchanged SHA: candidate two is allowed only if candidate one exposes a concrete failure within this D-221 scope, the failure receives a causal fix and focused qualification, and fresh independent code/security reviews approve the same new SHA/tree. A successful matrix ends this recovery route. A failed second matrix, an out-of-scope blocker, or lack of concrete progress stops for a new owner discussion. Merge only an identical reviewed head with all required contexts green under existing branch protection.
+
+### Validation order and boundaries
+
+Run syntax, exact-input/scope checks, and causal self-tests before existing focused controls. Preserve existing CTest identities and floors; no new dependency, test identity, coverage reduction, broad suite, or speculative CI optimization. The codebase already has a dedicated [CI/CD efficiency procedure](../../context/WORKFLOW.md#cicd-efficiency); record measured queue, step, dependency-wait, and timeout data for each protected matrix candidate. Fail-fast should save wasted waiter time without changing qualification requirements.
+
+D-209 remains authoritative. FIXT-01 stays Pending; the Acid2 mismatch remains failed and unreplayed; Task 7, D-103, stale Phase 20/21/23.1 verification, and the administrative v0.4 closeout remain unchanged. Do not run ROM/fixture or Acid2 cases, the broad suite, phase/milestone verification or closure, milestone archival, v0.5 work, or worktree cleanup under this discussion.
+
+**Next route:** Update the existing 24-01 plan under D-221 and run a fresh independent plan check. The owner authorized planning scope only; implementation, reviews, protected matrix runs, and merge remain gated until the plan boundary is reviewed and execution authority is explicit. Keep both automatic-advance flags false.
+
+### Canonical references for D-221
+
+- .planning/milestones/v0.4-ROADMAP.md — Phase 24's archived success criteria and single-plan boundary.
+- .planning/milestones/v0.4-REQUIREMENTS.md — D-209 dispositions and the retained FIXT-01 Pending status.
+- .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md — sole plan and prior task ownership/history.
+- .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-EVIDENCE.md — existing admitted evidence and exclusions.
+- .planning/context/WORKFLOW.md#cicd-efficiency — required measured CI/release efficiency assessment.
+- tests/scripts/verify-no-phase-paths.py, tests/scripts/verify-planning-hygiene.py, tests/scripts/verify-state-forks.py — failing platform controls.
+- .github/scripts/wait-exact-head-ci.py, .github/workflows/preview.yml, .github/scripts/verify-workflow-policy.py, tests/scripts/verify-workflow-policy-coverage.py — exact-head waiters and their policy checks.
+- https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/2917da5c-253c-4c0e-aaf6-9dddc37d2e6e — Windows filename restrictions.
+- https://git-scm.com/docs/git-clone and https://git-scm.com/docs/git-fetch — object database alternates and fetching exact Git objects.
+- https://git-scm.com/docs/git-update-index — NUL-framed Git index paths.
+- https://docs.github.com/en/pull-requests/reference/status-checks and https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax — skipped/failing check and job dependency semantics.
