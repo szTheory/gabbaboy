@@ -466,6 +466,37 @@ Under configured Python 3.14.4, all six allowlisted scripts parsed. The path sel
 
 The prior D-220 NO-GO remains preserved. No remote push, protected matrix, or merge has run; no broad suite, emulator/runner build, ROM/fixture replay, Acid2 or gbmicrotest replay, phase/security verifier, SUMMARY/UAT closure, milestone audit/archive, D-103, Task 7, v0.5 work, or worktree cleanup is claimed. FIXT-01 remains Pending, and the Acid2 mismatch remains failed and unreplayed.
 
+### D-221 T21–T23 candidate local qualification
+
+**Updated:** 2026-11-20. This records local qualification of candidate `496da17dead7fde45a67ad860ceca21ac13645e7` (tree `453d323279755b0c941028622b46f13fe4bcbe81`) before adding this evidence. It does not claim fresh review, hosted qualification, merge, or phase completion.
+
+Execution stayed on the D-221 route: T21, T22, and T23 only. Original-object ancestry passed from f19 through the immutable planning boundary `688864aef779a78bb2289705f5fd1524a1e8f3c6`, authorization and archive restoration, effective execution boundary `6f682cc93f499ddfc8ee61ced3a24d1af5d67418`, and this candidate. The candidate diff from the effective boundary contains exactly the seven admitted source paths and no route, archive, or unrelated edits. The exact D-209 requirement and roadmap blobs remain `fc86255cef47ac9296cb62bbc0a3038f733acf0a` and `bd710ffb3158b9fef42b531560c29445637a6cb3`; the state-fork manifest remains `42e095bf270510b757510282d5c7172c38b04406`. The guarded D-209 reader remains pinned to archive commit `96d502d4733ac54aa8bf7fbfd7813065143771dc`; the exact planning-hygiene source digest is `c80afba104ff252da2161a710d59b47ebda97e680973f6fb4d3897d179c7b9c8`.
+
+T21 preserves all 201 causal path refusals and the production positive. The owned fixture receives the exact pinned objects into its own Git database, verifies commit type and object identity, compares the archive bytes, and has no alternates route. The newline controls encode Git metadata with NUL-framed index input: the non-manifest positive is accepted, the manifest case receives the exact census refusal, and neither path is created on the host filesystem. The self-test passed 201 controls; the tracked scan passed 612 files with 12 allowlisted paths; planning hygiene passed 641 controls; and state-fork inventory passed 153 cases and 36 controls with runner/build/configure all zero. The 55.05-second prior path-control baseline was already close to its unchanged 60-second limit. The bounded cProfile diagnostic exceeded its approximately 120-second stop bound and did not complete; its partial evidence did not justify a parser change, so no speculative parser optimization was made.
+
+T22 adds opt-in pending-run failure debounce to the existing waiter and all three preview consumers. It accepts only two consecutive identical terminal failures among the twelve fixed required-native dependencies, bound to the newest exact-SHA run and current attempt through `filter=latest` plus an unchanged run-detail reread. Missing, stale, malformed, changed, truncated, or transport-uncertain observations reset the streak and keep waiting; child success or skip never grants success. The default remains off, and full exact-run, aggregate, player producer-attempt, artifact, and receipt gates remain intact. The waiter self-test passed 241 controls; policy self-test passed 499 negative and 19 positive controls (540 in the existing CI group); workflow-policy coverage passed 744 controls, including the nine new opt-in presence/order/duplication negatives. No stable test identity, protected context, timeout, or workflow topology changed.
+
+The T23 cheap gates passed before CMake: syntax, exact seven-path scope and diff checks, ancestry and immutable pins, dense-input Git context (24 controls; configure/build/runner zero), and the direct T21/T22 controls above. Configure-only `cmake --preset phase1` completed in 15.5 seconds without building a target. The configured interpreter was Python 3.14.4. Machine-readable inspection found each of the ten approved CTests exactly once, no fixture dependency, the same registered floors and timeouts, and immutable revision arguments bound to `496da17`; `workflow_policy_group_ci` retains its 180-second timeout and four processors.
+
+The ten CTests passed serially in the required order:
+
+| Test | Result | Elapsed |
+|---|---|---:|
+| `plan_cap` | pass | 0.37 s |
+| `phase22_evidence_controls` | pass | 19.77 s |
+| `phase22_evidence_contract` | pass | 2.81 s |
+| `no_phase_paths_controls` | pass | 40.62 s |
+| `no_phase_paths` | pass | 1.92 s |
+| `wait_exact_head_ci_controls` | pass | 0.06 s |
+| `workflow_policy_check` | pass | 0.39 s |
+| `workflow_policy_group_ci` | pass | 16.82 s |
+| `workflow_policy_coverage_controls` | pass | 5.96 s |
+| `planning_hygiene_controls` | pass | 18.55 s |
+
+Selected test time totaled 107.27 seconds. The path-control test retained 19.38 seconds of local headroom under its 60-second timeout; planning hygiene retained 11.45 seconds under its 30-second timeout. The observed 40.62-second path-control duration is lower than the previously recorded 55.05-second baseline, but the bounded profile did not establish a causal optimization and no parser change was made. These local results do not justify reducing coverage or changing timeouts, caches, concurrency, or CI topology. The required hosted queue, job/step, dependency-wait, package execution/skip, and timeout-headroom review remains due during the protected matrix under [WORKFLOW.md § CI/CD efficiency](../../context/WORKFLOW.md#cicd-efficiency).
+
+This evidence addition changes a tracked scan input, so `496da17` is not the final review candidate. Rebind and requalify the exact closeout-bearing head before obtaining fresh independent code and security reviews of that same SHA/tree. Keep those final qualification and review receipts outside this file. No push, protected matrix, merge, broad suite, fixture/ROM execution, Acid2 or gbmicrotest replay, Task 7, phase verification/SUMMARY/UAT, D-103, milestone audit/archive, v0.5 work, or worktree cleanup has occurred. FIXT-01 remains Pending; the Acid2 mismatch remains failed and unreplayed.
+
 ### D-220 immutable-reader parameter and path correction
 
 **Updated:** 2026-11-19. Fresh code review of `8bb0783f05ac92a66cd7c5e1fe8eb53cb81eb840` (tree `36d020ecdd06101242573a3eb8a2d6c6e31a0a57`) returned NO-GO: a pattern capture could redirect `immutable_blob`'s `path`, and neither the repository argument nor the file path operands were fully bound to their intended parameters. A targeted security follow-up confirmed the same gap also affected route evidence parameters. The initial security verdict on that candidate is superseded by its follow-up. Reports are [code review](../../../build/phase24/d220-final-code-review-8bb0783.md) and [updated security review](../../../build/phase24/d220-final-security-review-8bb0783.md). No push, matrix, or merge followed that candidate.
