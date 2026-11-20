@@ -10,7 +10,7 @@ Continue the sole existing Phase 24 recovery plan after the failed f19 protected
 
 Keep local diagnosis and targeted retesting within this exact scope, and stop if a correction needs a new trust boundary, dependency, CTest identity, reduced coverage, timeout increase, or unsupported claim. Each candidate needs a clean independent code review and security review of the same SHA/tree before hosted CI. Preserve the existing required contexts and success gates; no unchanged-head retry. A failed second candidate or any out-of-scope blocker returns to owner discussion.
 
-Do not run the broad suite, ROM/fixture/Acid2 replay, Task 7, phase verification, D-103 suite, UAT/SUMMARY closure, milestone audit/archive, v0.5 work, release/tag change, or worktree cleanup. Keep FIXT-01 Pending and the unreplayed Acid2 mismatch failed. D-219/D-220 history below is immutable except for the explicit D-221 matrix-budget supersession.
+Do not run the broad suite or re-execute emulator ROM/fixture/Acid2 evidence; do not start Task 7, phase verification, D-103 suite, UAT/SUMMARY closure, milestone audit/archive, v0.5 work, release/tag change, or worktree cleanup. Keep FIXT-01 Pending and the unreplayed Acid2 mismatch failed. D-219/D-220 history below is immutable except for the explicit D-221 matrix-budget supersession.
 </domain>
 
 <code_context>
