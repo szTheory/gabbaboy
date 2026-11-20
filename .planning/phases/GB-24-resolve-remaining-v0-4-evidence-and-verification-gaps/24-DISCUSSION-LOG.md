@@ -539,3 +539,39 @@ Primary references: Git documents verbatim NUL-delimited output and recursive fu
 The single gate-only replacement `e1f072f23d2d6a6fcfb328f0b30f224fe006c533` has the expected parent and exact one-file raw diff, but bootstrap denied `d221_source_drift` before writing `d225-bootstrap.json`. The two mismatched sources are precisely the existing correction-allowlisted paths; their D-221 expected and D-225 actual OIDs, plus the six matching pins and pre-freeze checks, are recorded in [`d225-bootstrap-denied.md`](../../../build/phase24/d225-bootstrap-denied.md). `validate_plan_anchor` enforces the D-221 pins unconditionally, exposing a mismatch with the stated two-path correction allowance.
 
 The frozen-failure stop applies: no gate edit/replacement, post-freeze immutable test, T25/T26, review, push, matrix, merge, verification, or milestone closeout ran. D-222 and D-224 receipts remain unchanged. Any further correction needs a new owner-approved scope; this discussion does not authorize another replacement.
+
+## D-226 — Bind correction pins to the original parent
+
+**Date:** 2026-11-20
+**Areas discussed:** Source-baseline provenance; gate boundary identity; adversarial controls; bounded execution and stop rule
+
+### Trigger and evidence
+
+D-225's sole gate-only replacement `e1f072f23d2d6a6fcfb328f0b30f224fe006c533` passed its pre-freeze checks but its frozen bootstrap denied `d221_source_drift` before writing a receipt. The first mismatch is `.github/scripts/wait-exact-head-ci.py`: D-221 expects `67c78ff306e3338cfefbabe8b6512dc7a62da6b8`, while pinned source parent `7761be6f90041efd0bb6928279c002a369962d7f` contains `0eda5971bf059cbdba560c3b9d9bd8d6cb1ecb8d`. The second is `tests/scripts/verify-workflow-policy-coverage.py`: D-221 expects `81b388795eec982d5b73b1dc71e007af70b597ba`, while parent 7761 contains `771e64dd919f91dcdb8ef4163d985c517b82e6cb`. Both are exactly the existing correction-allowlisted paths; the other five of seven source paths match D-221. The gate's `validate_plan_anchor` compares all seven to D-221 unconditionally. The frozen failure and absence of a D-225 bootstrap receipt are preserved in [`d225-bootstrap-denied.md`](../../../build/phase24/d225-bootstrap-denied.md).
+
+The source-pin audit also inspected candidate qualification: `_verify_candidate_scope` bases candidate content on the checked plan revision and exempts only the two exact correction paths. Therefore re-anchoring to parent 7761 is not needed to preserve candidate-two eligibility; the reason to keep D-221 is its historical baseline role and the narrower, auditable proof.
+
+### Options considered
+
+| Option | Benefits | Costs / failure mode | Decision |
+|---|---|---|---|
+| Re-anchor all seven source pins to parent 7761 | Removes the immediate mismatch | Rewrites the historical D-221 source baseline even though five files are identical; expands trust changes beyond the two intended corrections | Reject |
+| Skip the D-221 comparison for any correction-allowlisted path | Small code change | Accepts any content at those paths without proving which already-admitted correction object is intended | Reject |
+| Keep D-221 for five files; require the two plan blobs to equal exact original-object entries in pinned parent 7761 | Preserves historical provenance and exactly admits existing correction bytes; no new manifest or dependency | Must pin and verify the separate source parent/tree and two modes/OIDs, distinct from the new D-226 planning boundary | **Select** |
+| Add a new correction manifest or broader source abstraction | Could externalize source facts | Adds another mutable artifact and more trust wiring without improving on three exact constants in the existing gate | Reject |
+
+### Cross-role synthesis
+
+| Lens | Adversarial finding | Recommendation |
+|---|---|---|
+| Security / provenance | A path-only exemption leaves correction contents mutable; comparing to the mutable checked plan itself would make the assertion circular. | Read the exact parent `7761be6...` as an original commit, verify its tree and both path entries' mode/type/OID, then require the checked plan's two correction entries to match those exact objects. Keep D-221 comparisons for the other five paths. |
+| Architecture / Git boundary | The D-226 documentation boundary is a child of the D-225 stop commit, while source corrections originate at 7761. Treating these as one parent would confuse execution-route identity with source provenance. | Pin separate constants: D-226 plan revision and immediate parent for the route boundary; source parent/tree 7761 for the two correction blobs; D-221 remains the five-file baseline. |
+| Candidate qualification | The current candidate validator compares candidate blobs to `PLAN_REV` and permits only the two fixed correction paths; the candidate-two rule independently requires an in-scope first-matrix failure and causal path. | Leave `_verify_candidate_scope`, source allowlist, correction allowlist and candidate-two rules unchanged. Do not claim a full re-anchor is required to keep candidate two eligible. |
+| Test engineering | A broad positive could mask accepting arbitrary bytes at correction paths; a fixture-only test could miss production use. | Exercise the production `validate_plan_anchor` path. Prove exact parent-bound positives plus causal refusal for wrong parent/tree, changed correction OID, wrong mode/type, any of five non-correction drift, allowlist drift, and redirected/malformed Git reads; assert zero promotion calls. |
+| Operations / GSD | The frozen failure has a strict stop; expensive local CTests or CI cannot fix it after freeze. | Before the single new replacement, run syntax/scope/direct controls and the unchanged cheap scanner. After freeze, run direct, bootstrap and immutable checks; only if all pass continue T25/T26. Any failure stops with no further replacement. |
+| Maintainability / cost | A new package, manifest, or scanner exception would widen the trust surface. | Add the two exact pins to the existing standard-library gate and reuse its current test seam. Add no dependency, CTest, CI context, or workflow topology change. |
+| Product / release | This is a promotion-proof defect, not new emulation evidence. | Keep D-209 dispositions, FIXT-01 Pending, failed unreplayed Acid2, Task 7, D-103, release bytes, archives, branch protection and milestone boundary unchanged. |
+
+**Owner's choice:** The owner selected **Authorize D226** on 2026-11-20. The approved bounded scope is one same-plan update, one independent plan check, and one gate-only replacement using D-221 for five files and exact parent-bound objects for two correction files.
+
+**Authorization boundary:** D-226 supersedes D-225's no-further-replacement stop only for one new gate-only replacement after the D-226 checked planning boundary. It does not alter the failed D-225 replacement or receipt state. Pre-freeze local diagnosis may converge within the described gate proof. After freeze, any direct, bootstrap, immutable, or required qualification failure stops without another replacement. T25/T26 stay held until frozen direct/bootstrap/immutable checks pass. All D-209, D-103, Task 7, Acid2, candidate, review, matrix, CI, merge and cleanup limits remain unchanged. If T24 passes, resume the existing authorized `$gsd-autonomous --from 24` route.
