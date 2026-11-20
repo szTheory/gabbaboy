@@ -3,8 +3,8 @@ gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
 stopped_at: Phase 24 D-225 discussion complete; same-plan replan and independent check in progress
-last_updated: "2026-11-20T19:51:01.109Z"
-state_head: 7761be6f90041efd0bb6928279c002a369962d7f
+last_updated: "2026-11-20T20:27:36.995Z"
+state_head: e1f072f23d2d6a6fcfb328f0b30f224fe006c533
 progress:
   total_phases: 6
   completed_phases: 5
@@ -12,9 +12,9 @@ progress:
   completed_plans: 32
 milestone_name: Evidence Floor
 last_activity: 2026-11-20
+current_plan: "Phase 24 Plan 24-01: D-225 frozen bootstrap denied; stopped pending owner decision on a new bounded recovery scope"
 current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: Phase 24 Plan 24-01 D-225 recovery replan and independent check in progress
 ---
 
 # Project State
@@ -56,9 +56,9 @@ The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 veri
 
 ## Owner Handoff
 
-Current stage: D-225 sole-plan and route-pointer corrections are complete; the independent plan check passed with no blockers or warnings. The D-224 no_phase_paths failure remains preserved; no source edit or qualification has started.
+Current stage: D-225 frozen bootstrap denied d221_source_drift on the two existing correction-allowlisted source OIDs. The one replacement remains frozen; no D-225 receipt, post-freeze immutable check, T25/T26, review, push, matrix, merge, or closure occurred.
 
-Next actor: The orchestrator commits the D-225 documentation boundary, excluding generated .planning/state.json, then executes only T24 under the existing autonomous authorization. T25/T26 resume only after the frozen gate passes its direct, bootstrap, and immutable checks.
+Next actor: The owner decides whether to authorize a new bounded Phase 24 recovery scope with $gsd-discuss-phase 24. D-225 explicitly stops after its frozen failure and authorizes no second replacement.
 
 Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-103, D-209 dispositions, v0.4 administrative closeout, required branch protection, and all phase/milestone closure boundaries. Keep this worktree and both automatic-advance flags false.
 ## Accumulated Context
@@ -119,6 +119,7 @@ Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-10
 - [Phase 24]: D-222 replaces the active D-221 route with a sole-plan integrated recovery: T24 freezes the immutable local promotion gate, T25 fixes valid duplicate-name fixtures and bounds waiter subprocesses, and T26 qualifies the exact reviewed head for protected promotion. The local gate does not claim server-side enforcement; candidate two still requires a concrete in-scope first-matrix failure and causal fix. Continue the already authorized `$gsd-autonomous --from 24` after the independent plan check and planning-boundary commit; preserve D-209 and all closure/execution exclusions.
 - [Phase 24]: D-225 replaces the active D-224 gate path: keep the lexical scanner strict, use pinned raw-tree lookup, preserve the D-221 source baseline and two-file T25 correction allowlist, and make one gate-only replacement. — The D-224 frozen gate failed the required no_phase_paths check. After T24 passes, T25 may adapt only the existing direct receipt seam; inherited waiter logic stays verification-only. Continue the existing autonomous Phase 24 authorization and preserve all D-209 and protected-matrix limits.
 - [Phase 24]: D-225 is the active Phase 24 recovery route. D-222 promotion conditions remain inherited: at most two changed, locally qualified and freshly reviewed candidates; candidate two requires a concrete in-scope first-matrix failure and causal fix. D-225 adds one gate-only replacement before T25/T26 and does not reset candidate, review, matrix, D-209, D-103 or Task 7 limits.
+- [Phase 24]: D-225 frozen result: the sole gate-only replacement e1f072f failed bootstrap with d221_source_drift on both exact correction-allowlisted sources. Five other source paths match D-221. The frozen scope stops without replacement, post-freeze immutable testing, T25/T26, review, push, matrix or merge. A new bounded scope requires owner authorization.
 
 ## Session
 
@@ -127,4 +128,5 @@ Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-10
 **Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md
 
 ### Blockers
-None
+
+- D-225 frozen bootstrap denial: validate_plan_anchor rejects the two existing correction-allowlisted source blobs as D-221 source drift; T25/T26 and all downstream closure remain held until a new recovery scope is owner-authorized.
