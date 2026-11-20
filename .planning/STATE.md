@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: Phase 24 D-221 archive restored at 16a139; route-finalization commit is effective EXEC_REV
-last_updated: "2026-11-20T04:12:13Z"
-state_head: 16a139ddf7f27e6c67acbfb6026ad37164acaaeb
+stopped_at: Phase 24 D-222 context gathered; sole plan replan and independent check next
+last_updated: "2026-11-20T12:21:32.765Z"
+state_head: 3ef551f7176b016c36302acb003701f105f58081
 progress:
   total_phases: 6
   completed_phases: 5
@@ -117,9 +117,9 @@ Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-10
 
 ## Session
 
-**Last session:** 2026-11-20T04:12:13Z
-**Stopped at:** Phase 24 D-221 archive restored at 16a139; route-finalization commit is effective EXEC_REV
-**Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md
+**Last session:** 2026-11-20T12:21:32.132Z
+**Stopped at:** Phase 24 D-222 context gathered; sole plan replan and independent check next
+**Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md
 
 ### Blockers
 
