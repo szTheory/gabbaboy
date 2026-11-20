@@ -98,7 +98,18 @@ GROUP_BY_WORKFLOW = {
 EXPECTED_TEST_NAMES = set(GROUPS.values()) | {"workflow_policy_coverage", "workflow_policy_coverage_controls"}
 POLICY_TEST_NAMES = EXPECTED_TEST_NAMES | {"workflow_policy_check"}
 PHASE24_GATE_PATH = ".github/scripts/phase24-promotion-gate.py"
-PHASE24_BOOTSTRAP_PATH = "build/phase24/d224-bootstrap.json"
+PHASE24_BOOTSTRAP_PATH = "build/phase24/d226-bootstrap.json"
+PHASE24_BOOTSTRAP_CANONICAL_SHA256 = "69f9e05b626fdc17fde63c92280c9edf654b1b8afb87a45ab3198ca60f9df555"
+PHASE24_PLAN_REV = "9bf8048de96b9f40898238a0ef9b8a723b04bbe5"
+PHASE24_PLAN_PARENT = "e16873ad03c725e3564d857d8a5ae4850c2049e1"
+PHASE24_PLAN_TREE = "8f1b848155d0a24492ad6023da07e3b286fc79f4"
+PHASE24_PLAN_BLOB = "d548c63258a6f4a0f663ef9acdcf5fdb89981d2d"
+PHASE24_PLAN_SHA256 = "f25c20e4fabbe697796c140feebdda4517263f2e83da172f9c598d319b7d4511"
+PHASE24_PLAN_PATH_SHA256 = "981d088bc4d660fbb67e39db130bb8ec6bba081e6717b99ab9ec825388cdc72e"
+PHASE24_D225_GATE_REV = "e1f072f23d2d6a6fcfb328f0b30f224fe006c533"
+PHASE24_D225_GATE_TREE = "f02887b8ef6addb08c5bfe31a89e7a50c898a704"
+PHASE24_D225_GATE_BLOB = "13518dd3a40871c7476a9480a372b43d5550cadd"
+PHASE24_D225_GATE_SHA256 = "8c75d1963a56dd7086c5c0d97d11d2f7738abc60c1d9d92c2dd2c4d38bbe9daf"
 PHASE24_GATE_REV_RE = re.compile(r"^[0-9a-f]{40}$")
 PHASE24_GATE_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 ALL_PLATFORMS = ("posix", "windows")
@@ -3353,23 +3364,82 @@ def _phase24_pinned_gate_source(root: Path, gate_rev: str, gate_sha256: str,
         reject("Phase 24 bootstrap receipt is missing or oversized")
     try:
         bootstrap = json.loads(receipt.read_bytes().decode("utf-8", "strict"),
-                               object_pairs_hook=_phase24_object_pairs)
+                               object_pairs_hook=_phase24_object_pairs,
+                               parse_constant=lambda _value: reject("Phase 24 bootstrap contains a non-finite number"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         reject(f"Phase 24 bootstrap receipt is malformed: {error}")
-    if (type(bootstrap) is not dict or bootstrap.get("kind") != "phase24-d224-bootstrap"
+    required_top_level = {
+        "schema_version", "kind", "plan", "discussion", "closeout", "loader",
+        "inherited_gate", "gate", "repository", "scope", "history_pins", "trusted_handoff",
+    }
+    required_nested = {
+        "plan": {"rev", "parent", "tree", "blob", "sha256", "path_sha256"},
+        "discussion": {"rev", "tree", "blob", "sha256", "path_sha256"},
+        "closeout": {"rev", "tree", "blob", "sha256", "path_sha256"},
+        "loader": {"sha256"},
+        "inherited_gate": {"rev", "tree", "blob", "sha256", "mode"},
+        "gate": {"rev", "parent", "tree", "blob", "sha256", "old_blob", "old_mode"},
+        "repository": {"root", "git_dir", "branch"},
+        "scope": {"source_allowlist", "correction_allowlist"},
+        "history_pins": {
+            "d209_rev", "d220_candidate", "d221_candidate", "d221_tree", "d221_exec_rev",
+            "requirements_blob", "roadmap_blob", "state_forks_blob", "planning_hygiene_sha256",
+        },
+        "trusted_handoff": {"authority", "plan_rev", "plan_sha256", "gate_rev", "gate_sha256"},
+    }
+    if (type(bootstrap) is not dict or set(bootstrap) != required_top_level
+            or bootstrap.get("kind") != "phase24-d226-bootstrap"
             or type(bootstrap.get("schema_version")) is not int
             or bootstrap.get("schema_version") != 1):
         reject("Phase 24 bootstrap receipt has the wrong identity")
+    for name, required_keys in required_nested.items():
+        value = bootstrap.get(name)
+        if type(value) is not dict or set(value) != required_keys:
+            reject(f"Phase 24 bootstrap {name} schema is invalid")
     gate = bootstrap.get("gate")
     handoff = bootstrap.get("trusted_handoff")
     plan = bootstrap.get("plan")
-    if (type(gate) is not dict or type(handoff) is not dict or type(plan) is not dict
-            or gate.get("rev") != gate_rev or gate.get("sha256") != gate_sha256
-            or handoff.get("gate_rev") != gate_rev or handoff.get("gate_sha256") != gate_sha256
-            or handoff.get("plan_rev") != plan.get("rev")
-            or handoff.get("plan_sha256") != plan.get("sha256")
-            or gate.get("parent") != plan.get("rev")):
+    expected_plan = {
+        "rev": PHASE24_PLAN_REV, "parent": PHASE24_PLAN_PARENT, "tree": PHASE24_PLAN_TREE,
+        "blob": PHASE24_PLAN_BLOB, "sha256": PHASE24_PLAN_SHA256,
+        "path_sha256": PHASE24_PLAN_PATH_SHA256,
+    }
+    expected_handoff = {
+        "authority": "gsd-executor", "plan_rev": PHASE24_PLAN_REV,
+        "plan_sha256": PHASE24_PLAN_SHA256, "gate_rev": gate_rev, "gate_sha256": gate_sha256,
+    }
+    if (plan != expected_plan or type(gate) is not dict or type(handoff) is not dict
+            or handoff != expected_handoff or gate.get("rev") != gate_rev
+            or gate.get("sha256") != gate_sha256 or gate.get("parent") != PHASE24_PLAN_REV
+            or gate.get("old_blob") != PHASE24_D225_GATE_BLOB or gate.get("old_mode") != "100644"
+            or bootstrap.get("inherited_gate") != {
+                "rev": PHASE24_D225_GATE_REV, "tree": PHASE24_D225_GATE_TREE,
+                "blob": PHASE24_D225_GATE_BLOB, "sha256": PHASE24_D225_GATE_SHA256, "mode": "100644",
+            }):
         reject("Phase 24 gate pin differs from its trusted bootstrap anchor")
+
+    repository = bootstrap["repository"]
+    current_root = git_read(root, "rev-parse", "--show-toplevel")
+    current_git_dir = git_read(root, "rev-parse", "--absolute-git-dir")
+    current_branch = git_read(root, "symbolic-ref", "--quiet", "--short", "HEAD")
+    if any(result.returncode != 0 for result in (current_root, current_git_dir, current_branch)):
+        reject("Phase 24 bootstrap repository identity is unavailable")
+    expected_repository = {
+        "root": current_root.stdout.decode("utf-8", "strict").strip(),
+        "git_dir": current_git_dir.stdout.decode("utf-8", "strict").strip(),
+        "branch": current_branch.stdout.decode("utf-8", "strict").strip(),
+    }
+    if repository != expected_repository or not expected_repository["branch"].startswith("gsd/phase-24-"):
+        reject("Phase 24 bootstrap repository identity differs from this execution")
+    normalized_bootstrap = copy.deepcopy(bootstrap)
+    normalized_bootstrap["repository"] = {"root": "<repo-root>", "git_dir": "<git-dir>", "branch": "<branch>"}
+    try:
+        normalized_bytes = json.dumps(normalized_bootstrap, ensure_ascii=False, sort_keys=True,
+                                      separators=(",", ":"), allow_nan=False).encode("utf-8")
+    except (TypeError, ValueError):
+        reject("Phase 24 bootstrap cannot be canonically encoded")
+    if hashlib.sha256(normalized_bytes).hexdigest() != PHASE24_BOOTSTRAP_CANONICAL_SHA256:
+        reject("Phase 24 bootstrap differs from the exact D226 handoff")
 
     resolved = resolve_commit(root, gate_rev)
     if resolved != gate_rev:
@@ -3381,6 +3451,20 @@ def _phase24_pinned_gate_source(root: Path, gate_rev: str, gate_sha256: str,
         reject("Phase 24 gate parent record is malformed")
     if parent_line.returncode != 0 or commit_and_parents != [gate_rev, gate.get("parent")]:
         reject("Phase 24 gate anchor is not the bootstrapped single-parent child")
+
+    tree_line = git_read(root, "rev-parse", f"{gate_rev}^{{tree}}")
+    blob_line = git_read(root, "rev-parse", f"{gate_rev}:{PHASE24_GATE_PATH}")
+    if tree_line.returncode != 0 or blob_line.returncode != 0:
+        reject("Phase 24 gate tree or blob is unavailable")
+    try:
+        gate_tree = tree_line.stdout.decode("ascii", "strict").strip()
+        gate_blob = blob_line.stdout.decode("ascii", "strict").strip()
+    except UnicodeDecodeError:
+        reject("Phase 24 gate tree or blob record is malformed")
+    if (gate.get("tree") != gate_tree or gate.get("blob") != gate_blob
+            or not PHASE24_GATE_REV_RE.fullmatch(gate_tree)
+            or not PHASE24_GATE_REV_RE.fullmatch(gate_blob)):
+        reject("Phase 24 gate tree or blob differs from its trusted receipt")
 
     source = git_text(root, gate_rev, PHASE24_GATE_PATH)
     if hashlib.sha256(source).hexdigest() != gate_sha256:
