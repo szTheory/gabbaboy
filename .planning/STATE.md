@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: Phase 24 D-221 execution authorized; check and commit authorization boundary before T21
-last_updated: "2026-11-20T03:24:21Z"
-state_head: b630407680e3724a2e61808631900f98dd29264a
+stopped_at: Phase 24 D-221 T21 refused prior archive pin; check and commit corrected EXEC_REV
+last_updated: "2026-11-20T04:02:24Z"
+state_head: 06fc6e0d9e788226a16f75c1c5836a1b19c8b393
 progress:
   total_phases: 6
   completed_phases: 5
@@ -14,7 +14,7 @@ milestone_name: Evidence Floor
 last_activity: 2026-11-19
 current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: Phase 24 Plan 24-01 D-221 T21–T23 authorized through GSD Autonomous; authorization boundary checking
+current_plan: Phase 24 Plan 24-01 D-221 T21–T23 authorized; exact archived-roadmap boundary correction checking
 ---
 
 # Project State
@@ -24,7 +24,7 @@ current_plan: Phase 24 Plan 24-01 D-221 T21–T23 authorized through GSD Autonom
 **Milestone stage:** v0.4 remains administratively closed with D-209 gaps; this D-221 execution authorization preserves the separate phase and milestone closure boundaries.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
 **Phase state:** Phase 24 remains incomplete. Candidate f19d5ae2f5819d18074a68e1e80d959dc31b1302 passed both fresh code/security reviews, then its single D-220 protected matrix failed: required-native and preview-package-smoke failed; fixture-repro passed. See [hosted matrix evidence](../build/phase24/f19d5ae2f5819d18074a68e1e80d959dc31b1302-hosted-matrix.md). No retry or merge occurred.
-**Next route:** The owner explicitly authorized D-221 execution through GSD Autonomous after checked planning boundary 688864a. The agent acts next to independently check and commit the documentation-only authorization reconciliation, then continue `$gsd-autonomous --from 24` for T21–T23 only. Local qualification, fresh code/security reviews, at most two changed protected candidates under D-221's causal-fix condition, and conditional identical-head protected merge are authorized. Keep this worktree and both automatic-advance flags false.
+**Next route:** The owner explicitly authorized D-221 execution through GSD Autonomous after checked planning boundary 688864a. T21 correctly refused prior authorization commit 06fc6e0 because its archived-roadmap blob mismatches the required D-209 pin; that commit records authority but is not a usable source baseline. The agent independently checks and commits the documentation-only exact-archive restoration and root-route correction as the effective EXEC_REV, keeping pending T21 source edits outside the commit, then continues `$gsd-autonomous --from 24` for T21–T23 only. Local qualification, fresh code/security reviews, at most two changed protected candidates under D-221's causal-fix condition, and conditional identical-head protected merge remain authorized. Root STATE.md/ROADMAP.md carry the active route; the archived roadmap stays byte-identical to D-209. Keep this worktree and both automatic-advance flags false.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -56,9 +56,9 @@ The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 veri
 
 ## Owner Handoff
 
-Current stage: Phase 24 D-221 planning and independent plan checking are complete at boundary 688864a; the owner explicitly authorized execution through GSD Autonomous on 2026-11-19. The agent is checking and committing the documentation-only authorization reconciliation before T21.
+Current stage: Phase 24 D-221 planning remains complete at immutable boundary 688864a; the owner's explicit execution authorization remains recorded in 06fc6e0. T21 source edits are pending, and its archive prerequisite correctly refused 06fc6e0's mismatched archived-roadmap blob. The agent is independently checking the documentation-only correction that restores the exact D-209 archive before committing the effective EXEC_REV.
 
-Next actor: the agent continues `$gsd-autonomous --from 24` after the authorization reconciliation passes independent checking and is committed as EXEC_REV. Execute T21–T23 only; no further owner acknowledgment is needed. Generated .planning/state.json remains unstaged and undiscarded.
+Next actor: the agent continues `$gsd-autonomous --from 24` after the exact-archive/root-route correction passes independent checking and is committed as the effective EXEC_REV. Preserve pending T21 source edits outside that documentation commit, then continue T21–T23 only; no further owner acknowledgment is needed. Generated .planning/state.json remains unstaged and undiscarded.
 
 Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-103, D-209 dispositions, v0.4 administrative closeout, required branch protection, and all phase/milestone closure boundaries. Keep this worktree and both automatic-advance flags false.
 ## Accumulated Context
@@ -117,10 +117,10 @@ Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-10
 
 ## Session
 
-**Last session:** 2026-11-20T03:24:21Z
-**Stopped at:** Phase 24 D-221 execution authorization recorded; independently check and commit EXEC_REV before T21
+**Last session:** 2026-11-20T04:02:24Z
+**Stopped at:** Phase 24 D-221 T21 refused prior archive pin; independently check and commit corrected EXEC_REV
 **Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md
 
 ### Blockers
 
-- Candidate f19d5ae2f5819d18074a68e1e80d959dc31b1302 passed fresh code/security review but its single D-220 matrix failed: required-native and preview-package-smoke failed, fixture-repro passed. D-221's checked T21–T23 scope is now explicitly authorized through GSD Autonomous. Independently check and commit the documentation-only authorization reconciliation before source execution. Up to two changed candidate matrices are allowed, and candidate two requires a concrete in-scope failure, causal fix, local qualification, and fresh code/security reviews. Required gates and all closure exclusions remain; generated .planning/state.json stays uncommitted.
+- Candidate f19d5ae2f5819d18074a68e1e80d959dc31b1302 passed fresh code/security review but its single D-220 matrix failed: required-native and preview-package-smoke failed, fixture-repro passed. D-221's checked T21–T23 scope is explicitly authorized through GSD Autonomous. T21 source edits are pending; its immutable check correctly refused 06fc6e0's archived-roadmap pin mismatch. Independently check and commit the documentation-only exact-D-209-archive correction as the effective EXEC_REV, keeping source/generated state uncommitted, then continue the authorized route. Up to two changed candidate matrices remain allowed; candidate two requires a concrete in-scope failure, causal fix, local qualification, and fresh code/security reviews. Required gates and all closure exclusions remain.
