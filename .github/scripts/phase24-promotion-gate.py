@@ -18,6 +18,7 @@ import math
 import os
 import re
 import secrets
+import shlex
 import shutil
 import stat
 import subprocess
@@ -34,6 +35,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 GATE_PATH = ".github/scripts/phase24-promotion-gate.py"
 D229_BOOTSTRAP_PATH = "build/phase24/d229-bootstrap.json"
+D230_BOOTSTRAP_PATH = "build/phase24/d230-bootstrap.json"
 D228_PLAN_REV = "62e023b8aa45fa8e86cf1a7dec28c87facc57004"
 D228_PLAN_PARENT = "2e9d8cf1ed3e9889dd0199a9d30acdb06635661d"
 D228_PLAN_TREE = "6e1aafc9abc85220bcd9827be097ce759c047859"
@@ -56,11 +58,41 @@ DISCUSSION_BLOB = "df45dd868a83cccfc8d29778247452c5c546777d"
 DISCUSSION_SHA256 = "1de2aa3f4a9078f2714366da7cce862f37fe1da6379dad50cdb271a8389eb118"
 DISCUSSION_PATH_SHA256 = "c0600dcc6a37ca945963f6e2d89a3c0509c324cca4c07f143f92916e49703657"
 D229_DISCUSSION_PATH_SHA256 = "3a0e982e59a695cedac174a449e3f1ad3322c943d4e48c772afc85ff6e9b9075"
+D229_GATE_REV = "4b8a04e259650480a259137b88df20959c86e320"
+D229_GATE_TREE = "b9a1824fd40f9eb3c5855f382370d365ef9ed6dd"
+D229_GATE_BLOB = "d274e410cb13775457581a151eded15dd692edff"
+D229_GATE_SHA256 = "76e3ec4aefc30695f7aa05046a4e06ed587ac36915b351f084293c50db61b0f2"
+D229_SEAM_REV = "80a0f5736badae10f4bd2fe1263556a0e29a60a4"
+D229_SEAM_TREE = "b42d90f159fa02186a4558e0e9a6f7a18872e8bf"
+D229_SEAM_OLD_COVERAGE_BLOB = "f794032e500609d654fb938d0d8f3e9478ddbcaa"
+D229_SEAM_COVERAGE_BLOB = "c0fefa08d292e45de0e80a68b526a492e81b639d"
+D229_STOP_CANDIDATE = "e6926b69fde285917c2a6cedc42188085420a427"
+D229_STOP_TREE = "230cae0d099106f35759bc5773f2d6e840196f0f"
+D229_BOOTSTRAP_SHA256 = "7911a142fadb097a634e1c6cb29e31e84bb2b21ab964dbbc526a2a5150582745"
+D229_LOADER_SHA256 = "03c5e223ce50de3b430e1ea06add6f6dd08a2286c8fd9cddc8d1c4cd3ee62958"
+D230_PLAN_REV = "1e1fe73f24255d1a76d9b78a7320a90a4e47de2b"
+D230_PLAN_PARENT = D229_STOP_CANDIDATE
+D230_PLAN_TREE = "956057b9ca2b136cf9005c249c03c1d2cf8c32f6"
+D230_PLAN_BLOB = "a3c9462f394dc5390451d8d58f20eb07d2fae654"
+D230_PLAN_SHA256 = "5a39f53e085b7b7a94a6d32d3cde891a2dbfe7874509c571e4f31ec346e4fa56"
+D230_DISCUSSION_REV = D230_PLAN_REV
+D230_DISCUSSION_TREE = D230_PLAN_TREE
+D230_DISCUSSION_BLOB = "ddd959f1abf4feeb2ca08140e89f8ffc89578737"
+D230_DISCUSSION_SHA256 = "e5fa5c1e510b2e2c47e87154e3f9d7a02e9e70f3a82420ed82659d4a5e70fe3b"
+D230_DISCUSSION_PATH_SHA256 = D229_DISCUSSION_PATH_SHA256
+D230_DISCUSSION_LOG_BLOB = "e89a254ddc7101bff175fd30b3de47da8b0b6fe2"
+D230_DISCUSSION_LOG_SHA256 = "974449cdad9aff0f69eb9b462f1ce001d41aa7a743f41f1c6620b9c5dde33de0"
+D230_DISCUSSION_LOG_PATH_SHA256 = DISCUSSION_PATH_SHA256
+D230_CLOSEOUT_REV = D230_PLAN_REV
+D230_CLOSEOUT_TREE = D230_PLAN_TREE
+D230_CLOSEOUT_BLOB = "cd4855b46aeda1c521372b503b8709217f4c142c"
+D230_CLOSEOUT_SHA256 = "f66e2495bdb81589cda29731501caa0e564d0bbb9c15b9250deaf55c3107435b"
 CLOSEOUT_REV = "9bf8048de96b9f40898238a0ef9b8a723b04bbe5"
 CLOSEOUT_TREE = "8f1b848155d0a24492ad6023da07e3b286fc79f4"
 CLOSEOUT_BLOB = "5518083f3bf5cecb8ba3eb9e127dc730a64bb4d8"
 CLOSEOUT_SHA256 = "5fad7cb8bfa8355338081f315240bef918bf085883f2d61d502363c641fb5e5b"
 CLOSEOUT_PATH_SHA256 = "56f44d6804c1ae7ca224578d88d51d10a3bc086f9844bae48bcfaae0f044f703"
+D230_CLOSEOUT_PATH_SHA256 = CLOSEOUT_PATH_SHA256
 SOURCE_PARENT = "7761be6f90041efd0bb6928279c002a369962d7f"
 SOURCE_TREE = "1c4c9d2162a3fc32cff2a1205215511372372a56"
 D225_PLAN_REV = "570279b42491f06527f754c42ce482e395241ba1"
@@ -218,6 +250,40 @@ def expected_history_pins() -> dict[str, str]:
         **D228_HISTORY_PINS,
         **D229_HISTORY_PINS,
     }
+
+
+def expected_d230_history_pins() -> dict[str, str]:
+    """Return the complete D-229 predecessor plus D-230 discussion inventory."""
+    return {
+        **expected_history_pins(),
+        "d229_gate_rev": D229_GATE_REV,
+        "d229_gate_parent": PLAN_REV,
+        "d229_gate_tree": D229_GATE_TREE,
+        "d229_gate_blob": D229_GATE_BLOB,
+        "d229_gate_sha256": D229_GATE_SHA256,
+        "d229_gate_old_blob": D228_GATE_BLOB,
+        "d229_gate_mode": "100644",
+        "d229_seam_rev": D229_SEAM_REV,
+        "d229_seam_parent": D229_GATE_REV,
+        "d229_seam_tree": D229_SEAM_TREE,
+        "d229_seam_old_coverage_blob": D229_SEAM_OLD_COVERAGE_BLOB,
+        "d229_seam_coverage_blob": D229_SEAM_COVERAGE_BLOB,
+        "d229_candidate_rev": D229_STOP_CANDIDATE,
+        "d229_candidate_parent": D229_SEAM_REV,
+        "d229_candidate_tree": D229_STOP_TREE,
+        "d229_bootstrap_sha256": D229_BOOTSTRAP_SHA256,
+        "d229_loader_sha256": D229_LOADER_SHA256,
+        "d229_t35_tests": "PASS",
+        "d229_t35_code_review": "CLEAN",
+        "d229_t35_security_review": "OPEN_THREATS",
+        "d229_t35_security_findings": "unaccounted pre-push hook; recursive submodule push",
+        "d229_t35_external_promotion": "NOT_RUN",
+        "d230_discussion_log_rev": D230_PLAN_REV,
+        "d230_discussion_log_tree": D230_PLAN_TREE,
+        "d230_discussion_log_blob": D230_DISCUSSION_LOG_BLOB,
+        "d230_discussion_log_sha256": D230_DISCUSSION_LOG_SHA256,
+        "d230_discussion_log_path_sha256": D230_DISCUSSION_LOG_PATH_SHA256,
+    }
 D226_HISTORY_PINS = {
     "d225_gate_rev": D225_GATE_REV,
     "d225_gate_tree": D225_GATE_TREE,
@@ -299,6 +365,10 @@ D226_ROUTE_CORRECTION_PINS = {
 D227_ROUTE_CORRECTION_PINS = {
     ".github/scripts/wait-exact-head-ci.py": D226_ROUTE_CORRECTION_PINS[".github/scripts/wait-exact-head-ci.py"],
     "tests/scripts/verify-workflow-policy-coverage.py": ("100644", "blob", D227_SEAM_COVERAGE_BLOB),
+}
+D229_ROUTE_CORRECTION_PINS = {
+    ".github/scripts/wait-exact-head-ci.py": D227_ROUTE_CORRECTION_PINS[".github/scripts/wait-exact-head-ci.py"],
+    "tests/scripts/verify-workflow-policy-coverage.py": ("100644", "blob", D229_SEAM_COVERAGE_BLOB),
 }
 EXPECTED_CANDIDATE_CORRECTION_HASHES = {hashlib.sha256(path.encode("utf-8")).hexdigest(): path for path in EXPECTED_CANDIDATE_CORRECTIONS}
 ALLOWED_CANDIDATE_PATH_HASHES = set(EXPECTED_CANDIDATE_CORRECTION_HASHES) | {CLOSEOUT_PATH_SHA256}
@@ -453,16 +523,29 @@ def auth_environment(env: Mapping[str, str] | None = None) -> dict[str, str]:
     return safe
 
 
-def fixed_push_argv(candidate_sha: str, branch: str) -> list[str]:
+def _fixed_push_argv_contract(candidate_sha: str, branch: str) -> tuple[str, ...]:
     require_sha(candidate_sha, "candidate SHA")
     if type(branch) is not str or re.fullmatch(r"[A-Za-z0-9._/-]{1,200}", branch) is None or branch.startswith("-") or ".." in branch:
         deny("invalid_pr_branch")
-    return [
+    return (
         "git", "--no-replace-objects", "-c", "credential.helper=",
         "-c", "credential.helper=!gh auth git-credential",
-        "-c", "credential.interactive=false", "push", "origin",
+        "-c", "credential.interactive=false", "push", "--no-verify",
+        "--recurse-submodules=no", "origin",
         f"{candidate_sha}:refs/heads/{branch}",
-    ]
+    )
+
+
+def fixed_push_argv(candidate_sha: str, branch: str) -> list[str]:
+    return list(_fixed_push_argv_contract(candidate_sha, branch))
+
+
+def _validate_fixed_push_argv(argv: Sequence[str], candidate_sha: str, branch: str) -> tuple[str, ...]:
+    expected = _fixed_push_argv_contract(candidate_sha, branch)
+    if (type(argv) not in (list, tuple) or any(type(part) is not str for part in argv)
+            or tuple(argv) != expected):
+        deny("fixed_push_argv_contract_mismatch")
+    return tuple(argv)
 
 
 def fixed_merge_argv(candidate_sha: str) -> list[str]:
@@ -892,12 +975,12 @@ def _validate_d229_inherited_gate_boundary(git: Git) -> dict[str, str]:
             "sha256": D228_GATE_SHA256, "mode": "100644"}
 
 
-def _validate_gate_replacement_diff(entries: Sequence[DiffEntry]) -> str:
+def _validate_gate_replacement_diff(entries: Sequence[DiffEntry], *, old_blob: str = D228_GATE_BLOB) -> str:
     if len(entries) != 1:
         deny("bootstrap_diff_not_one_file")
     entry = entries[0]
     if (entry.path_bytes, entry.status, entry.old_mode, entry.new_mode, entry.old_oid) != (
-        GATE_PATH.encode("ascii"), "M", "100644", "100644", D228_GATE_BLOB,
+        GATE_PATH.encode("ascii"), "M", "100644", "100644", old_blob,
     ):
         deny("bootstrap_diff_scope")
     return entry.new_oid
@@ -911,6 +994,7 @@ def _validate_plan_source_entries(git: Git, plan_rev: str) -> None:
             expected = CORRECTION_SOURCE_PINS[path]
             d226_entry = D226_ROUTE_CORRECTION_PINS[path]
             d227_entry = D227_ROUTE_CORRECTION_PINS[path]
+            final_entry = D229_ROUTE_CORRECTION_PINS[path] if plan_rev == D230_PLAN_REV else d227_entry
             if (git.tree_entry(SOURCE_PARENT, path) != expected
                     or git.tree_entry(D226_STOP_INTERMEDIATE, path) != d226_entry
                     or git.tree_entry(D226_STOP_CANDIDATE, path) != d226_entry
@@ -918,7 +1002,7 @@ def _validate_plan_source_entries(git: Git, plan_rev: str) -> None:
                     or git.tree_entry(D227_GATE_REV, path) != d226_entry
                     or git.tree_entry(D227_SEAM_REV, path) != d227_entry
                     or git.tree_entry(D227_STOP_CANDIDATE, path) != d227_entry
-                    or git.tree_entry(plan_rev, path) != d227_entry):
+                    or git.tree_entry(plan_rev, path) != final_entry):
                 deny("d226_correction_source_pin_mismatch", path)
             continue
         if git.tree_entry(plan_rev, path) != git.tree_entry(D221_SHA, path):
@@ -981,6 +1065,105 @@ def validate_plan_anchor(git: Git, *, env: Mapping[str, str] | None = None) -> d
         "closeout_blob": CLOSEOUT_BLOB,
         "closeout_sha256": CLOSEOUT_SHA256,
         "inherited_gate": inherited_gate,
+        "loader_sha256": loader_sha256,
+    }
+
+
+def validate_d230_plan_anchor(git: Git, *, env: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """Validate the checked D-230 boundary and its pinned D-229 predecessor."""
+    current = os.environ if env is None else env
+    rev = current.get("PHASE24_D222_PLAN_REV", "")
+    digest = current.get("PHASE24_D222_PLAN_SHA256", "")
+    if (rev != D230_PLAN_REV or digest != D230_PLAN_SHA256
+            or current.get("PHASE24_D230_PLAN_TREE") != D230_PLAN_TREE
+            or current.get("PHASE24_D230_PLAN_BLOB") != D230_PLAN_BLOB):
+        deny("missing_or_wrong_d230_plan_handoff")
+
+    d229_env = {
+        "PHASE24_D222_PLAN_REV": PLAN_REV,
+        "PHASE24_D222_PLAN_SHA256": PLAN_SHA256,
+        "PHASE24_D229_PLAN_TREE": PLAN_TREE,
+        "PHASE24_D229_PLAN_BLOB": PLAN_BLOB,
+    }
+    validate_plan_anchor(git, env=d229_env)
+    if (git.object_type(D229_GATE_REV) != "commit" or git.tree(D229_GATE_REV) != D229_GATE_TREE
+            or git.parents(D229_GATE_REV) != [PLAN_REV]
+            or git.tree_entry(D229_GATE_REV, GATE_PATH) != ("100644", "blob", D229_GATE_BLOB)
+            or digest_bytes(git.blob(D229_GATE_REV, GATE_PATH)) != D229_GATE_SHA256):
+        deny("d229_gate_history_mismatch")
+    d229_gate_diff = git.raw_diff(PLAN_REV, D229_GATE_REV)
+    if (len(d229_gate_diff) != 1
+            or (d229_gate_diff[0].path_bytes, d229_gate_diff[0].status, d229_gate_diff[0].old_mode,
+                d229_gate_diff[0].new_mode, d229_gate_diff[0].old_oid, d229_gate_diff[0].new_oid)
+            != (GATE_PATH.encode("ascii"), "M", "100644", "100644", D228_GATE_BLOB, D229_GATE_BLOB)):
+        deny("d229_gate_transition_mismatch")
+    d229_seam_diff = git.raw_diff(D229_GATE_REV, D229_SEAM_REV)
+    if (git.object_type(D229_SEAM_REV) != "commit" or git.tree(D229_SEAM_REV) != D229_SEAM_TREE
+            or git.parents(D229_SEAM_REV) != [D229_GATE_REV]
+            or git.tree_entry(D229_SEAM_REV, GATE_PATH) != ("100644", "blob", D229_GATE_BLOB)
+            or git.tree_entry(D229_GATE_REV, "tests/scripts/verify-workflow-policy-coverage.py")
+            != ("100644", "blob", D229_SEAM_OLD_COVERAGE_BLOB)
+            or git.tree_entry(D229_SEAM_REV, "tests/scripts/verify-workflow-policy-coverage.py")
+            != ("100644", "blob", D229_SEAM_COVERAGE_BLOB)
+            or len(d229_seam_diff) != 1
+            or (d229_seam_diff[0].path_bytes, d229_seam_diff[0].status, d229_seam_diff[0].old_mode,
+                d229_seam_diff[0].new_mode, d229_seam_diff[0].old_oid, d229_seam_diff[0].new_oid)
+            != (b"tests/scripts/verify-workflow-policy-coverage.py", "M", "100644", "100644",
+                D229_SEAM_OLD_COVERAGE_BLOB, D229_SEAM_COVERAGE_BLOB)):
+        deny("d229_seam_history_mismatch")
+    if (git.object_type(D229_STOP_CANDIDATE) != "commit" or git.tree(D229_STOP_CANDIDATE) != D229_STOP_TREE
+            or git.parents(D229_STOP_CANDIDATE) != [D229_SEAM_REV]
+            or git.tree_entry(D229_STOP_CANDIDATE, GATE_PATH) != ("100644", "blob", D229_GATE_BLOB)
+            or any(item.path_bytes == GATE_PATH.encode("ascii")
+                   for item in git.raw_diff(D229_SEAM_REV, D229_STOP_CANDIDATE))):
+        deny("d229_candidate_history_mismatch")
+    if (git.object_type(D230_PLAN_REV) != "commit" or git.tree(D230_PLAN_REV) != D230_PLAN_TREE
+            or git.parents(D230_PLAN_REV) != [D230_PLAN_PARENT]
+            or git.tree_entry(D230_PLAN_PARENT, GATE_PATH) != ("100644", "blob", D229_GATE_BLOB)
+            or git.tree_entry(D230_PLAN_REV, GATE_PATH) != ("100644", "blob", D229_GATE_BLOB)
+            or any(item.path_bytes == GATE_PATH.encode("ascii")
+                   for item in git.raw_diff(D230_PLAN_PARENT, D230_PLAN_REV))):
+        deny("d230_plan_boundary_mismatch")
+
+    plan_bytes = git.pinned_blob(D230_PLAN_REV, D230_PLAN_TREE, PLAN_PATH_SHA256, D230_PLAN_BLOB, D230_PLAN_SHA256)
+    discussion_bytes = git.pinned_blob(
+        D230_DISCUSSION_REV, D230_DISCUSSION_TREE, D230_DISCUSSION_PATH_SHA256,
+        D230_DISCUSSION_BLOB, D230_DISCUSSION_SHA256,
+    )
+    closeout_bytes = git.pinned_blob(
+        D230_CLOSEOUT_REV, D230_CLOSEOUT_TREE, D230_CLOSEOUT_PATH_SHA256,
+        D230_CLOSEOUT_BLOB, D230_CLOSEOUT_SHA256,
+    )
+    discussion_log = git.pinned_blob(
+        D230_PLAN_REV, D230_PLAN_TREE, D230_DISCUSSION_LOG_PATH_SHA256,
+        D230_DISCUSSION_LOG_BLOB, D230_DISCUSSION_LOG_SHA256,
+    )
+    source_scope, corrections = parse_plan_scopes(plan_bytes)
+    _validate_plan_source_entries(git, D230_PLAN_REV)
+    if (git.tree(D221_SHA) != D221_TREE or git.object_type(D209_REV) != "commit"
+            or not git.is_ancestor(D221_EXEC_REV, D230_PLAN_REV)):
+        deny("d230_historical_source_mismatch")
+    for path, expected_blob in HISTORICAL_PATHS.items():
+        if git.text("rev-parse", f"{D230_PLAN_REV}:{path}") != expected_blob:
+            deny("historical_data_drift", path)
+    if (git.text("rev-parse", f"{D209_REV}:.planning/milestones/v0.4-REQUIREMENTS.md") != REQUIREMENTS_BLOB
+            or git.text("rev-parse", f"{D209_REV}:.planning/milestones/v0.4-ROADMAP.md") != ROADMAP_BLOB
+            or digest_bytes(git.blob(D230_PLAN_REV, "tests/scripts/verify-planning-hygiene.py")) != PLANNING_HYGIENE_SHA256):
+        deny("d230_preserved_source_mismatch")
+    loader_sha256 = digest_bytes(extract_plan_loader(plan_bytes))
+    if loader_sha256 != D229_LOADER_SHA256:
+        deny("d230_loader_identity_mismatch")
+    return {
+        "rev": rev, "parent": D230_PLAN_PARENT, "tree": D230_PLAN_TREE, "blob": D230_PLAN_BLOB,
+        "sha256": D230_PLAN_SHA256, "source_allowlist": list(source_scope),
+        "correction_allowlist": list(corrections), "discussion_rev": D230_DISCUSSION_REV,
+        "discussion_tree": D230_DISCUSSION_TREE, "discussion_blob": D230_DISCUSSION_BLOB,
+        "discussion_sha256": D230_DISCUSSION_SHA256, "discussion_path_sha256": D230_DISCUSSION_PATH_SHA256,
+        "discussion_log_sha256": digest_bytes(discussion_log), "closeout_rev": D230_CLOSEOUT_REV,
+        "closeout_tree": D230_CLOSEOUT_TREE, "closeout_blob": D230_CLOSEOUT_BLOB,
+        "closeout_sha256": D230_CLOSEOUT_SHA256, "closeout_path_sha256": D230_CLOSEOUT_PATH_SHA256,
+        "inherited_gate": {"rev": D229_GATE_REV, "tree": D229_GATE_TREE, "blob": D229_GATE_BLOB,
+                           "sha256": D229_GATE_SHA256, "mode": "100644"},
         "loader_sha256": loader_sha256,
     }
 
@@ -1202,7 +1385,19 @@ def fresh_plan_wrapper_source() -> str:
     return extract_plan_loader(plan_bytes).decode("utf-8", errors="strict")
 
 
+def fresh_d230_plan_wrapper_source() -> str:
+    """Return the loader selected from the checked D-230 plan object."""
+    plan_bytes = Git(Path.cwd()).pinned_blob(
+        D230_PLAN_REV, D230_PLAN_TREE, PLAN_PATH_SHA256, D230_PLAN_BLOB, D230_PLAN_SHA256,
+    )
+    return extract_plan_loader(plan_bytes).decode("utf-8", errors="strict")
+
+
 def verify_bootstrap(root: Path, bootstrap_path: str) -> dict[str, Any]:
+    if bootstrap_path == D230_BOOTSTRAP_PATH:
+        return verify_d230_bootstrap(root, bootstrap_path)
+    if bootstrap_path != D229_BOOTSTRAP_PATH:
+        deny("bootstrap_path")
     reject_hostile_git_environment()
     git = Git(root)
     _check_ignored(git, bootstrap_path)
@@ -1269,7 +1464,7 @@ def build_d229_bootstrap_receipt(root: Path, *, env: Mapping[str, str] | None = 
 
 
 def _exclusive_create_bootstrap(root: Path, relative: str, payload: bytes) -> None:
-    if relative != D229_BOOTSTRAP_PATH or type(payload) is not bytes or len(payload) > MAX_JSON_BYTES:
+    if relative not in {D229_BOOTSTRAP_PATH, D230_BOOTSTRAP_PATH} or type(payload) is not bytes or len(payload) > MAX_JSON_BYTES:
         deny("bootstrap_publication_contract")
     git = Git(root)
     _check_ignored(git, relative)
@@ -1306,7 +1501,7 @@ def _exclusive_create_bootstrap(root: Path, relative: str, payload: bytes) -> No
             deny("bootstrap_output_exists")
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow | getattr(os, "O_CLOEXEC", 0)
         for _ in range(8):
-            temp_name = ".d229-bootstrap-" + secrets.token_hex(12) + ".tmp"
+            temp_name = "." + leaf.removesuffix(".json") + "-" + secrets.token_hex(12) + ".tmp"
             try:
                 staging_fd = os.open(temp_name, flags, 0o600, dir_fd=dir_fd)
                 break
@@ -1362,6 +1557,170 @@ def write_d229_bootstrap(root: Path, *, env: Mapping[str, str] | None = None) ->
     payload = canonical_json(receipt) + b"\n"
     _exclusive_create_bootstrap(root, D229_BOOTSTRAP_PATH, payload)
     return verify_bootstrap(root, D229_BOOTSTRAP_PATH)
+
+
+def _verify_d230_bootstrap_source(git: Git, receipt: Mapping[str, Any], *, env: Mapping[str, str] | None = None) -> dict[str, Any]:
+    current = os.environ if env is None else env
+    if receipt.get("history_pins") != expected_d230_history_pins():
+        deny("bootstrap_historical_pins_mismatch")
+    plan = exact_keys(receipt.get("plan"), {"rev", "parent", "tree", "blob", "sha256", "path_sha256"}, "bootstrap.plan")
+    discussion = exact_keys(receipt.get("discussion"), {"rev", "tree", "blob", "sha256", "path_sha256"}, "bootstrap.discussion")
+    closeout = exact_keys(receipt.get("closeout"), {"rev", "tree", "blob", "sha256", "path_sha256"}, "bootstrap.closeout")
+    loader = exact_keys(receipt.get("loader"), {"sha256"}, "bootstrap.loader")
+    inherited = exact_keys(receipt.get("inherited_gate"), {"rev", "tree", "blob", "sha256", "mode"}, "bootstrap.inherited_gate")
+    gate = exact_keys(receipt.get("gate"), {"rev", "parent", "tree", "blob", "sha256", "old_blob", "old_mode"}, "bootstrap.gate")
+    repository = exact_keys(receipt.get("repository"), {"root", "git_dir", "branch"}, "bootstrap.repository")
+    trusted = exact_keys(receipt.get("trusted_handoff"), {"authority", "plan_rev", "plan_sha256", "gate_rev", "gate_sha256"}, "bootstrap.trusted_handoff")
+    for label, value in (("plan.rev", plan["rev"]), ("plan.parent", plan["parent"]), ("plan.tree", plan["tree"]), ("plan.blob", plan["blob"]),
+                         ("discussion.rev", discussion["rev"]), ("discussion.tree", discussion["tree"]), ("discussion.blob", discussion["blob"]),
+                         ("closeout.rev", closeout["rev"]), ("closeout.tree", closeout["tree"]), ("closeout.blob", closeout["blob"]),
+                         ("inherited_gate.rev", inherited["rev"]), ("inherited_gate.tree", inherited["tree"]), ("inherited_gate.blob", inherited["blob"]),
+                         ("gate.rev", gate["rev"]), ("gate.parent", gate["parent"]), ("gate.tree", gate["tree"]), ("gate.blob", gate["blob"]),
+                         ("gate.old_blob", gate["old_blob"])):
+        require_sha(value, label)
+    for label, value in (("plan.sha256", plan["sha256"]), ("plan.path_sha256", plan["path_sha256"]),
+                         ("discussion.sha256", discussion["sha256"]), ("discussion.path_sha256", discussion["path_sha256"]),
+                         ("closeout.sha256", closeout["sha256"]), ("closeout.path_sha256", closeout["path_sha256"]),
+                         ("loader.sha256", loader["sha256"]), ("gate.sha256", gate["sha256"]),
+                         ("trusted.plan_sha256", trusted["plan_sha256"]), ("trusted.gate_sha256", trusted["gate_sha256"])):
+        require_digest(value, label)
+    if plan != {"rev": D230_PLAN_REV, "parent": D230_PLAN_PARENT, "tree": D230_PLAN_TREE, "blob": D230_PLAN_BLOB,
+                "sha256": D230_PLAN_SHA256, "path_sha256": PLAN_PATH_SHA256}:
+        deny("bootstrap_plan_receipt_mismatch")
+    if discussion != {"rev": D230_DISCUSSION_REV, "tree": D230_DISCUSSION_TREE, "blob": D230_DISCUSSION_BLOB,
+                      "sha256": D230_DISCUSSION_SHA256, "path_sha256": D230_DISCUSSION_PATH_SHA256}:
+        deny("bootstrap_discussion_receipt_mismatch")
+    if closeout != {"rev": D230_CLOSEOUT_REV, "tree": D230_CLOSEOUT_TREE, "blob": D230_CLOSEOUT_BLOB,
+                    "sha256": D230_CLOSEOUT_SHA256, "path_sha256": D230_CLOSEOUT_PATH_SHA256}:
+        deny("bootstrap_closeout_receipt_mismatch")
+    if inherited != {"rev": D229_GATE_REV, "tree": D229_GATE_TREE, "blob": D229_GATE_BLOB,
+                     "sha256": D229_GATE_SHA256, "mode": "100644"}:
+        deny("bootstrap_inherited_gate_mismatch")
+    gate_rev = current.get("PHASE24_D222_GATE_REV", "")
+    gate_digest = current.get("PHASE24_D222_GATE_SHA256", "")
+    if not valid_sha(gate_rev) or not valid_sha256(gate_digest):
+        deny("missing_trusted_gate_handoff")
+    if gate["rev"] != gate_rev or gate["sha256"] != gate_digest or gate["parent"] != D230_PLAN_REV:
+        deny("bootstrap_gate_receipt_mismatch")
+    if gate["old_blob"] != D229_GATE_BLOB or gate["old_mode"] != "100644":
+        deny("bootstrap_old_gate_mismatch")
+    if trusted != {"authority": "gsd-executor", "plan_rev": D230_PLAN_REV, "plan_sha256": D230_PLAN_SHA256,
+                   "gate_rev": gate_rev, "gate_sha256": gate_digest}:
+        deny("untrusted_bootstrap_handoff")
+
+    anchor = validate_d230_plan_anchor(git, env=current)
+    plan_bytes = git.pinned_blob(D230_PLAN_REV, D230_PLAN_TREE, PLAN_PATH_SHA256, D230_PLAN_BLOB, D230_PLAN_SHA256)
+    expected_loader = digest_bytes(extract_plan_loader(plan_bytes))
+    if loader["sha256"] != expected_loader or loader["sha256"] != anchor["loader_sha256"]:
+        deny("bootstrap_loader_digest_mismatch")
+    if digest_bytes(git.pinned_blob(D230_DISCUSSION_REV, D230_DISCUSSION_TREE, D230_DISCUSSION_PATH_SHA256,
+                                    D230_DISCUSSION_BLOB, D230_DISCUSSION_SHA256)) != D230_DISCUSSION_SHA256:
+        deny("discussion_blob_mismatch")
+    if digest_bytes(git.pinned_blob(D230_CLOSEOUT_REV, D230_CLOSEOUT_TREE, D230_CLOSEOUT_PATH_SHA256,
+                                    D230_CLOSEOUT_BLOB, D230_CLOSEOUT_SHA256)) != D230_CLOSEOUT_SHA256:
+        deny("closeout_blob_mismatch")
+    if git.object_type(gate_rev) != "commit" or git.tree(gate_rev) != gate["tree"] or git.parents(gate_rev) != [D230_PLAN_REV]:
+        deny("gate_object_mismatch")
+    gate_blob = _validate_gate_replacement_diff(git.raw_diff(D230_PLAN_REV, gate_rev), old_blob=D229_GATE_BLOB)
+    gate_bytes = git.blob(gate_rev, GATE_PATH)
+    if (git.tree_entry(gate_rev, GATE_PATH) != ("100644", "blob", gate_blob)
+            or gate_blob != gate["blob"] or git.text("rev-parse", f"{gate_rev}:{GATE_PATH}") != gate_blob
+            or digest_bytes(gate_bytes) != gate_digest):
+        deny("gate_blob_mismatch")
+    _verify_executing_bytes(gate_bytes, executing_source_bytes())
+    root, git_dir, branch = current_root(git)
+    if repository != {"root": root, "git_dir": git_dir, "branch": branch}:
+        deny("bootstrap_repository_mismatch")
+    if current.get("PHASE24_D222_PLAN_REV") != D230_PLAN_REV or current.get("PHASE24_D222_PLAN_SHA256") != D230_PLAN_SHA256:
+        deny("plan_handoff_mismatch")
+    scope = exact_keys(receipt.get("scope"), {"source_allowlist", "correction_allowlist"}, "bootstrap.scope")
+    source_scope, correction_scope = parse_plan_scopes(plan_bytes)
+    if scope != {"source_allowlist": list(source_scope), "correction_allowlist": list(correction_scope)}:
+        deny("bootstrap_scope_mismatch")
+    return {"plan": dict(plan), "discussion": dict(discussion), "closeout": dict(closeout), "loader": dict(loader),
+            "inherited_gate": dict(inherited), "gate": dict(gate), "repository": dict(repository), "scope": dict(scope),
+            "anchor": anchor}
+
+
+def build_d230_bootstrap_receipt(root: Path, *, env: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """Build the distinct D-230 receipt from checked original Git objects."""
+    current = os.environ if env is None else env
+    reject_hostile_git_environment()
+    git = Git(root)
+    anchor = validate_d230_plan_anchor(git, env=current)
+    gate_rev = current.get("PHASE24_D222_GATE_REV", "")
+    gate_digest = current.get("PHASE24_D222_GATE_SHA256", "")
+    if not valid_sha(gate_rev) or not valid_sha256(gate_digest):
+        deny("missing_trusted_gate_handoff")
+    if git.object_type(gate_rev) != "commit" or git.parents(gate_rev) != [D230_PLAN_REV]:
+        deny("gate_object_mismatch")
+    gate_tree = git.tree(gate_rev)
+    gate_entry = git.tree_entry(gate_rev, GATE_PATH)
+    if gate_entry[:2] != ("100644", "blob"):
+        deny("gate_blob_mismatch")
+    gate_blob = gate_entry[2]
+    if _validate_gate_replacement_diff(git.raw_diff(D230_PLAN_REV, gate_rev), old_blob=D229_GATE_BLOB) != gate_blob:
+        deny("gate_blob_mismatch")
+    gate_bytes = git.blob(gate_rev, GATE_PATH)
+    if digest_bytes(gate_bytes) != gate_digest:
+        deny("gate_digest_mismatch")
+    _verify_executing_bytes(gate_bytes, executing_source_bytes())
+    source_scope, correction_scope = parse_plan_scopes(
+        git.pinned_blob(D230_PLAN_REV, D230_PLAN_TREE, PLAN_PATH_SHA256, D230_PLAN_BLOB, D230_PLAN_SHA256)
+    )
+    root_value, git_dir, branch = current_root(git)
+    receipt = {
+        "schema_version": 1,
+        "kind": "phase24-d230-bootstrap",
+        "plan": {"rev": D230_PLAN_REV, "parent": D230_PLAN_PARENT, "tree": D230_PLAN_TREE,
+                 "blob": D230_PLAN_BLOB, "sha256": D230_PLAN_SHA256, "path_sha256": PLAN_PATH_SHA256},
+        "discussion": {"rev": D230_DISCUSSION_REV, "tree": D230_DISCUSSION_TREE,
+                       "blob": D230_DISCUSSION_BLOB, "sha256": D230_DISCUSSION_SHA256,
+                       "path_sha256": D230_DISCUSSION_PATH_SHA256},
+        "closeout": {"rev": D230_CLOSEOUT_REV, "tree": D230_CLOSEOUT_TREE,
+                     "blob": D230_CLOSEOUT_BLOB, "sha256": D230_CLOSEOUT_SHA256,
+                     "path_sha256": D230_CLOSEOUT_PATH_SHA256},
+        "loader": {"sha256": anchor["loader_sha256"]},
+        "inherited_gate": dict(anchor["inherited_gate"]),
+        "gate": {"rev": gate_rev, "parent": D230_PLAN_REV, "tree": gate_tree, "blob": gate_blob,
+                 "sha256": gate_digest, "old_blob": D229_GATE_BLOB, "old_mode": "100644"},
+        "repository": {"root": root_value, "git_dir": git_dir, "branch": branch},
+        "scope": {"source_allowlist": list(source_scope), "correction_allowlist": list(correction_scope)},
+        "history_pins": expected_d230_history_pins(),
+        "trusted_handoff": {"authority": "gsd-executor", "plan_rev": D230_PLAN_REV,
+                            "plan_sha256": D230_PLAN_SHA256, "gate_rev": gate_rev,
+                            "gate_sha256": gate_digest},
+    }
+    _verify_d230_bootstrap_source(git, receipt, env=current)
+    _verify_current_tree_clean(git, gate_rev)
+    return receipt
+
+
+def verify_d230_bootstrap(root: Path, bootstrap_path: str = D230_BOOTSTRAP_PATH, *, env: Mapping[str, str] | None = None) -> dict[str, Any]:
+    if bootstrap_path != D230_BOOTSTRAP_PATH:
+        deny("bootstrap_path")
+    reject_hostile_git_environment()
+    git = Git(root)
+    _check_ignored(git, bootstrap_path)
+    _, receipt, _ = _load_receipt(root, bootstrap_path)
+    exact_keys(receipt, {"schema_version", "kind", "plan", "discussion", "closeout", "loader", "inherited_gate",
+                         "gate", "repository", "scope", "history_pins", "trusted_handoff"}, "bootstrap")
+    _require_schema_version(receipt, "bootstrap")
+    if receipt.get("kind") != "phase24-d230-bootstrap":
+        deny("bootstrap_kind")
+    result = _verify_d230_bootstrap_source(git, receipt, env=env)
+    _verify_current_tree_clean(git, str(result["gate"]["rev"]))
+    return {"decision": "ALLOW", "mode": "verify-bootstrap", "plan_rev": D230_PLAN_REV,
+            "plan_sha256": D230_PLAN_SHA256, "loader_sha256": result["loader"]["sha256"],
+            "discussion_sha256": result["discussion"]["sha256"], "gate_rev": result["gate"]["rev"],
+            "gate_sha256": result["gate"]["sha256"]}
+
+
+def write_d230_bootstrap(root: Path, *, env: Mapping[str, str] | None = None) -> dict[str, Any]:
+    receipt = build_d230_bootstrap_receipt(root, env=env)
+    payload = canonical_json(receipt) + b"\n"
+    _exclusive_create_bootstrap(root, D230_BOOTSTRAP_PATH, payload)
+    return verify_d230_bootstrap(root, D230_BOOTSTRAP_PATH, env=env)
 
 
 def _verify_candidate_scope(git: Git, bootstrap: Mapping[str, Any], candidate_sha: str, *, require_checkout: bool = True) -> dict[str, Any]:
@@ -1491,7 +1850,7 @@ CTEST_INVENTORY_KEYS = {"command", "transcript_path", "transcript_sha256", "exit
 DIRECT_CONTROL_KEYS = {"name", "command", "transcript_path", "transcript_sha256", "exit_code", "markers"}
 DIRECT_CONTROL_NAMES = ("pinned_gate_self_test", "wait_exact_head_ci_self_test", "promotion_coverage_controls", "dense_input_git_context", "state_fork_inventory_controls")
 DIRECT_CONTROL_MARKERS = {
-    "pinned_gate_self_test": r"PHASE24_D229_SELF_TESTS=PASS tests=[1-9][0-9]*",
+    "pinned_gate_self_test": r"PHASE24_D230_SELF_TESTS=PASS tests=[1-9][0-9]*",
     "wait_exact_head_ci_self_test": TEST_PASS_PATTERNS["wait_exact_head_ci_controls"],
     "promotion_coverage_controls": r"^PASS: phase24-promotion-controls gate=(?P<gate_sha256>[0-9a-f]{64}) controls=[0-9]+$",
     "dense_input_git_context": r"dense-input git-context=pass rev=[0-9a-f]{40} controls=[0-9]+ configure=0 build=0 runner=0",
@@ -1639,7 +1998,7 @@ def _expected_inventory_command() -> list[str]:
 
 def _expected_direct_control_command(name: str, candidate_sha: str, gate_rev: str, gate_sha256: str, interpreter: str) -> list[str]:
     if name == "pinned_gate_self_test":
-        return [interpreter, "-I", "-c", fresh_plan_wrapper_source(), "--self-test"]
+        return [interpreter, "-I", "-c", fresh_d230_plan_wrapper_source(), "--self-test"]
     if name == "wait_exact_head_ci_self_test":
         return [interpreter, "-I", ".github/scripts/wait-exact-head-ci.py", "--self-test"]
     if name == "promotion_coverage_controls":
@@ -1675,7 +2034,7 @@ def _validate_direct_control(root: Path, raw_control: Any, name: str, candidate_
 
 
 DIRECT_CONTROL_SAMPLE_OUTPUT = {
-    "pinned_gate_self_test": "PHASE24_D229_SELF_TESTS=PASS tests=19",
+    "pinned_gate_self_test": "PHASE24_D230_SELF_TESTS=PASS tests=47",
     "wait_exact_head_ci_self_test": "exact-head gate self-test passed cases=3 controls=40",
     "promotion_coverage_controls": "PASS: phase24-promotion-controls gate={gate_sha256} controls=12",
     "dense_input_git_context": "dense-input git-context=pass rev=" + "b" * 40 + " controls=8 configure=0 build=0 runner=0",
@@ -1844,7 +2203,7 @@ def _validate_qualification(root: Path, manifest: Mapping[str, Any], provenance:
         "kind": "phase24-d228-qualification",
         "candidate_sha": manifest["candidate_sha"],
         "candidate_tree": manifest["candidate_tree"],
-        "plan_rev": PLAN_REV,
+        "plan_rev": bootstrap["plan"]["rev"],
         "gate_rev": manifest["bootstrap_rev"],
         "gate_sha256": manifest["gate_sha256"],
     }
@@ -1894,22 +2253,22 @@ def _validate_qualification(root: Path, manifest: Mapping[str, Any], provenance:
         deny("qualification_fixture_effect")
     pins = exact_keys(qualification["source_pins"], {"plan_rev", "plan_parent", "plan_tree", "plan_blob", "plan_sha256", "plan_path_sha256", "discussion_rev", "discussion_tree", "discussion_blob", "discussion_sha256", "discussion_path_sha256", "closeout_rev", "closeout_tree", "closeout_blob", "closeout_sha256", "closeout_path_sha256", "loader_sha256", "d226_gate_rev", "d226_gate_tree", "d226_gate_blob", "d226_gate_sha256", "d226_gate_mode", "d227_gate_rev", "d227_gate_tree", "d227_gate_blob", "d227_gate_sha256", "d227_gate_mode", "d228_gate_rev", "d228_gate_tree", "d228_gate_blob", "d228_gate_sha256", "d228_gate_mode", "d221_exec_rev", "d209_rev", "requirements_blob", "roadmap_blob", "state_forks_blob", "planning_hygiene_sha256", "gate_rev", "gate_sha256"}, "qualification.source_pins")
     if pins != {
-        "plan_rev": PLAN_REV,
-        "plan_parent": PLAN_PARENT,
-        "plan_tree": PLAN_TREE,
-        "plan_blob": PLAN_BLOB,
-        "plan_sha256": PLAN_SHA256,
-        "plan_path_sha256": PLAN_PATH_SHA256,
-        "discussion_rev": DISCUSSION_REV,
-        "discussion_tree": DISCUSSION_TREE,
-        "discussion_blob": DISCUSSION_BLOB,
-        "discussion_sha256": DISCUSSION_SHA256,
-        "discussion_path_sha256": D229_DISCUSSION_PATH_SHA256,
-        "closeout_rev": CLOSEOUT_REV,
-        "closeout_tree": CLOSEOUT_TREE,
-        "closeout_blob": CLOSEOUT_BLOB,
-        "closeout_sha256": CLOSEOUT_SHA256,
-        "closeout_path_sha256": CLOSEOUT_PATH_SHA256,
+        "plan_rev": bootstrap["plan"]["rev"],
+        "plan_parent": bootstrap["plan"]["parent"],
+        "plan_tree": bootstrap["plan"]["tree"],
+        "plan_blob": bootstrap["plan"]["blob"],
+        "plan_sha256": bootstrap["plan"]["sha256"],
+        "plan_path_sha256": bootstrap["plan"]["path_sha256"],
+        "discussion_rev": bootstrap["discussion"]["rev"],
+        "discussion_tree": bootstrap["discussion"]["tree"],
+        "discussion_blob": bootstrap["discussion"]["blob"],
+        "discussion_sha256": bootstrap["discussion"]["sha256"],
+        "discussion_path_sha256": bootstrap["discussion"]["path_sha256"],
+        "closeout_rev": bootstrap["closeout"]["rev"],
+        "closeout_tree": bootstrap["closeout"]["tree"],
+        "closeout_blob": bootstrap["closeout"]["blob"],
+        "closeout_sha256": bootstrap["closeout"]["sha256"],
+        "closeout_path_sha256": bootstrap["closeout"]["path_sha256"],
         "loader_sha256": bootstrap["loader"]["sha256"],
         "d226_gate_rev": D226_GATE_REV,
         "d226_gate_tree": D226_GATE_TREE,
@@ -1950,11 +2309,11 @@ def _validate_qualification(root: Path, manifest: Mapping[str, Any], provenance:
     return {"tests": parsed, "direct_controls": direct_paths, "inventory": inventory_path, "ctest_inventory": ctest_path}
 
 
-def _validate_provenance(root: Path, manifest: Mapping[str, Any]) -> dict[str, Any]:
+def _validate_provenance(root: Path, manifest: Mapping[str, Any], bootstrap: Mapping[str, Any]) -> dict[str, Any]:
     _, provenance, _ = _manifest_receipt(root, manifest, "provenance")
     exact_keys(provenance, PROVENANCE_KEYS, "provenance")
     _require_schema_version(provenance, "provenance")
-    if provenance["kind"] != "phase24-d222-trusted-handoff" or provenance["plan_rev"] != PLAN_REV or provenance["gate_rev"] != manifest["bootstrap_rev"] or provenance["gate_sha256"] != manifest["gate_sha256"] or provenance["candidate_sha"] != manifest["candidate_sha"] or provenance["candidate_tree"] != manifest["candidate_tree"]:
+    if provenance["kind"] != "phase24-d222-trusted-handoff" or provenance["plan_rev"] != bootstrap["plan"]["rev"] or provenance["gate_rev"] != manifest["bootstrap_rev"] or provenance["gate_sha256"] != manifest["gate_sha256"] or provenance["candidate_sha"] != manifest["candidate_sha"] or provenance["candidate_tree"] != manifest["candidate_tree"]:
         deny("trusted_handoff_mismatch")
     _text(provenance["implementation_agent"], "provenance.implementation_agent", max_chars=120)
     expected_tests = provenance["expected_tests"]
@@ -1986,7 +2345,10 @@ def _load_manifest(root: Path, git: Git, bootstrap: Mapping[str, Any], candidate
     require_sha(manifest["plan_rev"], "plan revision")
     require_digest(manifest["plan_sha256"], "plan digest")
     require_digest(manifest["gate_sha256"], "gate digest")
-    if manifest["bootstrap_rev"] != bootstrap["gate"]["rev"] or manifest["plan_rev"] != PLAN_REV or manifest["plan_sha256"] != PLAN_SHA256 or manifest["gate_sha256"] != bootstrap["gate"]["sha256"]:
+    if (manifest["bootstrap_rev"] != bootstrap["gate"]["rev"]
+            or manifest["plan_rev"] != bootstrap["plan"]["rev"]
+            or manifest["plan_sha256"] != bootstrap["plan"]["sha256"]
+            or manifest["gate_sha256"] != bootstrap["gate"]["sha256"]):
         deny("manifest_anchor_mismatch")
     receipt_paths, receipt_raw = _bind_receipt_refs(
         manifest["receipts"],
@@ -2014,7 +2376,7 @@ def _load_manifest(root: Path, git: Git, bootstrap: Mapping[str, Any], candidate
         changed = {entry.path for entry in git.raw_diff(previous_sha, candidate["sha"])}
         if type(cause["causal_fix_paths"]) is not list or not set(cause["causal_fix_paths"]).issubset(changed):
             deny("candidate_two_fix_not_changed_from_first")
-    provenance = _validate_provenance(root, manifest)
+    provenance = _validate_provenance(root, manifest, bootstrap)
     qualification = _validate_qualification(root, manifest, provenance, bootstrap)
     code_review = _validate_review(root, manifest, provenance, "gsd-code-reviewer", "CLEAN")
     security_review = _validate_review(root, manifest, provenance, "gsd-security-auditor", "SECURED")
@@ -2727,14 +3089,19 @@ def _require_command_success(result: subprocess.CompletedProcess[bytes], reason:
         deny(reason)
 
 
-def _dispatch_fixed_action(action: str, candidate: Mapping[str, Any], branch: str, runner: CommandRunner, env: Mapping[str, str], *, timeout: float = CHILD_TIMEOUT) -> subprocess.CompletedProcess[bytes]:
+def _dispatch_fixed_action(action: str, candidate: Mapping[str, Any], branch: str, runner: CommandRunner, env: Mapping[str, str], *, timeout: float = CHILD_TIMEOUT, argv: Sequence[str] | None = None) -> subprocess.CompletedProcess[bytes]:
     if action == "push":
-        argv = fixed_push_argv(candidate["sha"], branch)
+        validated = _validate_fixed_push_argv(
+            fixed_push_argv(candidate["sha"], branch) if argv is None else argv,
+            candidate["sha"], branch,
+        )
     elif action == "merge":
-        argv = fixed_merge_argv(candidate["sha"])
+        if argv is not None:
+            deny("unexpected_fixed_action_argv")
+        validated = tuple(fixed_merge_argv(candidate["sha"]))
     else:
         deny("invalid_action")
-    return runner.run(argv, env=env, timeout=timeout)
+    return runner.run(validated, env=env, timeout=timeout)
 
 
 def _run_live(root: Path, args: argparse.Namespace, runner: CommandRunner | None = None) -> dict[str, Any]:
@@ -2746,14 +3113,19 @@ def _run_live(root: Path, args: argparse.Namespace, runner: CommandRunner | None
     bootstrap_path = args.bootstrap or os.environ.get("PHASE24_D222_BOOTSTRAP", "")
     if not bootstrap_path:
         deny("missing_bootstrap_receipt")
+    if bootstrap_path != D230_BOOTSTRAP_PATH and not _SELF_TEST_ACTIVE:
+        deny("bootstrap_path")
     bootstrap_path = _receipt_path_under_build(bootstrap_path, "bootstrap receipt")
     _check_ignored(git, bootstrap_path)
     _, bootstrap_receipt, _ = _load_receipt(root, bootstrap_path)
     exact_keys(bootstrap_receipt, {"schema_version", "kind", "plan", "discussion", "closeout", "loader", "inherited_gate", "gate", "repository", "scope", "history_pins", "trusted_handoff"}, "bootstrap")
     _require_schema_version(bootstrap_receipt, "bootstrap")
-    if bootstrap_receipt.get("kind") != "phase24-d229-bootstrap":
+    if bootstrap_receipt.get("kind") == "phase24-d230-bootstrap":
+        bootstrap = _verify_d230_bootstrap_source(git, bootstrap_receipt)
+    elif _SELF_TEST_ACTIVE and bootstrap_receipt.get("kind") == "phase24-d229-bootstrap":
+        bootstrap = _verify_bootstrap_source(git, bootstrap_receipt)
+    else:
         deny("bootstrap_kind")
-    bootstrap = _verify_bootstrap_source(git, bootstrap_receipt)
     manifest, candidate, provenance, evidence = _load_manifest(root, git, bootstrap, args.candidate, args.evidence)
     history_path, records = _load_history_file(root, manifest["receipts"]["history"], manifest["_receipt_raw"]["history"])
     effective_action = args.mode
@@ -2767,6 +3139,12 @@ def _run_live(root: Path, args: argparse.Namespace, runner: CommandRunner | None
     reader.auth_status()
     remote = _validate_pr_and_protection(git, reader, manifest, candidate, action=effective_action)
     state = {**state, "branch": remote["branch"]}
+    push_argv: tuple[str, ...] | None = None
+    if args.mode == "push":
+        push_argv = _validate_fixed_push_argv(
+            fixed_push_argv(candidate["sha"], remote["branch"]),
+            candidate["sha"], remote["branch"],
+        )
     if effective_action == "push" and state.get("candidate_number") == 2:
         state["causal_readback"] = _validate_causal_matrix_failure(reader, candidate, manifest, state, remote)
     if args.mode == "preflight":
@@ -2790,7 +3168,7 @@ def _run_live(root: Path, args: argparse.Namespace, runner: CommandRunner | None
             action_id=action_id, outcome="ALLOW", remote_head_sha=remote["head_sha"],
             base_sha=remote["base_sha"], branch=remote["branch"],
         )
-        result = _dispatch_fixed_action("push", candidate, remote["branch"], reader_runner, gh_env)
+        result = _dispatch_fixed_action("push", candidate, remote["branch"], reader_runner, gh_env, argv=push_argv)
         _require_command_success(result, "push_failed_or_ambiguous")
         records = _history_record_action(
             history_path, records, kind="push_result", candidate=candidate,
@@ -3033,6 +3411,128 @@ def _test_protection() -> dict[str, Any]:
 
 
 class PromotionGateContractTests(unittest.TestCase):
+    def _local_git_env(self, root: Path) -> dict[str, str]:
+        home = root / "home"
+        home.mkdir(parents=True, exist_ok=True)
+        empty_config = root / "empty-git-config"
+        empty_config.write_bytes(b"")
+        keys = ("PATH", "SYSTEMROOT", "SystemRoot", "WINDIR", "PATHEXT", "COMSPEC", "TMPDIR", "TMP", "TEMP")
+        env = {key: os.environ[key] for key in keys if key in os.environ}
+        env.update({
+            "HOME": str(home),
+            "GIT_CONFIG_GLOBAL": str(empty_config),
+            "GIT_CONFIG_SYSTEM": str(empty_config),
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_ALLOW_PROTOCOL": "file",
+            "LC_ALL": "C",
+        })
+        return env
+
+    def _local_git(self, root: Path, env: Mapping[str, str], *args: str) -> str:
+        result = subprocess.run(
+            ["git", "-C", str(root), *args], env=dict(env),
+            capture_output=True, check=False, timeout=30,
+        )
+        if result.returncode != 0:
+            self.fail(f"isolated local Git command failed: {args!r}: {result.stderr.decode('utf-8', errors='replace')}")
+        return result.stdout.decode("utf-8", errors="strict").strip()
+
+    def _init_local_bare(self, root: Path, env: Mapping[str, str]) -> None:
+        root.mkdir(parents=True, exist_ok=True)
+        self._local_git(root, env, "init", "--bare")
+
+    def _hook_fixture(self, root: Path, env: Mapping[str, str], hook_kind: str) -> tuple[Path, Path, Path, str]:
+        repository = root / "work"
+        origin = root / "origin.git"
+        sentinel = root / "sentinel.git"
+        self._init_local_bare(origin, env)
+        self._init_local_bare(sentinel, env)
+        repository.mkdir(parents=True)
+        self._local_git(repository, env, "init")
+        self._local_git(repository, env, "config", "user.name", "Phase 24 fixture")
+        self._local_git(repository, env, "config", "user.email", "phase24@example.invalid")
+        (repository / "tracked.txt").write_text("local hook fixture\n", encoding="utf-8")
+        self._local_git(repository, env, "add", "tracked.txt")
+        self._local_git(repository, env, "commit", "-m", "local hook fixture")
+        commit = self._local_git(repository, env, "rev-parse", "HEAD")
+        self._local_git(repository, env, "remote", "add", "origin", str(origin))
+        self._local_git(repository, env, "remote", "add", "sentinel", str(sentinel))
+
+        if hook_kind == "default":
+            hook_dir = repository / ".git" / "hooks"
+        elif hook_kind == "core.hooksPath":
+            hook_dir = root / "hooks-path"
+            self._local_git(repository, env, "config", "core.hooksPath", str(hook_dir))
+            hook_dir.mkdir(parents=True)
+        else:
+            raise AssertionError(f"unknown hook fixture kind: {hook_kind}")
+        hook_dir.mkdir(parents=True, exist_ok=True)
+        sentinel_ref = f"refs/heads/{hook_kind.replace('.', '-')}-sentinel"
+        script = "\n".join((
+            "#!/bin/sh",
+            "set -eu",
+            "unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES",
+            f"git -C {shlex.quote(repository.as_posix())} push --no-verify {shlex.quote(sentinel.as_posix())} HEAD:{shlex.quote(sentinel_ref)} >/dev/null 2>&1",
+            "",
+        ))
+        hook = hook_dir / "pre-push"
+        hook.write_text(script, encoding="utf-8", newline="\n")
+        hook.chmod(0o755)
+        return repository, origin, sentinel, commit
+
+    def _run_fixed_local_push(self, repository: Path, env: Mapping[str, str], candidate_sha: str, branch: str) -> subprocess.CompletedProcess[bytes]:
+        command = _validate_fixed_push_argv(fixed_push_argv(candidate_sha, branch), candidate_sha, branch)
+        previous = Path.cwd()
+        try:
+            os.chdir(repository)
+            return CommandRunner().run(command, env=env, timeout=30)
+        finally:
+            os.chdir(previous)
+
+    def _submodule_fixture(self, root: Path, env: Mapping[str, str]) -> tuple[Path, Path, Path, str, str, str]:
+        sub_remote = root / "submodule.git"
+        sub_source = root / "submodule-source"
+        superproject = root / "superproject"
+        super_remote = root / "superproject.git"
+        self._init_local_bare(sub_remote, env)
+        sub_source.mkdir(parents=True)
+        self._local_git(sub_source, env, "init")
+        self._local_git(sub_source, env, "symbolic-ref", "HEAD", "refs/heads/main")
+        self._local_git(sub_source, env, "config", "user.name", "Phase 24 fixture")
+        self._local_git(sub_source, env, "config", "user.email", "phase24@example.invalid")
+        (sub_source / "submodule.txt").write_text("base\n", encoding="utf-8")
+        self._local_git(sub_source, env, "add", "submodule.txt")
+        self._local_git(sub_source, env, "commit", "-m", "submodule base")
+        base_commit = self._local_git(sub_source, env, "rev-parse", "HEAD")
+        self._local_git(sub_source, env, "remote", "add", "origin", str(sub_remote))
+        self._local_git(sub_source, env, "push", "origin", "HEAD:refs/heads/main")
+        self._local_git(sub_remote, env, "symbolic-ref", "HEAD", "refs/heads/main")
+
+        superproject.mkdir(parents=True)
+        self._local_git(superproject, env, "init")
+        self._local_git(superproject, env, "symbolic-ref", "HEAD", "refs/heads/main")
+        self._local_git(superproject, env, "config", "user.name", "Phase 24 fixture")
+        self._local_git(superproject, env, "config", "user.email", "phase24@example.invalid")
+        self._local_git(superproject, env, "-c", "protocol.file.allow=always", "submodule", "add", str(sub_remote), "deps/submodule")
+        self._local_git(superproject, env, "commit", "-m", "add submodule")
+        clone = superproject / "deps" / "submodule"
+        self._local_git(clone, env, "config", "user.name", "Phase 24 fixture")
+        self._local_git(clone, env, "config", "user.email", "phase24@example.invalid")
+        (clone / "submodule.txt").write_text("unpublished submodule commit\n", encoding="utf-8")
+        self._local_git(clone, env, "add", "submodule.txt")
+        self._local_git(clone, env, "commit", "-m", "unpublished submodule commit")
+        sub_commit = self._local_git(clone, env, "rev-parse", "HEAD")
+        self._local_git(superproject, env, "add", "deps/submodule")
+        self._local_git(superproject, env, "commit", "-m", "advance submodule")
+        super_commit = self._local_git(superproject, env, "rev-parse", "HEAD")
+
+        self._init_local_bare(super_remote, env)
+        self._local_git(superproject, env, "remote", "add", "origin", str(super_remote))
+        self._local_git(superproject, env, "config", "push.recurseSubmodules", "on-demand")
+        self._local_git(superproject, env, "config", "submodule.recurse", "true")
+        return superproject, super_remote, sub_remote, base_commit, sub_commit, super_commit
+
     def test_d229_plan_anchor_accepts_exact_parent_bound_corrections(self) -> None:
         handoff = {"PHASE24_D222_PLAN_REV": PLAN_REV, "PHASE24_D222_PLAN_SHA256": PLAN_SHA256,
                    "PHASE24_D229_PLAN_TREE": PLAN_TREE, "PHASE24_D229_PLAN_BLOB": PLAN_BLOB}
@@ -3090,6 +3590,79 @@ class PromotionGateContractTests(unittest.TestCase):
                     validate_plan_anchor(mutated, env=handoff)
                 self.assertEqual(error.exception.reason, reason)
                 self.assertEqual(mutated.action_calls, [])
+
+    def test_d230_plan_anchor_and_loader_are_bound_to_the_checked_child(self) -> None:
+        git = Git(Path.cwd())
+        handoff = {
+            "PHASE24_D222_PLAN_REV": D230_PLAN_REV,
+            "PHASE24_D222_PLAN_SHA256": D230_PLAN_SHA256,
+            "PHASE24_D230_PLAN_TREE": D230_PLAN_TREE,
+            "PHASE24_D230_PLAN_BLOB": D230_PLAN_BLOB,
+        }
+        anchor = validate_d230_plan_anchor(git, env=handoff)
+        self.assertEqual(anchor["rev"], D230_PLAN_REV)
+        self.assertEqual(anchor["parent"], D229_STOP_CANDIDATE)
+        self.assertEqual(anchor["inherited_gate"]["blob"], D229_GATE_BLOB)
+        self.assertEqual(anchor["loader_sha256"], D229_LOADER_SHA256)
+        self.assertEqual(digest_bytes(fresh_d230_plan_wrapper_source().encode()), D229_LOADER_SHA256)
+        self.assertEqual(extract_plan_loader(git.pinned_blob(
+            D230_PLAN_REV, D230_PLAN_TREE, PLAN_PATH_SHA256, D230_PLAN_BLOB, D230_PLAN_SHA256,
+        )), extract_plan_loader(git.pinned_blob(PLAN_REV, PLAN_TREE, PLAN_PATH_SHA256, PLAN_BLOB, PLAN_SHA256)))
+        for key, value in (("PHASE24_D222_PLAN_REV", "f" * 40),
+                           ("PHASE24_D222_PLAN_SHA256", "f" * 64),
+                           ("PHASE24_D230_PLAN_TREE", "f" * 40),
+                           ("PHASE24_D230_PLAN_BLOB", "f" * 40)):
+            with self.subTest(handoff=key):
+                with self.assertRaises(GateError):
+                    validate_d230_plan_anchor(git, env={**handoff, key: value})
+
+    def test_d230_gate_replacement_requires_the_pinned_d229_blob(self) -> None:
+        exact = DiffEntry("100644", "100644", D229_GATE_BLOB, "a" * 40, "M", GATE_PATH)
+        self.assertEqual(_validate_gate_replacement_diff([exact], old_blob=D229_GATE_BLOB), exact.new_oid)
+        for invalid in (
+            DiffEntry("100644", "100644", D228_GATE_BLOB, exact.new_oid, "M", GATE_PATH),
+            DiffEntry("100755", "100644", D229_GATE_BLOB, exact.new_oid, "M", GATE_PATH),
+            DiffEntry("100644", "100755", D229_GATE_BLOB, exact.new_oid, "M", GATE_PATH),
+            DiffEntry("100644", "100644", D229_GATE_BLOB, exact.new_oid, "T", GATE_PATH),
+            DiffEntry("100644", "100644", D229_GATE_BLOB, exact.new_oid, "M", "other.py"),
+        ):
+            with self.subTest(entry=invalid):
+                with self.assertRaises(GateError):
+                    _validate_gate_replacement_diff([invalid], old_blob=D229_GATE_BLOB)
+
+    def test_d230_complete_history_map_matches_independent_literal_additions(self) -> None:
+        expected_additions = {
+            "d229_gate_rev": "4b8a04e259650480a259137b88df20959c86e320",
+            "d229_gate_parent": "3b7814793e6f2fa30f75a2f3eccdb46024f88b54",
+            "d229_gate_tree": "b9a1824fd40f9eb3c5855f382370d365ef9ed6dd",
+            "d229_gate_blob": "d274e410cb13775457581a151eded15dd692edff",
+            "d229_gate_sha256": "76e3ec4aefc30695f7aa05046a4e06ed587ac36915b351f084293c50db61b0f2",
+            "d229_gate_old_blob": "da9c54b86d9b67b1195864c56186b9a98795ee6b",
+            "d229_gate_mode": "100644",
+            "d229_seam_rev": "80a0f5736badae10f4bd2fe1263556a0e29a60a4",
+            "d229_seam_parent": "4b8a04e259650480a259137b88df20959c86e320",
+            "d229_seam_tree": "b42d90f159fa02186a4558e0e9a6f7a18872e8bf",
+            "d229_seam_old_coverage_blob": "f794032e500609d654fb938d0d8f3e9478ddbcaa",
+            "d229_seam_coverage_blob": "c0fefa08d292e45de0e80a68b526a492e81b639d",
+            "d229_candidate_rev": "e6926b69fde285917c2a6cedc42188085420a427",
+            "d229_candidate_parent": "80a0f5736badae10f4bd2fe1263556a0e29a60a4",
+            "d229_candidate_tree": "230cae0d099106f35759bc5773f2d6e840196f0f",
+            "d229_bootstrap_sha256": "7911a142fadb097a634e1c6cb29e31e84bb2b21ab964dbbc526a2a5150582745",
+            "d229_loader_sha256": "03c5e223ce50de3b430e1ea06add6f6dd08a2286c8fd9cddc8d1c4cd3ee62958",
+            "d229_t35_tests": "PASS",
+            "d229_t35_code_review": "CLEAN",
+            "d229_t35_security_review": "OPEN_THREATS",
+            "d229_t35_security_findings": "unaccounted pre-push hook; recursive submodule push",
+            "d229_t35_external_promotion": "NOT_RUN",
+            "d230_discussion_log_rev": "1e1fe73f24255d1a76d9b78a7320a90a4e47de2b",
+            "d230_discussion_log_tree": "956057b9ca2b136cf9005c249c03c1d2cf8c32f6",
+            "d230_discussion_log_blob": "e89a254ddc7101bff175fd30b3de47da8b0b6fe2",
+            "d230_discussion_log_sha256": "974449cdad9aff0f69eb9b462f1ce001d41aa7a743f41f1c6620b9c5dde33de0",
+            "d230_discussion_log_path_sha256": "c0600dcc6a37ca945963f6e2d89a3c0509c324cca4c07f143f92916e49703657",
+        }
+        self.assertEqual(len(D227_HISTORY_PINS), 21)
+        self.assertEqual(expected_d230_history_pins(), {**expected_history_pins(), **expected_additions})
+        self.assertTrue(set(D227_HISTORY_PINS).issubset(expected_d230_history_pins()))
 
     def test_pinned_raw_tree_resolver_is_available_for_planning_blobs(self) -> None:
         resolver = getattr(Git, "pinned_blob", None)
@@ -3366,7 +3939,7 @@ class PromotionGateContractTests(unittest.TestCase):
         finally:
             sys.modules.pop(module_name, None)
 
-    def _run_live_fixture(self, action: str, candidate_number: int = 1, fault: str | None = None) -> tuple[dict[str, Any] | None, GateError | None, _RecordingRunner]:
+    def _run_live_fixture(self, action: str, candidate_number: int = 1, fault: str | None = None) -> tuple[dict[str, Any] | None, GateError | None, _RecordingRunner, list[str]]:
         root = Path.cwd().resolve()
         first_sha, first_tree = "a" * 40, "b" * 40
         candidate_sha = first_sha if candidate_number == 1 else "d" * 40
@@ -3487,14 +4060,14 @@ class PromotionGateContractTests(unittest.TestCase):
             patched["_history_record_action"].side_effect = append_action
             try:
                 result = _run_live(root, args, runner=runner)
-                return result, None, runner
+                return result, None, runner, action_log
             except GateError as exc:
-                return None, exc, runner
+                return None, exc, runner, action_log
 
     def test_run_live_production_path_dispatches_one_fixed_action_for_each_allow(self) -> None:
         for action, candidate_number in (("push", 1), ("merge", 1), ("push", 2)):
             with self.subTest(action=action, candidate_number=candidate_number):
-                result, error, runner = self._run_live_fixture(action, candidate_number)
+                result, error, runner, _ = self._run_live_fixture(action, candidate_number)
                 self.assertIsNone(error)
                 self.assertIsNotNone(result)
                 self.assertEqual(len(runner.action_calls), 1)
@@ -3509,10 +4082,27 @@ class PromotionGateContractTests(unittest.TestCase):
             ("merge", 1, "check_app_mismatch"), ("merge", 1, "wrong_workflow_path"))
         for action, candidate_number, fault in cases:
             with self.subTest(action=action, candidate_number=candidate_number, fault=fault):
-                result, error, runner = self._run_live_fixture(action, candidate_number, fault)
+                result, error, runner, action_log = self._run_live_fixture(action, candidate_number, fault)
                 self.assertIsNone(result)
                 self.assertIsNotNone(error)
                 self.assertEqual(runner.action_calls, [])
+                self.assertEqual(action_log, [])
+
+    def test_run_live_rejects_omitted_push_flags_before_reservation_and_dispatch(self) -> None:
+        original_builder = fixed_push_argv
+        for omitted in ("--no-verify", "--recurse-submodules=no"):
+            def omit_flag(candidate_sha: str, branch: str, omitted_flag: str = omitted) -> list[str]:
+                argv = original_builder(candidate_sha, branch)
+                argv.remove(omitted_flag)
+                return argv
+
+            with self.subTest(omitted=omitted), mock.patch(__name__ + ".fixed_push_argv", side_effect=omit_flag):
+                result, error, runner, action_log = self._run_live_fixture("push", 1)
+            self.assertIsNone(result)
+            self.assertIsNotNone(error)
+            self.assertEqual(error.reason, "fixed_push_argv_contract_mismatch")
+            self.assertEqual(action_log, [])
+            self.assertEqual(runner.action_calls, [])
 
     def test_manifest_and_all_receipts_require_trusted_raw_digests(self) -> None:
         body = canonical_json({"schema_version": 1}) + b"\n"
@@ -4339,6 +4929,69 @@ class PromotionGateContractTests(unittest.TestCase):
         self.assertEqual(runner.calls[0][0], fixed_push_argv(candidate["sha"], remote["branch"]))
         self.assertNotIn("--force", runner.calls[0][0])
 
+    def test_fixed_push_argv_disables_hooks_and_recursive_submodule_pushes(self) -> None:
+        candidate_sha = "a" * 40
+        branch = "phase24-candidate"
+        self.assertEqual(fixed_push_argv(candidate_sha, branch), [
+            "git", "--no-replace-objects", "-c", "credential.helper=",
+            "-c", "credential.helper=!gh auth git-credential",
+            "-c", "credential.interactive=false", "push", "--no-verify",
+            "--recurse-submodules=no", "origin",
+            f"{candidate_sha}:refs/heads/{branch}",
+        ])
+
+    def test_local_git_hook_and_recursive_submodule_side_effects_are_suppressed(self) -> None:
+        for hook_kind in ("default", "core.hooksPath"):
+            with self.subTest(hook_kind=hook_kind), tempfile.TemporaryDirectory(prefix="phase24-d230-hook-") as temp:
+                root = Path(temp)
+                legacy_root = root / "legacy"
+                legacy_root.mkdir()
+                legacy_env = self._local_git_env(legacy_root)
+                legacy_repo, _, legacy_sentinel, legacy_commit = self._hook_fixture(legacy_root, legacy_env, hook_kind)
+                legacy_ref = f"refs/heads/{hook_kind.replace('.', '-')}-sentinel"
+                self._local_git(legacy_repo, legacy_env, "push", "origin", "HEAD:refs/heads/legacy-target")
+                self.assertEqual(self._local_git(legacy_sentinel, legacy_env, "rev-parse", "--verify", legacy_ref), legacy_commit)
+
+                hardened_root = root / "hardened"
+                hardened_root.mkdir()
+                hardened_env = self._local_git_env(hardened_root)
+                hardened_repo, hardened_origin, hardened_sentinel, hardened_commit = self._hook_fixture(hardened_root, hardened_env, hook_kind)
+                branch = f"d230-{hook_kind.replace('.', '-')}-target"
+                result = self._run_fixed_local_push(hardened_repo, hardened_env, hardened_commit, branch)
+                self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", errors="replace"))
+                self.assertEqual(self._local_git(hardened_origin, hardened_env, "for-each-ref", "--format=%(refname)"), f"refs/heads/{branch}")
+                self.assertEqual(self._local_git(hardened_origin, hardened_env, "rev-parse", "--verify", f"refs/heads/{branch}"), hardened_commit)
+                self.assertEqual(self._local_git(hardened_sentinel, hardened_env, "for-each-ref", "--format=%(refname)"), "")
+
+        with tempfile.TemporaryDirectory(prefix="phase24-d230-submodule-") as temp:
+            root = Path(temp)
+            legacy_root = root / "legacy"
+            legacy_root.mkdir()
+            legacy_env = self._local_git_env(legacy_root)
+            legacy_super, legacy_remote, legacy_subremote, base_commit, sub_commit, super_commit = self._submodule_fixture(legacy_root, legacy_env)
+            self.assertEqual(self._local_git(legacy_subremote, legacy_env, "rev-parse", "--verify", "refs/heads/main"), base_commit)
+            self._local_git(legacy_super, legacy_env, "push", "origin", "HEAD:refs/heads/legacy-target")
+            legacy_submodule_refs = set(self._local_git(legacy_subremote, legacy_env, "for-each-ref", "--format=%(refname)").splitlines())
+            self.assertEqual(legacy_submodule_refs, {"refs/heads/main", "refs/heads/legacy-target"})
+            self.assertEqual(self._local_git(legacy_subremote, legacy_env, "rev-parse", "--verify", "refs/heads/main"), base_commit)
+            self.assertEqual(self._local_git(legacy_subremote, legacy_env, "rev-parse", "--verify", "refs/heads/legacy-target"), sub_commit)
+            self.assertEqual(self._local_git(legacy_remote, legacy_env, "for-each-ref", "--format=%(refname)"), "refs/heads/legacy-target")
+            self.assertEqual(self._local_git(legacy_remote, legacy_env, "rev-parse", "--verify", "refs/heads/legacy-target"), super_commit)
+
+            hardened_root = root / "hardened"
+            hardened_root.mkdir()
+            hardened_env = self._local_git_env(hardened_root)
+            hardened_super, hardened_remote, hardened_subremote, hardened_base, hardened_sub, hardened_commit = self._submodule_fixture(hardened_root, hardened_env)
+            self.assertNotEqual(hardened_sub, hardened_base)
+            branch = "d230-submodule-target"
+            result = self._run_fixed_local_push(hardened_super, hardened_env, hardened_commit, branch)
+            self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", errors="replace"))
+            self.assertEqual(self._local_git(hardened_remote, hardened_env, "for-each-ref", "--format=%(refname)"), f"refs/heads/{branch}")
+            self.assertEqual(self._local_git(hardened_remote, hardened_env, "rev-parse", "--verify", f"refs/heads/{branch}"), hardened_commit)
+            hardened_submodule_refs = set(self._local_git(hardened_subremote, hardened_env, "for-each-ref", "--format=%(refname)").splitlines())
+            self.assertEqual(hardened_submodule_refs, {"refs/heads/main"})
+            self.assertEqual(self._local_git(hardened_subremote, hardened_env, "rev-parse", "--verify", "refs/heads/main"), hardened_base)
+
     def test_eligible_reviewed_candidate_merges_with_head_match(self) -> None:
         sha = "a" * 40
         candidate = {"sha": sha, "tree": "b" * 40, "paths": [EXPECTED_CANDIDATE_CORRECTIONS[0]]}
@@ -4879,6 +5532,150 @@ class PromotionGateContractTests(unittest.TestCase):
                 self.assertEqual(output.read_bytes(), original_output)
                 live_action.assert_not_called()
 
+    def test_d230_bootstrap_builder_verifier_and_no_overwrite_contract(self) -> None:
+        source_git = Git(Path.cwd())
+        gate_bytes = executing_source_bytes()
+        gate_rev, gate_tree = "c" * 40, "d" * 40
+        gate_blob = hashlib.sha1(b"blob " + str(len(gate_bytes)).encode("ascii") + b"\0" + gate_bytes).hexdigest()
+        gate_sha = digest_bytes(gate_bytes)
+        with tempfile.TemporaryDirectory(prefix="phase24-d230-bootstrap-") as temp:
+            root = Path(temp).resolve()
+            (root / "build/phase24").mkdir(parents=True)
+            prior_receipt = root / D229_BOOTSTRAP_PATH
+            prior_bytes = b"preserved historical D-229 receipt fixture\n"
+            prior_receipt.write_bytes(prior_bytes)
+
+            class FixtureGit:
+                def __init__(self) -> None:
+                    self.root = root
+                    self.action_calls: list[str] = []
+
+                def __getattr__(self, name: str) -> Any:
+                    return getattr(source_git, name)
+
+                def object_type(self, rev: str) -> str:
+                    return "commit" if rev == gate_rev else source_git.object_type(rev)
+
+                def tree(self, rev: str) -> str:
+                    return gate_tree if rev == gate_rev else source_git.tree(rev)
+
+                def parents(self, rev: str) -> list[str]:
+                    return [D230_PLAN_REV] if rev == gate_rev else source_git.parents(rev)
+
+                def tree_entry(self, rev: str, path: str) -> tuple[str, str, str]:
+                    if rev == gate_rev and path == GATE_PATH:
+                        return "100644", "blob", gate_blob
+                    return source_git.tree_entry(rev, path)
+
+                def blob(self, rev: str, path: str) -> bytes:
+                    if rev == gate_rev and path == GATE_PATH:
+                        return gate_bytes
+                    return source_git.blob(rev, path)
+
+                def raw_diff(self, before: str, after: str) -> list[DiffEntry]:
+                    if (before, after) == (D230_PLAN_REV, gate_rev):
+                        return [DiffEntry("100644", "100644", D229_GATE_BLOB, gate_blob, "M", GATE_PATH)]
+                    return source_git.raw_diff(before, after)
+
+                def text(self, *args: str, **kwargs: Any) -> str:
+                    if args == ("rev-parse", "--show-toplevel"):
+                        return str(root)
+                    if args == ("rev-parse", "--absolute-git-dir"):
+                        return str(root / ".git")
+                    if args == ("symbolic-ref", "--quiet", "--short", "HEAD"):
+                        return "gsd/phase-24-d230-fixture"
+                    if args == ("rev-parse", "HEAD"):
+                        return gate_rev
+                    if args == ("rev-parse", f"{gate_rev}:{GATE_PATH}"):
+                        return gate_blob
+                    return source_git.text(*args, **kwargs)
+
+                def run_result(self, *args: str, **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+                    if args[:2] == ("check-ignore", "--quiet") or args[:1] == ("status",) or args == ("diff", "--cached", "--quiet"):
+                        return subprocess.CompletedProcess(list(args), 0, b"", b"")
+                    return source_git.run_result(*args, **kwargs)
+
+                def run(self, *args: str, **kwargs: Any) -> bytes:
+                    result = self.run_result(*args, **kwargs)
+                    if result.returncode:
+                        deny("fixture_git_read")
+                    return result.stdout
+
+            fixture = FixtureGit()
+            handoff = {
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                "TMPDIR": os.environ.get("TMPDIR", "/tmp"),
+                "PHASE24_D222_PLAN_REV": D230_PLAN_REV,
+                "PHASE24_D222_PLAN_SHA256": D230_PLAN_SHA256,
+                "PHASE24_D230_PLAN_TREE": D230_PLAN_TREE,
+                "PHASE24_D230_PLAN_BLOB": D230_PLAN_BLOB,
+                "PHASE24_D222_GATE_REV": gate_rev,
+                "PHASE24_D222_GATE_SHA256": gate_sha,
+            }
+            with mock.patch(__name__ + ".Git", side_effect=lambda *args, **kwargs: fixture):
+                receipt = build_d230_bootstrap_receipt(root, env=handoff)
+                self.assertEqual(receipt["kind"], "phase24-d230-bootstrap")
+                self.assertEqual(receipt["plan"], {
+                    "rev": D230_PLAN_REV, "parent": D230_PLAN_PARENT, "tree": D230_PLAN_TREE,
+                    "blob": D230_PLAN_BLOB, "sha256": D230_PLAN_SHA256, "path_sha256": PLAN_PATH_SHA256,
+                })
+                self.assertEqual(receipt["gate"], {
+                    "rev": gate_rev, "parent": D230_PLAN_REV, "tree": gate_tree, "blob": gate_blob,
+                    "sha256": gate_sha, "old_blob": D229_GATE_BLOB, "old_mode": "100644",
+                })
+                self.assertEqual(receipt["inherited_gate"]["blob"], D229_GATE_BLOB)
+                self.assertEqual(receipt["history_pins"], expected_d230_history_pins())
+                self.assertEqual(fixture.action_calls, [])
+                self.assertFalse((root / D230_BOOTSTRAP_PATH).exists(), "pre-freeze builder controls cannot publish")
+
+                valid_history = expected_d230_history_pins()
+                for key in tuple(valid_history):
+                    for case, mutation in (
+                        ("missing", lambda bad, k=key: bad["history_pins"].pop(k)),
+                        ("changed", lambda bad, k=key: bad["history_pins"].__setitem__(k, "0" * 64)),
+                        ("extra", lambda bad, k=key: bad["history_pins"].__setitem__("unexpected_" + k, "1" * 40)),
+                    ):
+                        with self.subTest(history=case, key=key):
+                            bad = copy.deepcopy(receipt)
+                            mutation(bad)
+                            with self.assertRaises(GateError) as error:
+                                _verify_d230_bootstrap_source(fixture, bad, env=handoff)
+                            self.assertEqual(error.exception.reason, "bootstrap_historical_pins_mismatch")
+                without_d227 = copy.deepcopy(receipt)
+                for key in D227_HISTORY_PINS:
+                    without_d227["history_pins"].pop(key)
+                with self.assertRaises(GateError) as removed_d227:
+                    _verify_d230_bootstrap_source(fixture, without_d227, env=handoff)
+                self.assertEqual(removed_d227.exception.reason, "bootstrap_historical_pins_mismatch")
+                bad_plan = {**handoff, "PHASE24_D222_PLAN_REV": "f" * 40}
+                with self.assertRaises(GateError) as wrong_plan:
+                    build_d230_bootstrap_receipt(root, env=bad_plan)
+                self.assertEqual(wrong_plan.exception.reason, "missing_or_wrong_d230_plan_handoff")
+                bad_tree = {**handoff, "PHASE24_D230_PLAN_TREE": "f" * 40}
+                with self.assertRaises(GateError) as wrong_tree:
+                    build_d230_bootstrap_receipt(root, env=bad_tree)
+                self.assertEqual(wrong_tree.exception.reason, "missing_or_wrong_d230_plan_handoff")
+
+                prior_receipt_before = prior_receipt.read_bytes()
+                verified = write_d230_bootstrap(root, env=handoff)
+                output = root / D230_BOOTSTRAP_PATH
+                first_bytes = output.read_bytes()
+                self.assertEqual(first_bytes, canonical_json(receipt) + b"\n")
+                self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o600)
+                self.assertEqual(verified["decision"], "ALLOW")
+                self.assertEqual(verified["mode"], "verify-bootstrap")
+                self.assertEqual(verified["gate_sha256"], gate_sha)
+                self.assertEqual(prior_receipt.read_bytes(), prior_receipt_before)
+                with self.assertRaises(GateError) as overwrite:
+                    _exclusive_create_bootstrap(root, D230_BOOTSTRAP_PATH, b"must not overwrite the frozen receipt\n")
+                self.assertEqual(overwrite.exception.reason, "bootstrap_output_exists")
+                self.assertEqual(output.read_bytes(), first_bytes)
+                self.assertEqual(prior_receipt.read_bytes(), prior_receipt_before)
+                with self.assertRaises(GateError) as alternate:
+                    verify_d230_bootstrap(root, "build/phase24/alternate.json")
+                self.assertEqual(alternate.exception.reason, "bootstrap_path")
+                self.assertEqual(fixture.action_calls, [])
+
     def test_d229_full_history_map_matches_independent_literal_inventory(self) -> None:
         expected = {
             "d209_rev": "96d502d4733ac54aa8bf7fbfd7813065143771dc",
@@ -5009,7 +5806,7 @@ def _run_self_test() -> int:
         suite = unittest.defaultTestLoader.loadTestsFromTestCase(PromotionGateContractTests)
         result = unittest.TextTestRunner(verbosity=2).run(suite)
         if result.wasSuccessful():
-            print(f"PHASE24_D229_SELF_TESTS=PASS tests={result.testsRun}")
+            print(f"PHASE24_D230_SELF_TESTS=PASS tests={result.testsRun}")
             return 0
         return 1
     finally:
@@ -5057,7 +5854,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.write_bootstrap:
             if any((args.bootstrap, args.candidate, args.evidence)):
                 deny("bootstrap_write_extra_arguments")
-            result = write_d229_bootstrap(root)
+            result = write_d230_bootstrap(root)
             _emit(result)
             return 0
         if args.verify_bootstrap:
