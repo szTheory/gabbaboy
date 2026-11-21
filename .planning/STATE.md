@@ -2,8 +2,8 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: Phase 24 D-229 context gathered
-last_updated: "2026-11-21T02:11:38.268Z"
+stopped_at: Phase 24 D-229 plan revised; route reconciliation and independent check
+last_updated: "2026-11-21T02:58:52.700Z"
 state_head: 8f90749937467d264b5d638b757d178d0ef1120b
 progress:
   total_phases: 6
@@ -14,18 +14,18 @@ milestone_name: Evidence Floor
 last_activity: 2026-11-20
 current_phase: 24
 current_phase_name: Resolve remaining v0.4 evidence and verification gaps
-current_plan: "Phase 24 Plan 24-01: T30 frozen bootstrap denied; D-228 no-retry stop"
+current_plan: "Phase 24 Plan 24-01: D-229 T33 canonical bootstrap recovery; D-228 denial preserved"
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone stage:** v0.4 remains administratively closed under D-209 while the owner-authorized D-228 Phase 24 recovery proceeds; accepted requirement gaps and release bytes remain unchanged.
+**Milestone stage:** v0.4 remains administratively closed under D-209 while the owner-authorized D-229 Phase 24 recovery proceeds; accepted requirement gaps and release bytes remain unchanged.
 **Requirements:** 7/8 original requirements are complete. RIGHTS-01, DIAG-01 and DIAG-02 are complete for the exact admitted diagnostic scope; FIXT-01 remains Pending and deferred.
-**Phase state:** Phase 24 remains incomplete. The D-228 gate-only commit `8ce5517a5777bffb87247564a9ae3afa1b0153d8` passed its immutable 39-control self-test. Its one frozen bootstrap verification denied with `bootstrap_historical_pins_mismatch`; read-only diagnosis found the generated D-228 receipt omitted the 21 D-227 provenance pins. D-228 ends on any frozen failure: no retry, replacement, repin, T31 seam, CTest, review, hosted action, promotion, or closure. Exact ignored evidence is under `build/phase24/d228-frozen-*` and `d228-bootstrap-denied.md`; the D-227 receipt remains unchanged. FIXT-01, Acid2, Task 7, D-103 and all D-209 dispositions are unchanged.
+**Phase state:** Phase 24 remains incomplete. D-228 gate-only commit `8ce5517a5777bffb87247564a9ae3afa1b0153d8` passed its immutable 39-control self-test, then frozen bootstrap verification denied with `bootstrap_historical_pins_mismatch` because the manually copied receipt omitted 21 D-227 provenance pins. Preserve the gate, receipt and denial; D-228 permits no retry or execution of T31/T32. D-229 authorizes one separate checked boundary and one gate-only replacement. The sole plan now has T33/T34/T35 active; T33 adds a canonical receipt builder and exact-map preflight before freeze. The initial independent plan check found stale active route records; those records are now aligned, and the check is being rerun. No implementation, CTest, review, hosted action or promotion has started under D-229. FIXT-01, Acid2, Task 7, D-103 and all D-209 dispositions are unchanged.
 
-**Next route:** The owner acts next by starting `$gsd-discuss-phase 24` to define and authorize a new bounded Phase 24 recovery scope. No D-228 gate execution may resume. Keep this branch/worktree and preserve the frozen denial. Only after a new checked scope may the autonomous route continue; v0.4 is not complete.
+**Next route:** Active ROADMAP.md, STATE.md, HANDOFF.json and both continuation notes now agree on D-229/T33–T35. Rerun the independent plan check. If clean, commit one checked boundary directly on `6573cb05dcd978f37102ac2d3a26a821c145a2fd`, descended from handoff `5df387b0bdf4740ba1dd4a5b26400a57605904f7`, preserving inherited D-228 gate blob `da9c54b86d9b67b1195864c56186b9a98795ee6b`; then continue `$gsd-autonomous --from 24`. Never execute D-228 again. Keep this branch/worktree and preserve the denial. v0.4 is not complete.
 
 **Final diagnostic evidence:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. The failed result was not replayed and its cause is unproven. One `div_inc_timing_a` case passed for the DMG-CPU-B software model; one case was eligible/executed and 512 remain excluded. Details are in [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md).
 
@@ -53,13 +53,13 @@ Two items had already been acknowledged by an earlier closeout; the audit record
 
 FIXT-01 remains Pending: neither Potion Panic nor µCity has a complete source/build/ROM/header/mode/runtime chain. Do not introduce a third game candidate under the v0.4 requirement. Do not replay the Acid2 comparison or claim its cause. The v0.4.0 tag/assets and published claims remain unchanged. No hardware, perception, mode-3 timing, general compatibility, Linux player, Steam Deck, or live Playstead claim is established by this closeout.
 
-The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 verification is stale; Phase 24 Task 7 is incomplete. These remain gaps, not passes. D-211 and D-214 through D-219 failures remain preserved. D-220 T18–T20 completed with clean code/security reviews and local qualification on candidate f19, but its protected matrix failed required-native and preview-package-smoke; fixture-repro passed. No retry or merge occurred. Candidate c7a7cc1 and earlier NO-GO findings remain candidate-specific history in Phase 24 records. D-221 candidate 9bab completed its local qualification but received review NO-GO and was never pushed. D-222 now governs the active T24–T26 route, with at most two changed, locally qualified, freshly code/security-reviewed matrix candidates; candidate two requires a concrete in-scope first-matrix failure and causal fix. Preserve the same-head protected merge condition, D-209 dispositions, FIXT-01 Pending, the failed unreplayed Acid2 result, D-103, Task 7, released bytes, administrative closeout, and all phase/milestone stops. Keep both automatic-advance flags false.
+The exact-final-head D-103 gate remains unfulfilled. Phase 20, 21, and 23.1 verification is stale; Phase 24 Task 7 is incomplete. These remain gaps, not passes. D-211 and D-214 through D-219 failures remain preserved. D-220 T18–T20 completed with clean code/security reviews and local qualification on candidate f19, but its protected matrix failed required-native and preview-package-smoke; fixture-repro passed. No retry or merge occurred. Candidate c7a7cc1 and earlier NO-GO findings remain candidate-specific history in Phase 24 records. D-221 candidate 9bab completed its local qualification but received review NO-GO and was never pushed. D-222's exact-head promotion contract remains in force under D-229 T33–T35, with at most two changed, locally qualified, freshly code/security-reviewed matrix candidates; candidate two requires a concrete in-scope first-matrix failure and causal fix. Preserve the same-head protected merge condition, D-209 dispositions, FIXT-01 Pending, the failed unreplayed Acid2 result, D-103, Task 7, released bytes, administrative closeout, and all phase/milestone stops. Keep both automatic-advance flags false.
 
 ## Owner Handoff
 
-Current stage: Phase 24 T30 committed the D-228 gate correction and passed its immutable 39-control self-test. The frozen bootstrap verifier denied with `bootstrap_historical_pins_mismatch` because the D-228 receipt omitted the 21 expected D-227 history pins. No T31/T32 action ran.
+Current stage: D-229 context and sole-plan revision are recorded. D-228 T30 passed its 39-control direct self-test, then frozen bootstrap denied with `bootstrap_historical_pins_mismatch` because the copied receipt omitted 21 expected D-227 history pins. T31/T32 never ran. D-228's gate, receipt and denial remain immutable history. The first independent D-229 plan check identified stale active route records; ROADMAP, STATE, HANDOFF and both continuation notes now agree on the active route and exact boundary.
 
-Next actor: The owner authorizes a new bounded Phase 24 recovery scope with `$gsd-discuss-phase 24`. D-228 explicitly forbids a frozen retry, replacement, repin, CTest, review, hosted action, or closure; preserve its gate and denial evidence. No main/worktree switch or milestone closure is authorized by this stop.
+Next actor: The orchestrator reruns the independent Phase 24 plan check. On pass, commit the D-229 checked boundary as a sole-parent child of `6573cb05dcd978f37102ac2d3a26a821c145a2fd`, descended from handoff `5df387b0bdf4740ba1dd4a5b26400a57605904f7`, then run T33 preflight and its one gate-only freeze; T34/T35 remain gated until frozen direct/bootstrap and immutable seam checks pass. No owner acknowledgment is needed. Preserve D-228's no-retry stop, do not switch worktrees or claim milestone closure, and continue the previously authorized GSD Autonomous v0.4 route only after the new checked boundary.
 
 Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-103, D-209 dispositions, v0.4 administrative closeout, required branch protection, and all phase/milestone closure boundaries. Keep this worktree and both automatic-advance flags false.
 ## Accumulated Context
@@ -124,12 +124,13 @@ Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-10
 - [Phase 24]: D-225 is the active Phase 24 recovery route. D-222 promotion conditions remain inherited: at most two changed, locally qualified and freshly reviewed candidates; candidate two requires a concrete in-scope first-matrix failure and causal fix. D-225 adds one gate-only replacement before T25/T26 and does not reset candidate, review, matrix, D-209, D-103 or Task 7 limits.
 - [Phase 24]: D-225 frozen result: the sole gate-only replacement e1f072f failed bootstrap with d221_source_drift on both exact correction-allowlisted sources. Five other source paths match D-221. The frozen scope stops without replacement, post-freeze immutable testing, T25/T26, review, push, matrix or merge. A new bounded scope requires owner authorization.
 - [Phase 24]: D-226 authorized: keep D-221 source pins for the five non-correction paths; require the two correction-allowlisted plan blobs to equal exact original-object entries at pinned parent 7761, including mode/type/OID and parent/tree identity. Keep source/correction allowlists and candidate validation unchanged. One same-plan update, one independent check, and one gate-only replacement; frozen failure stops without another replacement.
+- [Phase 24]: D-229 supersedes the D-228 route only for one new checked boundary and one gate-only replacement. D-228 T30's 39-control direct pass/bootstrap denial and T31/T32 not-started remain immutable history. D-229 adds canonical exact-map receipt construction/preflight as T33, the existing immutable seam as T34, and inherited guarded qualification as T35; no candidate/review/matrix/CI/merge/closure limits reset. Active route artifacts are reconciled; the independent plan check and checked boundary are next.
 
 ## Session
 
-**Last session:** 2026-11-21T02:11:37.617Z
-**Stopped at:** Phase 24 D-229 context gathered
+**Last session:** 2026-11-21T02:58:52.700Z
+**Stopped at:** Phase 24 D-229 route records reconciled; rerunning independent plan check
 **Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md
 
 ### Blockers
-D-228 frozen bootstrap denied due to missing D-227 history pins in the new receipt. Owner must authorize a fresh bounded Phase 24 recovery before further gate execution.
+D-228 frozen bootstrap denied due to missing D-227 history pins in the new receipt; do not retry D-228. D-229 is authorized. The initial plan check found stale active route records; ROADMAP, STATE, HANDOFF and both continuation notes now identify D-229/T33–T35. No D-229 implementation or frozen gate call has started. Rerun the independent plan check before the checked boundary commit.

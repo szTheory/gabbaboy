@@ -1,13 +1,13 @@
 {
   "version": "1.0",
-  "timestamp": "2026-11-21T01:37:30.598Z",
+  "timestamp": "2026-11-21T02:58:52.700Z",
   "phase": 24,
   "phase_name": "Resolve remaining v0.4 evidence and verification gaps",
   "phase_dir": ".planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps",
   "plan": 1,
-  "task": 30,
-  "total_tasks": 32,
-  "status": "paused",
+  "task": 33,
+  "total_tasks": 35,
+  "status": "in_progress",
   "completed_tasks": [
     {
       "id": 27,
@@ -20,63 +20,76 @@
       "name": "D-227 receipt seam",
       "status": "done",
       "commit": "a1694ca"
-    },
-    {
-      "id": 29,
-      "name": "D-227 guarded qualification",
-      "status": "stopped",
-      "commit": "2e9d8cf"
-    },
-    {
-      "id": 30,
-      "name": "D-228 CTest schema recovery",
-      "status": "blocked",
-      "progress": "Gate-only commit 8ce5517 passed immutable self-test; frozen bootstrap denied."
     }
   ],
   "remaining_tasks": [
     {
+      "id": 29,
+      "name": "D-227 guarded qualification",
+      "status": "stopped",
+      "note": "Historical D-227 qualification stop; preserve immutable outcome."
+    },
+    {
       "id": 30,
       "name": "D-228 CTest schema recovery",
-      "status": "blocked",
-      "note": "D-228 no-retry boundary; bootstrap denial preserved."
+      "status": "blocked_historical",
+      "note": "D-228 direct controls passed, then bootstrap denied for omitted D-227 pins; no retry."
     },
     {
       "id": 31,
       "name": "D-228 receipt seam",
-      "status": "not_started"
+      "status": "not_started_historical",
+      "note": "Never started; do not replay."
     },
     {
       "id": 32,
       "name": "D-228 guarded qualification",
-      "status": "not_started"
+      "status": "not_started_historical",
+      "note": "Never started; do not replay."
+    },
+    {
+      "id": 33,
+      "name": "D-229 canonical bootstrap recovery",
+      "status": "active",
+      "note": "Canonical full-history receipt builder, independent preflight and one gate-only replacement."
+    },
+    {
+      "id": 34,
+      "name": "D-229 receipt seam",
+      "status": "not_started",
+      "note": "Blocked on T33 frozen direct/bootstrap success."
+    },
+    {
+      "id": 35,
+      "name": "D-229 guarded qualification",
+      "status": "not_started",
+      "note": "Blocked on T33/T34; inherited promotion and closure limits remain."
     }
   ],
   "blockers": [
     {
-      "description": "Frozen D-228 bootstrap verification denied with bootstrap_historical_pins_mismatch because the receipt omitted the 21 D-227 history pins required by the pinned gate. D-228 prohibits retries/replacements and downstream checks.",
-      "type": "human_action",
-      "workaround": "Owner must authorize a fresh bounded Phase 24 recovery scope before any further gate execution."
+      "description": "Independent D-229 plan check must pass after route reconciliation before the checked boundary commit.",
+      "type": "workflow_gate",
+      "workaround": "Rerun the independent checker; correct an in-scope plan issue if needed."
     }
   ],
   "async_jobs": [],
-  "human_actions_pending": [
-    {
-      "action": "Authorize a new bounded Phase 24 recovery scope via $gsd-discuss-phase 24.",
-      "context": "The D-228 frozen bootstrap denial is a no-retry stop; further gate execution is outside its authority.",
-      "blocking": true
-    }
-  ],
+  "human_actions_pending": [],
   "decisions": [
     {
       "decision": "Stop D-228 after its first frozen bootstrap denial.",
-      "rationale": "The plan explicitly prohibits retry, replacement, repinning, CTest, review, hosted action, promotion, and closure after a frozen failure.",
+      "rationale": "Preserve the D-228 gate, receipt, direct pass and denial as immutable history; no retry or downstream D-228 tasks.",
+      "phase": "24"
+    },
+    {
+      "decision": "D-229 is the active bounded Phase 24 recovery.",
+      "rationale": "One checked boundary and one gate-only replacement with canonical full-history receipt construction; no candidate, review, matrix, CI, merge or closure allowance resets.",
       "phase": "24"
     }
   ],
   "uncommitted_files": [
     " M .planning/state.json"
   ],
-  "next_action": "Owner authorizes a fresh bounded Phase 24 recovery scope using $gsd-discuss-phase 24; do not rerun D-228.",
-  "context_notes": "The D-228 immutable gate self-test passed; bootstrap denial is fully captured in ignored build/phase24 artifacts. Keep generated .planning/state.json and all failure receipts."
+  "next_action": "Rerun the independent GSD plan checker. If clean, commit one checked D-229 boundary directly on 6573cb05dcd978f37102ac2d3a26a821c145a2fd, then continue $gsd-autonomous --from 24.",
+  "context_notes": "D-228 frozen bootstrap denial bootstrap_historical_pins_mismatch remains preserved; do not retry D-228. Active route is D-229 T33/T34/T35. Checked boundary parent is 6573cb05dcd978f37102ac2d3a26a821c145a2fd, descended from 5df387b0bdf4740ba1dd4a5b26400a57605904f7, inheriting gate blob da9c54b86d9b67b1195864c56186b9a98795ee6b unchanged. Preserve FIXT-01 Pending, failed unreplayed Acid2, Task 7 deferred, D-103 incomplete, D-209 dispositions, release bytes and generated .planning/state.json."
 }
