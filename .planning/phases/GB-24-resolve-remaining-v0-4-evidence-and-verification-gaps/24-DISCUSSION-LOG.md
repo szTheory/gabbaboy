@@ -676,3 +676,48 @@ D-228 froze one gate-only replacement and passed its 39-control direct self-test
 **Owner's choice:** The owner directed the agent to follow its synthesized recommendations autonomously. The selected route is one new D-229 scope, one checked same-plan boundary, one gate-only replacement, a canonical no-overwrite receipt builder, exact-map preflight, then the already-authorized unchanged qualification path if all stops pass.
 
 **Authorization boundary:** D-229 supersedes D-228's stop only for one new checked boundary and one new gate-only replacement. It does not reopen or rewrite D-228 or its receipt. Any D-229 frozen direct/bootstrap/immutable or subsequent required qualification failure stops without retry/replacement and resets no candidate, review, matrix, CI, merge, or closure allowance. Keep all D-209 dispositions, FIXT-01 Pending, failed unreplayed Acid2, Task 7, D-103, release bytes, ten CTest identities/order, current required contexts, and protected merge rules. No broad suite, ROM/Acid2 replay, v0.5, or global auto-advance setting change.
+
+## D-230 — Close the unaccounted Git push side-effect paths
+
+**Date:** 2026-11-21
+**Mode:** Autonomous owner-directed discussion and independent fan-out
+**Inputs:** D-229 exact candidate `e6926b69fde285917c2a6cedc42188085420a427`, tree `230cae0d099106f35759bc5773f2d6e840196f0f`; clean code review; security review OPEN_THREATS with two high findings; no push, matrix, merge, or closure.
+
+### Blocking anti-pattern check
+
+- **Anti-pattern:** Reuse a predecessor bootstrap receipt as though it already described a later immutable gate.
+- **Manifestation:** D-228's direct self-test passed, but bootstrap verification denied because the hand-copied receipt omitted 21 required D-227 history pins.
+- **Structural prevention:** Each frozen gate has its own fixed, distinct, ignored receipt path; the pinned gate constructs it from its own canonical original-object contract, tests the full map against independent literal expected values, refuses overwrite, and immediately verifies it. D-230 must use `d230-bootstrap.json` and preserve D-229's receipt.
+
+### Exact security findings
+
+The D-229 review found that the promotion gate's fixed push can invoke a configured `pre-push` hook, which can make unledgered remote changes, and can trigger configured recursive submodule pushes. `_verify_origin()` validates the origin URL, push URL, follow-tags, mirror, and effective URL, but not these behaviors; the reservation is durable before the fixed push dispatch. The executor ran ten existing serial CTests (~95 seconds) and exact-head code review, then stopped at the open security result. The final local candidate has no remote mutation. The D-229 gate replacement and its result are immutable and spent.
+
+### Options and decision
+
+| Option | Trade-off | Decision |
+|---|---|---|
+| Reject any default/alternate hook or recursive config during preflight | More configuration inspection; remains vulnerable to a check/action race and requires platform-specific handling of `core.hooksPath` | Reject |
+| Add command-scoped `--no-verify` and `--recurse-submodules=no`, and test with actual isolated local Git repositories | Directly constrains Git at the mutation; uses existing standard Git behavior and standard-library fixtures | **Select** |
+| Test only a mocked argv | Cheap, but cannot see a nested hook push or submodule remote update | Insufficient alone |
+| Add a Git wrapper, dependency, test registration, or CI context | Generalizes a narrow gate defect and increases trust surface | Reject |
+
+### Independent lenses
+
+| Lens | Adversarial pass / result | Recommendation |
+|---|---|---|
+| Git security | Both risks stem from behaviors Git may execute after the gate records a single push. Checking `core.hooksPath` is incomplete because the setting can choose another directory. | Use Git's explicit command flags; keep one destination/refspec, exact reservation, and remote readback. |
+| Architecture | `fixed_push_argv()` is the single mutation seam; the existing exact-argv tests already assert one direct call, but fake runners cannot observe nested Git processes. | Keep mitigation at that seam; extend its production self-test with hook and submodule local-repository behavior. |
+| Test engineering | Controls must be non-vacuous and cover both enabled behavior and its disabled result. | Create local bare target/sentinel remotes; demonstrate legacy hook/recursion controls can mutate sentinels, then assert hardened calls update only the intended ref and preserve sentinels. Test default hook and `core.hooksPath`; test `push.recurseSubmodules=on-demand` plus `submodule.recurse=true`. Omitted flags must fail the production argv contract or reproduce the local side effect. No network or real credentials. |
+| Operations / CI | The D-229 failure is local and was caught before hosted CI. Long checks are not useful for iterating on two argv options. | Put syntax, exact diff/scope, gate self-test/local Git fixtures, and unchanged path scan before freeze. Preserve all ten serial CTests and required hosted contexts; if hosted CI runs, inspect actual timings per WORKFLOW.md. No CI redesign or speculative cache/concurrency. |
+| Product / release | The change is local promotion control, not new emulator functionality. Bypassing `pre-push` must not bypass required remote CI or branch protection. | Preserve all current required contexts, merge protection, release bytes, requirement statuses, and D-209 outcome. |
+| Supply chain / maintainability | New dependencies and wrappers create more code and code-resolution surfaces. | Use Python standard library and current Git CLI only; add no dependency, CTest ID, workflow, CI context, source path, or broad abstraction. |
+| Host trust boundary | A hostile host or executable `PATH` can subvert Python/Git before repository-level checks and is not an input this gate can safely attest cross-platform. | Keep the existing GSD host/toolchain/PATH trusted assumption explicit; scope this fix to untrusted repository-local hooks and configuration. |
+
+Git primary-source checks: [`git push`](https://git-scm.com/docs/git-push) documents that `--no-verify` bypasses `pre-push` and `--recurse-submodules=no` overrides recursive push configuration; [`git config`](https://git-scm.com/docs/git-config) documents `core.hooksPath` and `push.recurseSubmodules`; [`githooks`](https://git-scm.com/docs/githooks) describes the pre-push execution point. Local Git 2.41 help confirms the accepted recursion syntax. Independent local source audits were returned by `push_route_audit`, `push_controls_audit`, and `scope_boundary_adversary`; all recommended command-scoped controls, causal local fixtures, and preserving downstream caps. The route audit also surfaced host `PATH` as an adjacent trust assumption; it is documented, not expanded into this repository-local recovery.
+
+### Authorization and next route
+
+The owner has already directed: follow recommendations and keep GSD Autonomous running through the milestone. That is sufficient authority for this exact local recovery and routine required checks. D-230 makes one narrow exception to D-229's spent replacement stop: one same-plan D-230 context/replan, independent plan check, checked sole-parent boundary, and exactly one gate-only replacement. After its direct/bootstrap/immutable controls pass, rebind only the existing allowlisted coverage seam to a distinct D-230 receipt. Requalify and obtain new separate clean code/security reviews for the resulting exact head before a guarded remote action. Preserve all earlier failures and budgets; no D-229 receipt, candidate, or review becomes a pass. Any unresolved final review, failed frozen gate/seam, invalid or stale required context, ambiguous remote state, or exhausted inherited budget stops without retry.
+
+No resets to the D-222 two-candidate ceiling, candidate-two causal prerequisite, review allowances, existing ten-test gate, protected matrix cap, required contexts, branch protection, or matching-head merge. The current D-229 head has not been pushed and consumes no matrix slot. Preserve D-209/FIXT-01/Acid2/Task 7/D-103/release-byte/requirement boundaries; do not run broad tests, ROMs, v0.5, or change auto-advance settings. Continue autonomously after the fresh checked plan boundary.

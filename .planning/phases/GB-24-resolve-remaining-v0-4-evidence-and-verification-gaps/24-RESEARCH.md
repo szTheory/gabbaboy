@@ -1,6 +1,6 @@
 # Phase 24: Resolve remaining v0.4 evidence and verification gaps — Research
 
-**Current route note (D-224):** D-222-era material below is historical. The active D-224 replan is based on the actual single-parent Git history: the checked planning commit inherits the prior gate unchanged, while the replacement gate commit modifies that same path. Use complete original-object raw NUL diffs with `--no-renames`, pin the exact parent and old regular-file blob/mode, and exercise the production predicates with fixtures matching those transitions. No new Git framework or parser dependency is justified. The canonical launcher was verified as `@opengsd/gsd-core` 1.21.0 for this route; the earlier 1.20.0 observation remains historical.
+**Historical route note (D-224):** D-222-era material below is historical, as is the D-224 replan described here. The current route is D-230, recorded in the addendum below and in `24-CONTEXT.md`. The D-224 lesson about actual single-parent Git history remains relevant: the checked planning commit inherits the prior gate unchanged, while its replacement gate commit modifies that same path. Use complete original-object raw NUL diffs with `--no-renames`, pin the exact parent and old regular-file blob/mode, and exercise production predicates with fixtures matching those transitions. No new Git framework or parser dependency is justified. The canonical launcher was verified as `@opengsd/gsd-core` 1.21.0 for the active route; the earlier 1.20.0 observation remains historical.
 
 **Researched:** 2026-11-20 (D-222 integrated recovery)
 **Domain:** Immutable local promotion gating, protected PR qualification, exact-head review evidence, and bounded GitHub CLI polling
@@ -919,3 +919,56 @@ The sole Phase 24 plan has been revised for D-222 and is awaiting its final inde
 - [CITED: https://asvs.owasp.org/; https://github.com/OWASP/ASVS/blob/master/5.0/en/0x13-V4-API-and-Web-Service.md; https://github.com/OWASP/ASVS/blob/master/5.0/en/0x22-V13-Configuration.md] — ASVS 5.0.0 taxonomy used for applicability mapping.
 
 **Research execution boundary:** This D-222 research refresh changed only `24-RESEARCH.md`. The revised plan now defines the checked-plan then gate-only-child source sequence, trusted GSD reviewer provenance, and mandatory current protection readback with a stop if unavailable; the independent plan check is still underway. Current protection availability remains unqueried. No source/tests/builds, GitHub query, review, push, CI, matrix, or merge was performed for this research refresh.
+
+### D-230 — Fixed-push local side-effect controls
+
+#### Exact command and narrow change
+
+The current `fixed_push_argv()` builds this command, with no per-push hook or submodule-recursion override:
+
+```python
+return [
+    "git", "--no-replace-objects", "-c", "credential.helper=",
+    "-c", "credential.helper=!gh auth git-credential",
+    "-c", "credential.interactive=false", "push", "origin",
+    f"{candidate_sha}:refs/heads/{branch}",
+]
+```
+
+[VERIFIED: .github/scripts/phase24-promotion-gate.py:456-465]
+
+Add exactly two arguments to this fixed push, immediately after `"push"` and before `"origin"`:
+
+```python
+"--no-verify", "--recurse-submodules=no",
+```
+
+The resulting argument vector keeps the existing credential helper, explicit `origin`, and one candidate-to-branch refspec unchanged. `--no-verify` bypasses the local `pre-push` hook completely. `--recurse-submodules=no` explicitly selects recursion mode `no`, overriding `push.recurseSubmodules`. Local Git 2.41 help confirms the accepted value syntax. [CITED: https://git-scm.com/docs/git-push]
+
+#### Why configuration inspection is unnecessary
+
+Do not add checks for `$GIT_DIR/hooks`, `core.hooksPath`, `push.recurseSubmodules`, or `submodule.recurse` to decide whether this one push is safe. Git calls `pre-push` before the push; the hook can abort the push, receives the destination and ref information, and is bypassed by the command flag. `core.hooksPath` only changes which directory Git searches for hooks, so inspecting that value would add a second, race-prone control without improving the command-scoped bypass. [CITED: https://git-scm.com/docs/githooks; https://git-scm.com/docs/git-config]
+
+The recursion setting has several accepted values, and `submodule.recurse=true` can imply on-demand recursion when `push.recurseSubmodules` is unset. The explicit `--recurse-submodules=no` option selects `no` at invocation time, so configuration inspection is likewise unnecessary for preventing this push from recursively pushing submodule refs. Keep existing origin URL, mirror, follow-tags, authorization, reservation, and readback checks intact; this recommendation only closes these two documented push behaviors. [CITED: https://git-scm.com/docs/git-push; https://git-scm.com/docs/git-config]
+
+These are client-side controls for the exact local command. `--no-verify` does not remove server-side receive hooks or branch protection; retain current remote required contexts and protection checks. [CITED: https://git-scm.com/docs/githooks]
+
+#### Required non-vacuous local controls
+
+Keep the control inside the existing standard-library gate self-test. Use temporary working repositories and bare `file://` remotes only, with fixture-scoped Git configuration so inherited `core.hooksPath` cannot make the default-hook case vacuous; never use credentials, the configured hosted `origin`, or network access.
+
+1. **Default pre-push hook:** Install a temporary `pre-push` hook in the test repository's default hooks directory. First run the legacy push form and prove the hook writes a unique sentinel. Then run the hardened fixed argv and prove the sentinel remains absent while the intended superproject ref updates. Omit `--no-verify` in a negative control and show the sentinel returns; this demonstrates that the positive case did not pass because hooks were absent or inert.
+2. **Alternate hook path:** Configure that temporary repository's `core.hooksPath` to an isolated alternate hook directory and repeat the legacy-versus-hardened sentinel check. This proves the result is independent of whether Git selected the default directory or an alternate path. Keep the setting local to the fixture.
+3. **On-demand submodule recursion:** Create a temporary submodule bare remote with a known base commit, then a new unpushed submodule commit referenced by a temporary superproject candidate. With local `push.recurseSubmodules=on-demand`, prove the legacy form advances the submodule remote ref; prove the hardened command advances only the intended superproject ref and leaves the submodule remote ref unchanged. Repeat the hardened check with `push.recurseSubmodules` unset and local `submodule.recurse=true`, because Git documents that fallback. Omitting `--recurse-submodules=no` must make the on-demand side effect observable.
+4. **Exact production argv / refusal:** Assert the complete `fixed_push_argv()` list contains both flags in the intended position, and exercise the production action contract so a missing or changed flag is refused before any action is reserved or dispatched. The locked rule is “Any missing/changed flag fails the production command contract before reservation.” [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:756] Mock-only argv checks are useful here but do not replace the real local hook and recursion controls.
+
+The causal controls should assert both positive ref outcomes and absent side effects, not merely exit codes. These controls are local fixture work, not a new CTest: retain the existing gate self-test and the existing coverage seam.
+
+#### Portability, boundary, and cheap pre-freeze checks
+
+- Keep the two Git command flags; do not redirect hooks to `/dev/null` or create/delete hook directories at push time. The direct switches avoid OS-specific null-device paths and any global or repository configuration mutation. The check suppresses only this command's `pre-push` hook and recursive submodule push behavior.
+- Git documents that hooks without an executable bit are ignored. Git for Windows documents that Windows filesystem executable-bit behavior differs from POSIX, while its Unix-shell support varies by distribution (MinGit includes `/bin/sh`, not necessarily Bash). Make the local fixture install a hook in a way compatible with the Git under test, and require the legacy positive control to prove it actually ran before accepting the hardened negative result. Do not assume `chmod` alone makes a Windows fixture hook executable. [CITED: https://git-scm.com/docs/githooks; https://gitforwindows.org/file-names-branch-names-path-quotation-executable-bit-and-file-modes-core-filemode.html; https://gitforwindows.org/mingit]
+- Before freeze, run only cheap local checks: exact expected-argv and zero-action refusal controls; the isolated bare-repository default-hook, alternate-`core.hooksPath`, and on-demand-recursion causal controls; Python syntax parsing; checked boundary/source identity and NUL-delimited path-scope checks; and the unchanged path scanner. The recorded order is “Before freeze, require exact argv controls, real local bare-repository hook/recursion controls, Python syntax, boundary/source identity, and the unchanged path scanner.” [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:770] After freeze, use the immutable gate self-test, D-230 receipt verification, and existing coverage-seam self-test before the unchanged focused CTest set. Do not add a dependency, CTest identity, workflow, CI context, matrix change, or remote action.
+- Preserve the existing trust boundary: “the GSD host, interpreter, Git/`gh` installation, and inherited process `PATH` are trusted.” [VERIFIED: .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md:762] A hostile `PATH` could substitute Git before Git can honor these flags; that is a host/toolchain compromise, not a repository-local hook/configuration gap. Do not expand D-230 into executable attestation, PATH rewriting, or general host hardening.
+
+**Sources for D-230:** [official `git-push` options and `push.recurseSubmodules`](https://git-scm.com/docs/git-push); [official Git configuration reference for `core.hooksPath` and `push.recurseSubmodules`](https://git-scm.com/docs/git-config); [official hook selection and execution semantics](https://git-scm.com/docs/githooks); [Git for Windows file-mode notes](https://gitforwindows.org/file-names-branch-names-path-quotation-executable-bit-and-file-modes-core-filemode.html); [MinGit shell and hook notes](https://gitforwindows.org/mingit).
