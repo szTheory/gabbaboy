@@ -1,3 +1,10 @@
+---
+audit_acknowledged:
+  milestone: v0.4
+  at: 2026-11-17
+  gap_snapshot: "unknown::scenarios=0"
+---
+
 # Phase 21 automated verification evidence
 
 ## Local implementation boundary

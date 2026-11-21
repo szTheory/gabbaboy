@@ -2,8 +2,8 @@
 
 The candidate contract fixes exactly two identities and their order: Potion Panic (GB Compo
 2025), followed by µCity 1.3's `preferred-ucity.gbc` only after a final Potion Panic no-go. The
-checker validates evidence accounting. It does not grant rights, establish compatibility, or admit
-candidate bytes to product packages.
+checker validates evidence accounting and consumes a separately pinned rights record. A source
+label or a passing structural check does not authorize candidate bytes to product packages.
 
 ## Immutable inputs and commands
 
@@ -13,6 +13,51 @@ contract files in the working checkout must match their immutable blobs. Record 
 `tests/data/cgb-candidates/potion-panic.json` and
 `tests/data/cgb-candidates/ucity-1.3.json`; a third top-level JSON record, missing record or
 renamed identity fails the closed attempt-set check.
+
+Named-source rights are recorded separately at `tests/data/v04-closeout.json`. Check the record
+before any game-stage operation:
+
+```sh
+python3 -I tests/scripts/verify-cgb-candidates.py --check-closeout \
+  --closeout-stage rights --repo-root . --source-revision "$(git rev-parse HEAD)"
+python3 -I tests/scripts/verify-cgb-candidates.py --check-closeout \
+  --closeout-stage games --require-satisfied --repo-root . \
+  --source-revision "$(git rev-parse HEAD)"
+```
+
+The first command validates exact named source, component, notice and original requirement-owner
+identities while preserving unresolved outcomes. The second is an admission gate and refuses while
+any component needed by Potion Panic or the sole µCity fallback has unresolved local-build or
+repository/public-CI scope. Under D-207, the exact Potion Panic source code, audio driver,
+`hardware.inc`, visual assets and music have recorded supported scope; the CC BY-NC-SA asset use is
+noncommercial, retains attribution, identifies changes, and applies share-alike to adaptations. The
+Pigu/AYCE WLE converter remains unresolved and excluded from use. The pinned `build.sh` invokes that
+converter for the level JSON inputs, while the pinned tree has no generated level map `.inc` or
+`.bin` outputs; no reviewed source-build closure omitting the converter was identified.
+
+The creator page offers `potionpanic_jam.gbc` as “ROM file (GB Compo 2025 demo)” and links the
+pinned source project. The raw release and `LICENSE` sidecar were inspected only in ignored local
+review storage. Their exact digests, valid header/checksum observations, and a local bootless
+derivative digest and byte-range transform are recorded in
+`tests/data/cgb-candidates/evidence/potion-panic-build-review.json`. This page/source relationship
+does not include a build receipt binding the ROM bytes to the pinned commit. The candidate's build
+and ROM facts therefore remain `not_observed`; no source build, Phase 20 admission, candidate
+execution, progress observation, or receipt was produced, and neither ROM payload was staged.
+The exact non-fixture asset notice is retained at
+`tests/data/cgb-candidates/evidence/potion-panic-asset-notice.txt`.
+FIXT-01 remains Pending. After the committed Potion Panic no-go, the sole µCity fallback was
+checked against its already pinned v1.3 source and rights record. Its required
+`source/engine/hardware.inc` still has no established grant, so the fallback also stops before
+build, ROM acquisition, admission or runtime; candidate native-mode and progress facts remain
+unobserved.
+
+The record also pins the exact dmg-acid2 v1.0, cgb-acid2 v1.1 and gbmicrotest source trees and
+observed notices. Acid2 code and the mgblib code have recorded MIT notices. Under D-207, each
+exact pinned `img/` tree is accepted under its repository root MIT grant as a narrow
+repository-level inference; font data remains excluded by design, and no derivative or
+comparison was created.
+gbmicrotest source has its MIT notice, while the 513 generated ROM outputs and embedded logo remain
+unresolved. This does not admit or stage any diagnostic payload.
 
 Run both synthetic checks with:
 
@@ -42,7 +87,9 @@ the same executable digest afterward. CMake creates this receipt only with `BUIL
 `BUILD_TESTING=OFF` builds have no Python dependency or qualification writer.
 
 A partial record names its current `stage` and every field beyond its cutoff as `not_observed`,
-with the earlier blocking stage and a concrete reason. `--require-final` rejects partial records
+with the earlier blocking stage and a concrete reason. Unverified source/ROM payloads must not be
+staged to the repository or public CI; a rights-blocked record leaves later facts `not_observed`.
+`--require-final` rejects partial records
 and unresolved defects. Candidate records may be staged during an attempt, but project case/input
 and receipt identities remain tied to immutable project source commits.
 

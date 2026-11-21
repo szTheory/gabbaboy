@@ -1,7 +1,7 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.4 — Evidence Floor",
+  "milestone": "v0.4 \u2014 Evidence Floor",
   "phases": [
     {
       "number": "20",
@@ -21,13 +21,23 @@
     {
       "number": "23",
       "name": "Qualified v0.4.0 Release",
+      "status": "complete"
+    },
+    {
+      "number": "23.1",
+      "name": "Close v0.4 requirement and verification gaps",
+      "status": "complete"
+    },
+    {
+      "number": "24",
+      "name": "Resolve remaining v0.4 evidence and verification gaps",
       "status": "in_progress"
     }
   ],
   "next": {
-    "command": "$gsd-progress",
-    "label": "Show progress",
-    "reason": "Unsure of state — showing progress"
+    "command": "$gsd-execute-phase 24",
+    "label": "Execute only Phase 24 Task 9",
+    "reason": "Dispatch only 24-01-T9-overlay-control-accounting with an explicit active-task filter; do not replay Task 8 or run deferred Task 7. D-211 authorizes one correction, one fresh exact-candidate review, and one protected PR matrix. Acid2 remains excluded."
   },
-  "updated_at": "2026-11-04T12:49:20.186Z"
+  "updated_at": "2026-11-17T22:08:43Z"
 }

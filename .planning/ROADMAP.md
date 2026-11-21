@@ -2,208 +2,36 @@
 
 ## Milestones
 
-- ✅ **v0.1 Limited DMG Preview** — Phases 1–6 and 06.1, shipped 2026-10-10; [archive](milestones/v0.1-ROADMAP.md).
-- ✅ **v0.2 Color & Cartridge Breadth** — Phases 7–15 and 15.1, shipped 2026-10-24; [archive](milestones/v0.2-ROADMAP.md).
-- ✅ **v0.3 Save States & Host Contract** — Phases 16–19, 35 plans, shipped 2026-10-31; [archive](milestones/v0.3-ROADMAP.md).
-- 🚧 **v0.4 Evidence Floor** — Phases 20–23, roadmap owner-approved; Phase 20 is complete, with RIGHTS-01 still pending because no fixture was admitted.
+- ✅ **v0.1 Limited DMG Preview** — Phases 1–6 and 06.1; shipped 2026-10-10; [archive](milestones/v0.1-ROADMAP.md).
+- ✅ **v0.2 Color & Cartridge Breadth** — Phases 7–15 and 15.1; shipped 2026-10-24; [archive](milestones/v0.2-ROADMAP.md).
+- ✅ **v0.3 Save States & Host Contract** — Phases 16–19; shipped 2026-10-31; [archive](milestones/v0.3-ROADMAP.md).
+- ⚠️ **v0.4 Evidence Floor** — administratively closed 2026-11-17 after the qualified v0.4.0 release. Seven of eight requirements are complete; FIXT-01 remains Pending. Phase 24 Task 7, current verification for Phases 20/21/23.1, and D-103's exact-final-head suite are deferred and disclosed; [archive](milestones/v0.4-ROADMAP.md).
 
-## v0.4 — Evidence Floor
+## Next
 
-**Goal:** Establish a reproducible floor for CGB game progress and rendering evidence before deeper timing work, or document a specific reason neither named game candidate could be admitted.
+No new milestone is active. v0.4 remains administratively closed under D-209 while the owner-authorized D-230 Phase 24 recovery proceeds. Preserve D-227/D-228/D-229 gates, receipts, results, and failures as immutable history; do not retry a frozen gate. D-229 T35's ten focused tests and code review passed, but its fresh security review found that pre-push hooks and recursive submodule pushes could perform unledgered remote mutations. No push, matrix, merge, or closure occurred, and the D-229 replacement is spent. D-230 permits one same-plan update/check and one gate-only replacement after a checked boundary directly on candidate `e6926b69fde285917c2a6cedc42188085420a427`, preserving gate blob `d274e410cb13775457581a151eded15dd692edff`/mode `100644`. T36 adds `--no-verify` and `--recurse-submodules=no` and proves their behavior with local bare-Git side-effect controls; it freezes a distinct `d230-bootstrap.json`. T37 rebinds only the existing allowlisted immutable coverage seam after frozen direct/bootstrap pass. T38 resumes exact-candidate qualification and the existing protected promotion route. No limits reset; any frozen gate/seam failure or unresolved final review finding stops without retry/replacement. Preserve all candidate/review/matrix limits, D-209 dispositions, FIXT-01 Pending, failed unreplayed Acid2, Task 7, D-103, release/archive bytes, branch protection and generated unstaged `.planning/state.json`. Continue the explicitly authorized autonomous route; do not start v0.5 or clean up this worktree before protected merge and reconciliation.
 
-The two substantive tracks are CGB game acceptance with scene regressions, and diagnostic admission. A capped tune-up establishes the fixture boundary first; a qualified release closes the milestone. The approved scope is in [REQUIREMENTS.md](REQUIREMENTS.md), with decisions and future candidates in [DECISIONS.md](context/DECISIONS.md) and [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md).
+## Recovery Phase
 
-## Phases
+### Phase 24: Resolve remaining v0.4 evidence and verification gaps
 
-Numbering continues after completed Phase 19. Decimal phases are reserved for explicitly approved insertions.
-
-- [x] **Phase 20: Fixture Admission Tune-up** — New evidence enters through a checked rights and distribution boundary. Nine plans and exact-head hosted platform/package qualification are complete; RIGHTS-01 remains pending because no fixture was admitted.
-- [x] **Phase 21: CGB Game Progress and Scene Regressions** — The shared runner proves CGB progress and records the bounded game-candidate outcome. (completed 2026-11-02)
-- [x] **Phase 22: Synthetic Composition and Diagnostic Gate Assessment** — Preserve synthetic composition evidence and machine-check why the real diagnostic candidates remain unadmitted. Completed 2026-11-03; DIAG-01, DIAG-02, and RIGHTS-01 remain pending because all seven real-fixture gates remain unresolved.
-- [x] **Phase 23: Qualified v0.4.0 Release** — Published artifacts and support records carry only the evidence actually established. (completed 2026-11-13)
-
-## Phase Details
-
-### Phase 20: Fixture Admission Tune-up
-
-**Goal**: Maintainers can admit permitted evidence through one checked fixture and distribution boundary before new game or diagnostic bytes enter public automation.
-**Depends on**: Phase 19, completed and archived
-**Requirements**: RIGHTS-01
+**Status:** D-225 through D-229 failures, receipts, and outcomes remain preserved history. D-229's frozen replacement and distinct receipt are immutable; its final candidate passed ten focused CTests and code review but security review stopped promotion for unaccounted pre-push-hook and recursive-submodule side effects. D-230 authorizes one same-plan update/check and one gate-only replacement. The checked D-230 boundary is a sole-parent child of `e6926b69fde285917c2a6cedc42188085420a427`, preserving current gate blob `d274e410cb13775457581a151eded15dd692edff`/mode `100644`; the replacement is exactly one gate-file `M 100644→100644` child. T36 adds command-scoped hook and recursion suppression with causal local Git controls and produces a distinct no-overwrite `d230-bootstrap.json`; T37 rebinds the existing immutable coverage seam only after frozen direct/bootstrap pass; T38 resumes final qualification only after the immutable seam passes. Any frozen gate/seam failure or unresolved fresh exact-head review stops without retry/replacement. No candidate/review/matrix/CI/merge/closure limit resets.
+**Goal:** Close the D-229 promotion side-effect gap by freezing one checked D-230 gate replacement that suppresses pre-push hooks and recursive submodule pushes, proves both with causal local Git controls, and creates a distinct verified bootstrap receipt. Rebind the existing immutable seam, then finish the inherited exact-head qualification, protected promotion, automated Phase 24 verification, and D-209-compatible v0.4 lifecycle under all unchanged limits and accepted gaps.
+**Requirements:** []
+**Requirement boundary:** This recovery does not reassign requirements or change their statuses; the archived v0.4 tracker remains authoritative.
+**Depends on:** Phase 23.1 (historical)
+**Plan cap:** 1 existing ordinary plan; create no phase or additional plan.
 **Success Criteria** (what must be TRUE):
-  1. A fixture can enter the repository and public CI only when exact bytes, source/build inputs, and terms for its code, art, audio driver, and notices are recorded; incomplete rights or changed identities are rejected by automated controls.
-  2. An installed or product-release package containing a controlled game-ROM insertion is rejected, while a valid package retains the required component notices and GabbaBoy's MIT declaration.
-**Plan cap**: 9
-**Plans**: 9 total: three original plans, the consumed single security gap round (20-04), and five owner-authorized ordinary rescope plans (20-05–20-09). Final-review security follow-ups remain inside existing plans: retain publisher metadata/cleanup/Windows containment, source/core metadata bounds and forbidden-digest work; the final product review now reopens 20-02 at Task 5 for a separate archive-wide extension-header count while retaining its chain cap. No plan or gap round is added.
-
-Plans:
-**Wave 1**
-- [x] 20-01-PLAN.md — Versioned admission records, independent identity pins and shared exact product policy.
-
-**Wave 2** *(ready after Wave 1 completion)*
-- [x] 20-02-PLAN.md — Actual core install/archive/release boundary; metadata and archive-wide extension-header bounds delivered with long-path compatibility.
-- [x] 20-03-PLAN.md — Actual macOS player package and notice boundary with mutation controls; hosted final qualification remains an orchestration gate.
-
-**Wave 3** *(single in-scope security gap closure)*
-- [x] 20-04-PLAN.md — Bound fixture filesystem traversal and Git tree enumeration.
-
-**Wave 4** *(authorized rescope; original plans remain intact)*
-- [x] 20-05-PLAN.md — Independently pin product policy and exports/budgets; reject forbidden digests at every regular path, including generated/one_of core/player entries.
-- [x] 20-07-PLAN.md — Match repository-admission commands exactly and repair complete isolated workflow mutation subjects.
-- [x] 20-08-PLAN.md — Align shared notice-contract consumers and their negative controls with the reviewed source/product distinction.
-
-**Wave 5** *(after the indicated Wave 4 dependencies)*
-- [x] 20-06-PLAN.md — Validate downloaded macOS and Windows product bytes with trusted checker/policy; metadata, cleanup and pre-creation path containment controls complete.
-- [x] 20-09-PLAN.md — Restore dense-input source-only mutant configure with separate immutable baseline evidence and unqualified-build controls.
-
-Use existing checks to assess CI headroom, current documentation, and carry-over dispositions while establishing this boundary. Preserve the accepted v0.3 audit debts and standalone closeout-helper failure unless a documented trigger actually applies. The admission contract remains mandatory when later phases add fixtures; RIGHTS-01 has this single owner phase.
-
-### Phase 21: CGB Game Progress and Scene Regressions
-
-**Goal**: Maintainers can obtain a reproducible CGB progress result from the shared runner, explain the bounded game-candidate outcome, and turn useful scene reports into controlled regressions.
-**Depends on**: Phase 20
-**Requirements**: GAME-01, GAME-02, FIXT-01, FEED-01
-**Success Criteria** (what must be TRUE):
-  1. The existing acceptance runner observes RGB555 output and guest progress on the bootless CGB-CPU-E software profile, confirms the selected ROM's CGB execution mode, and preserves the existing DMG acceptance behavior.
-  2. A positive CGB progress case reaches an independently specified guest predicate through meaningful scripted input; no-input/wrong-input or deliberately broken-predicate controls fail, and the result binds the ROM, profile/mode, inputs, predicate, and frame/PCM observations. An original control fixture may prove the harness when no real game is admitted, and is labeled accordingly.
-  3. Potion Panic's GB Compo 2025 demo is assessed first in one bounded admission/build/predicate plan. Only after its recorded no-go may one bounded µCity 1.3 preferred-ucity.gbc fallback plan run; each records exact source/build, digest, cartridge metadata, native CGB mode, and the Phase 20 rights decision. No third game search begins.
-  4. An admitted game has a bound progress result with failing controls. If neither named candidate clears its gate, the evidence names each actual rights, build, predicate-feasibility, harness, or emulation blocker and the concrete harness result delivered; private play, test-ROM passes, and original fixtures are not presented as admitted game evidence.
-  5. A concise title/scene/symptom report can be taken through agent-owned metadata recovery, reproduction, and fault classification without mandatory owner play. Any automated scene regression has an independently reasoned expectation and negative control; personal ROMs, saves, states, and captures stay private.
-**Plan cap**: 9
-**Plans**: All eight Phase 21 plan files remain complete; the active cap is 9 after one unused ordinary slot was reallocated to Phase 23's required gap reserve. No Phase 21 plan, scope, or evidence changed. Plan 21-08 remains the single completed gap-work plan; after CR-04/CR-05 closure it reopened within that same plan for CR-06 and completed with exact 24-input qualification and source-drift controls. No additional plan or gap round was added. PR #140 final head `507019f9` passed required exact-head CI, fixture reproduction, installed consumers, and player-package smoke, then squash-merged as `bef2cfbd`; Phase 22 proceeds under the separate owner-approved D-141 scope.
-
-Plans:
-**Wave 1**
-- [x] 21-01-PLAN.md — Shared native-CGB progress tracer, original generated control and preserved Libbet/DMG policy.
-- [x] 21-03-PLAN.md — Source-bound two-candidate record/admission contract with real-CLI controls.
-
-**Wave 2** *(blocked on the indicated Wave 1 dependencies)*
-- [x] 21-02-PLAN.md — Input/predicate discrimination and independently specified original RGB555 observation controls.
-- [x] 21-06-PLAN.md — Minimal scene intake, agent-owned reproduction procedure and independent/private-data promotion gates.
-
-**Wave 3** *(blocked on Plans 21-02 and 21-03)*
-- [x] 21-04-PLAN.md — One bounded Potion Panic GB Compo 2025 source/build/rights/native-progress attempt or actual no-go.
-
-**Wave 4** *(blocked on the primary's final disposition)*
-- [x] 21-05-PLAN.md — Sole conditional preferred µCity 1.3 fallback or checked not-needed outcome.
-
-**Wave 5** *(blocked on controls, the final candidate pair and scene workflow)*
-- [x] 21-07-PLAN.md — Actual outcome/documentation composition, final source qualification and Phase 21 handoff.
-
-**Wave 6** *(single reserved gap round after final review)*
-- [x] 21-08-PLAN.md — Separate historical provenance from current CMake artifact qualification and bind replay to exact aggregate RGB555/PCM observations.
-
-Captured frame and PCM digests establish reproducibility. They do not independently establish rendering accuracy, perceptual quality, physical CGB-E behavior, or general compatibility. A newly reproduced correctness/security issue must be fixed within scope or trigger a rescope; the candidate absence exit cannot silently defer it. Optional direct Steam Deck/SSH exploration is neither a completion gate nor a qualified Linux/Deck path.
-
-### Phase 22: Synthetic Composition and Diagnostic Gate Assessment
-
-**Goal**: Maintainers can reproduce the synthetic, source-anchored composition tracer and inspect a machine-checked, metadata-only assessment explaining why real diagnostic fixtures remain unadmitted.
-**Depends on**: Phase 21
-**Requirements**: DIAG-01, DIAG-02
-**Success Criteria** (what must be TRUE):
-  1. The original synthetic composition tracer runs through the compiled runner with its fixed source-cell mask, exact unmasked comparison, and negative controls for altered identities, masks, and images.
-  2. A source-bound metadata-only inventory retains all 513 named gbmicrotest source/ROM pairs and records each unresolved acid2/gbmicrotest admission gate; the approval command refuses while required evidence is unresolved.
-  3. Documentation and automated checks keep the tracer labeled synthetic-only, record the real-fixture no-go without asserting a license prohibition, and leave DIAG-01, DIAG-02, and RIGHTS-01 Pending.
-**Phase-scoped acceptance override**: Owner-approved on 2026-11-03; see [22-RESCOPE.md](phases/GB-22-composition-and-microtest-evidence/22-RESCOPE.md) and D-141. Phase 22's revised roadmap criteria are the acceptance contract. The original meanings of DIAG-01/02 and RIGHTS-01 are unchanged and remain Pending. No real upstream diagnostic payload is fetched, built, run, admitted, or claimed.
-**Plan cap**: 12
-**Plans**: Five live plans, all with summaries. The D-143 C1 correction and review, final 1,732/1,732 local suite, and PR #142 exact-head qualification are complete. PR #142 merged as `ca2f0be6`; PR #143 addressed the post-merge Windows CTest timeout and merged as `4eee5b51`. Its post-merge main CI run `41715210158`, fixture-reproduction run `41715210637`, and release-please run `41715210175` all passed. PR #144 recorded the completed handoff and passed protected checks; its post-merge planning CI run `41721377525`, fixture-reproduction run `41721377486`, and release-please run `41721377533` passed. Local main was reconciled with `origin/main` while preserving the original local v0.4 commits. Seven original plans are superseded under D-141 and excluded from execution.
-**Boundary**: Phase 22 is complete at its approved metadata-only scope. The final local suite, exact-head required checks and package artifacts, reviews, branch-protection qualification, and merge-tree equivalence passed for PR #142. The separate post-merge Windows scheduling recovery, successful main CI, final docs handoff, and local-main reconciliation are recorded in the Phase 22 evidence; Phase 23 remains unstarted and owner-controlled.
-**Execution waves**: Five sequential dependency waves: 22-01 (complete) → 22-02 (close the existing metadata assessment) → 22-10 (immutable no-go contract and public claims) → 22-11 (initial qualification) → 22-12 (D-143 C1 correction, independent review and final qualification). Original 22-03 through 22-09 carry machine-readable `status: superseded` and must not dispatch.
-
-Plans:
-**Wave 1**
-- [x] 22-01-PLAN.md — Preserve the completed original synthetic composition tracer and controls.
-
-**Wave 2** *(blocked on Wave 1 completion)*
-- [x] 22-02-PLAN.md — Close the committed metadata assessment under the approved rescope; preserve the seven refused gates and Pending requirements.
-
-**Wave 3** *(blocked on Wave 2 completion)*
-- [x] 22-10-PLAN.md — Check immutable metadata, exact 513-name inventory, no-go/public claims, test membership and current source/package boundaries.
-
-**Wave 4** *(blocked on Wave 3 completion)*
-- [x] 22-11-PLAN.md — Qualify final local/review/security/remote evidence, generate automated closure and pause before `/gsd-discuss-phase 23`.
-
-**Wave 5** *(blocked on Wave 4 completion)*
-- [x] 22-12-PLAN.md
-
-The source coverage and dependency audit is [22-SOURCE-AUDIT.md](phases/GB-22-composition-and-microtest-evidence/22-SOURCE-AUDIT.md). Completed tracer and assessment commits are preserved; real-fixture build/admission/execution and downloaded-lifecycle work are outside the approved Phase 22 scope. Original requirement definitions and existing fixture-admission/package boundaries remain intact.
-
-### Phase 23: Qualified v0.4.0 Release
-
-**Status**: Complete — all nine scheduled plans have source-bound summaries and automated software closure. Qualified v0.4.0 publication/readback closes REL-01, while FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remain Pending. The enclosing normal protected planning closeout must satisfy latest exact-head checks before merge. Stop after Phase 23; the owner-controlled next stage is /gsd-audit-milestone.
-
-**Goal**: Users receive a qualified v0.4.0 release whose packages and support records accurately describe the established CGB game and diagnostic evidence.
-**Depends on**: Phase 22
-**Requirements**: REL-01
-**Success Criteria** (what must be TRUE):
-  1. Final implementation-head qualification and the existing trusted release rehearsal pass for the reviewed revision with required hosted coverage, consumer evidence, and regression controls; earlier phase evidence remains historical and is not repeatedly refreshed.
-  2. Release notes and the support ledger identify an admitted game's exact software-model progress result or the justified absence after the two named attempts, distinguish diagnostic and reproducibility observations, and retain hardware, perceptual, timing, platform, and compatibility limits.
-  3. Published/downloaded artifact identities and digests reconcile with the release source, installed consumers work against those bytes, required license/component notices are present, and the fixture-exclusion checks accept the real packages and reject their game-ROM insertion control.
-**Plan cap**: 10
-**Plans**: All nine scheduled plans are complete in the existing dependency order. The cap of 10 retains its reserved gap slot; no plan or milestone was added.
-
-Plans:
-**Wave 1**
-- [x] 23-01-PLAN.md — Generate the source-bound v0.4 support ledger and preserve evidence limits.
-
-**Wave 2**
-- [x] 23-02-PLAN.md — Generate concise release notes from the same checked evidence.
-
-**Wave 3**
-- [x] 23-03-PLAN.md — Bind the complete release claim and require observed exact release-please output.
-
-**Wave 4**
-- [x] 23-09-PLAN.md — Fix incomplete raw-HTML visibility bypasses in the existing notes/docs/changelog validators and add causal automated controls.
-
-**Wave 5**
-- [x] 23-04-PLAN.md — Reissue all three independent source-bound reports after the visibility fix, gate their committed evidence and qualify the implementation head.
-
-**Wave 6**
-- [x] 23-07-PLAN.md — Apply the observed 0.4.0 state-version policy before version freeze.
-
-**Wave 7**
-- [x] 23-05-PLAN.md — Prepare the version PR and use the existing trusted release lifecycle.
-
-**Wave 8**
-- [x] 23-06-PLAN.md — Reconcile downloaded release evidence and generate automated phase closure.
-
-**Wave 9**
-- [x] 23-08-PLAN.md — Record transferable lessons and stop at the owner-controlled milestone boundary.
-
-Use the existing release path. RM-032 tooling is not an automatic work list; only a concrete release blocker can justify a narrowly scoped required change. Keep full libretro, supported Linux/Steam Deck gameplay, CGB timing rewrites, license migration, and a libfuturo dependency or early API/state freeze outside this milestone.
-
-The [source coverage and dependency audit](phases/GB-23-qualified-v0-4-0-release/23-SOURCE-AUDIT.md), [research](phases/GB-23-qualified-v0-4-0-release/23-RESEARCH.md), and [execution contract](phases/GB-23-qualified-v0-4-0-release/23-EXECUTION-CONTRACT.md) preserve the evidence basis and execution limits. The spec-less probe's unclassified REL-01 edge and two descriptor-less transparency prohibitions remain explicitly flagged.
-
-## Requirement Coverage
-
-| Requirement | Owner phase |
-|-------------|-------------|
-| RIGHTS-01 | Phase 20 |
-| GAME-01 | Phase 21 |
-| GAME-02 | Phase 21 |
-| FIXT-01 | Phase 21 |
-| FEED-01 | Phase 21 |
-| DIAG-01 | Phase 22 |
-| DIAG-02 | Phase 22 |
-| REL-01 | Phase 23 |
-
-All eight v1 requirements have one owner phase. Cross-phase use of the admission and regression contracts does not create duplicate ownership.
-
-## Progress
-
-**Execution order:** 20 → 21 → 22 → 23, with an owner pause after every phase.
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 20. Fixture Admission Tune-up | 9/9 | Complete; RIGHTS-01 remains pending because no fixture was admitted | 2026-11-01 |
-| 21. CGB Game Progress and Scene Regressions | 8/8 | Complete; PR #140 passed exact-head checks and merged as `bef2cfbd` | 2026-11-02 |
-| 22. Synthetic Composition and Diagnostic Gate Assessment | 5/5 | Complete; exact-head qualification and merge passed; DIAG-01/02 and RIGHTS-01 remain pending | 2026-11-03 |
-| 23. Qualified v0.4.0 Release | 9/9 | Complete    | 2026-11-13 |
-
-## Planning and Approval Boundary
-
-- At most four phases and 40 plans; at most 12 plans in any phase. Active caps are 9/10/12/9 for Phases 20/21/22/23 (40 combined), including each phase's reserved gap slots. Phase 21's cap was reduced from 12 to 10 after completion: its eight plan files leave two reserve slots, preserving honest slack while keeping the combined cap at 40. Phase 20's gap slot is already consumed by 20-04; the five rescope additions are ordinary plans. These are scope caps, not acceptance evidence; Phase 21–23 feature goals are unchanged.
-- Every deliverable has an automated check and a meaningful negative control. New reusable checkers live in tests/scripts/, use immutable commit facts where appropriate, and enter CTest when created. Automated UAT closure uses the existing shared closure tool; voluntary play is not a release gate.
-- Preserve the deterministic performance budget and existing state-continuation behavior. Prefer the existing API and local helpers; new dependencies require demonstrated value.
-- Both automatic-advance flags remain false. The owner approved the original Phase 20 roadmap on 2026-10-31; the single permitted security gap round became Plan 20-04. On 2026-11-01 the owner authorized an explicit Phase 20 rescope: trusted final macOS/Windows downloaded-byte checks, independent product-policy identity, exact repository-admission workflow matching, and attributable notice/export/dense-input/mutation-subject/timeout/planning-cap contract repairs. No fixture admission, legal/rights disposition change, accepted v0.3 debt repair, or sandbox-only Git-worktree code repair is authorized by this rescope.
-
-Phase 20 completed with no admitted fixture; RIGHTS-01 remains pending. Phase 21's eight plans and five roadmap criteria are verified; its owner-approved disposition leaves FIXT-01 pending without claiming a license grant or candidate ROM. Phase 22's five plans and approved D-141/D-143 scope are complete. The final configured local suite passed 1,732/1,732; PR #142's exact head passed required CI, fixture reproduction, package artifacts, independent reviews, branch protection, and merge-tree equality before squash merge. The merged tree preserves the metadata-only assessment: seven real-fixture gates unresolved, admitted=0, executed=0; DIAG-01, DIAG-02, and RIGHTS-01 remain pending, with no license prohibition inferred. The post-merge Windows timeout and its recovery are recorded in [Phase 22 final evidence](phases/GB-22-composition-and-microtest-evidence/22-EVIDENCE.md). Phase 23 — Qualified v0.4.0 Release — is the next phase, remains unstarted and owner-controlled through **/gsd-discuss-phase 23**. Both automatic-advance flags remain false.
+  1. The independently checked D-230 plan/discussion boundary is a sole-parent child of `e6926b69fde285917c2a6cedc42188085420a427` and preserves current gate mode `100644`/blob `d274e410cb13775457581a151eded15dd692edff`; D-229 receipt/security outcome and all predecessor gate/receipt failures remain unchanged. The one D-230 replacement is its sole-parent child with exactly one raw NUL `M 100644→100644` gate entry from that old blob. ROADMAP.md, STATE.md, HANDOFF.json and both continuation notes agree on D-230 and T36–T38; pinned v0.4 archives remain unchanged.
+  2. The D-230 fixed push argv explicitly disables pre-push hooks and recursive submodule pushes. Production self-tests prove the exact command contract; isolated local bare-Git controls first show that omitted flags permit a hook or on-demand submodule side effect, then show the hardened command updates exactly the intended candidate ref and leaves default-hook, `core.hooksPath`, and submodule sentinel refs unchanged. Rejections occur before reservation/action. No network or live credentials are used by these controls.
+  3. The standard-library D-230 builder creates only ignored `build/phase24/d230-bootstrap.json` from the checked gate/original-object contract, atomically and exclusively; refuses overwrite; and immediately passes normal verification. The D-229 receipt is preserved. The existing coverage seam is rebound only after frozen direct/bootstrap pass and executes the exact D-230 original-object gate self-test. Cheap syntax/scope/local-control/receipt/self-test/lexical checks precede freeze; frozen direct/bootstrap/seam checks precede final qualification; a frozen failure stops without retry or replacement.
+  4. Missing, malformed, stale, substituted or ambiguous source, qualification, review, provenance, history, PR, protection or context evidence denies before reservation or promotion; the local guard makes no server-side enforcement claim.
+  5. Valid duplicate-name fixtures pass API shape validation first, then exercise the duplicate-name WAIT predicate; malformed/duplicate-ID cases remain separate refusals.
+  6. Every GitHub waiter child receives only the remaining original monotonic deadline; timeout/exhaustion remain transient uncertainty/fail-closed without relaxing the 5100-second deadline.
+  7. Keep the existing ten CTest identities, prescribed serial order, coverage, deadlines and required contexts; run cheap syntax/scope/direct/receipt/lexical checks before focused CTests, with hygiene last. Keep source parent 7761 separate from the D-226 source boundary; retain D-221 for five paths and exact parent objects for the two-file correction allowance. Do not replay inherited corrections, run D-103's broad suite, or add dependencies, fixture effects or CTest identities.
+  8. A maximum of two changed, locally qualified, independently code/security-reviewed matrix candidates is allowed; candidate two requires a concrete in-scope first-matrix failure and causal fix. Merge only the identical reviewed head with all required contexts green under current branch protection.
+  9. Record actual queue/dependency waits, job/step durations, timeout headroom and package-step behavior from the protected matrix. Evaluate evidence-backed iteration-time improvements without weakening coverage or release gates; keep out-of-scope changes as measured follow-ups.
+  10. Generate an active-task SUMMARY with `requirements-completed: []` and pass automated Phase 24 verification for completed recovery tasks T24/T25/T27/T28/T33/T34/T36–T38. Preserve the D-229 T35 security stop as a nonpassing historical outcome alongside D-227 T29 and D-228 T30 denials, T31/T32 not-started status, FIXT-01 Pending, Task 7 deferred, Acid2 failed/unreplayed, D-103 unfulfilled and all D-209 dispositions.
+  11. Complete the v0.4 audit with `gaps_found` and `override_closeout`, preserve the D-209 archive snapshots byte-for-byte, reconcile reviewed work onto main, and finish with clean status. Do not start v0.5 in this route.
+**Plans:**
+- [ ] 24-01-PLAN.md — D-230 recovery: suppress unaccounted Git push side effects with causal local controls and a distinct immutable receipt; preserve D-229 security stop and all prior evidence, then the existing seam, qualification/promotion limits, automated phase verification and D-209-compatible milestone closeout.

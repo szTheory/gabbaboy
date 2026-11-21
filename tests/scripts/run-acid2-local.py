@@ -16,6 +16,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 import zlib
 
 W, H = 160, 144
@@ -24,8 +25,18 @@ DEFAULT_MANIFEST = HERE.parent / "acid2" / "manifest.json"
 PNG_SIG = b"\x89PNG\r\n\x1a\n"
 MAX_IDAT = 1 << 20
 MAX_RUNNER_OUTPUT = 1 << 16
+MAX_RUNNER_BINARY = 64 * 1024 * 1024
 PPM_HEADER = b"P6\n160 144\n255\n"
 MAX_PPM_BYTES = len(PPM_HEADER) + W * H * 3
+ADMITTED_GUEST_BUDGET_HALF_DOTS = 4213440
+ADMITTED_PROFILES = {
+    "dmg": {"rom_kind": "dmg", "reference": "source/dmg/img/reference-dmg.png",
+            "runner_model": "dmg-cpu-b", "mode": "dmg"},
+    "dmg-on-cgb": {"rom_kind": "dmg", "reference": "source/dmg/img/reference-cgb.png",
+                    "runner_model": "cgb-cpu-e", "mode": "dmg"},
+    "cgb": {"rom_kind": "cgb", "reference": "source/cgb/img/reference.png",
+            "runner_model": "cgb-cpu-e", "mode": "cgb"},
+}
 
 
 class Refused(Exception):
@@ -191,7 +202,8 @@ def compare(frame, reference) -> tuple[int, str]:
     return 1, f"acid2 result=differs pixels={differing}"
 
 
-def run_core(runner: pathlib.Path, kind: dict, rom: bytes, budget: int, timeout: int = 300) -> bytes:
+def run_core(runner: pathlib.Path, kind: dict, rom: bytes, budget: int,
+             timeout: float = 300) -> bytes:
     """Run the pinned ROM to its ld b,b and return the newest frame PPM from the failure dir."""
     with tempfile.TemporaryDirectory(prefix="gbb-acid2-") as tmp:
         work = pathlib.Path(tmp)
@@ -216,6 +228,186 @@ def run_core(runner: pathlib.Path, kind: dict, rom: bytes, budget: int, timeout:
             detail = (proc.stderr or proc.stdout).decode("utf-8", "replace").strip().splitlines()[-1:]
             raise RuntimeError(f"runner failed (exit {proc.returncode}): {(detail or ['no output'])[0][:160]}")
         return ppm.read_bytes()
+
+
+def run_admitted_comparison(members: dict[str, bytes], manifest: dict,
+                            runner: pathlib.Path, kind: str,
+                            deadline_seconds: float = 25) -> dict:
+    """Run one comparison from an already rights/admission-validated Acid2 bundle.
+
+    This helper does not grant or check rights. The caller must complete the immutable
+    diagnostic-closeout gate and current-runner qualification before passing these bytes.
+    """
+    profile = ADMITTED_PROFILES.get(kind)
+    if profile is None:
+        raise Refused("unsupported admitted Acid2 profile")
+    if not isinstance(members, dict) or not isinstance(manifest, dict):
+        raise Refused("validated Acid2 bundle inputs unavailable")
+    if not isinstance(deadline_seconds, (int, float)) or isinstance(deadline_seconds, bool) \
+            or not 0 < deadline_seconds <= 25:
+        raise Refused("Acid2 deadline outside fixed 25-second limit")
+    deadline = time.monotonic() + deadline_seconds
+    try:
+        runner_info = runner.lstat()
+        if runner.is_symlink() or not runner.is_file() or runner_info.st_size > MAX_RUNNER_BINARY:
+            raise Refused("current runner artifact type or size refused")
+        runner_bytes = runner.read_bytes()
+    except OSError:
+        raise Refused("current runner artifact unavailable") from None
+    if len(runner_bytes) != runner_info.st_size:
+        raise Refused("current runner artifact changed while reading")
+    runner_sha256 = hashlib.sha256(runner_bytes).hexdigest()
+
+    mask_module_path = HERE / "verify-acid2-masks.py"
+    spec = importlib.util.spec_from_file_location("phase24_admitted_acid2_mask", mask_module_path)
+    if spec is None or spec.loader is None:
+        raise Refused("Acid2 source-mask verifier unavailable")
+    masks = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(masks)
+
+    rom_kind = profile["rom_kind"]
+    suffix = "gb" if rom_kind == "dmg" else "gbc"
+    derivative_path = f"derivatives/{rom_kind}-acid2.{suffix}"
+    derivative_row = next((row for row in manifest.get("derivatives", [])
+                           if isinstance(row, dict) and row.get("kind") == rom_kind), None)
+    rom = members.get(derivative_path)
+    if (not isinstance(derivative_row, dict) or not isinstance(rom, bytes)
+            or derivative_row.get("path") != derivative_path
+            or derivative_row.get("sha256") != hashlib.sha256(rom).hexdigest()
+            or derivative_row.get("size_bytes") != len(rom)
+            or len(rom) != 32768 or rom[0x104:0x134] != bytes(48)):
+        raise Refused("admitted Acid2 derivative identity mismatch")
+
+    scope_model = "cgb" if profile["runner_model"] == "cgb-cpu-e" else "dmg"
+    scope = manifest.get("model_scope", {}).get(scope_model, {})
+    if (not isinstance(scope, dict) or scope.get("runner_model") != profile["runner_model"]
+            or scope.get("hardware_claim") is not False):
+        raise Refused("admitted Acid2 software model scope mismatch")
+
+    pin = masks.SOURCE_PINS[rom_kind]
+    cells = masks.acid2_source_cells(
+        rom_kind,
+        members[f"derived/{rom_kind}/src/{pin['source']}"] ,
+        members[f"source/{rom_kind}/inc/oam.asm"],
+        members[f"source/{rom_kind}/inc/background.asm"],
+        members["source/mgblib/src/display/ResetDisplay.asm"],
+    )
+    mask = members.get(f"masks/{rom_kind}.bin")
+    masks.validate_mask(mask, cells)
+    reference_bytes = members.get(profile["reference"])
+    if not isinstance(reference_bytes, bytes):
+        raise Refused("admitted Acid2 reference unavailable")
+    reference = decode_png(reference_bytes)
+
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise Refused("Acid2 runtime deadline exceeded")
+    runner_kind = {"rom_sha256": hashlib.sha256(rom).hexdigest(),
+                   "rom_size": len(rom), "runner_model": profile["runner_model"]}
+    try:
+        ppm = run_core(runner, runner_kind, rom, ADMITTED_GUEST_BUDGET_HALF_DOTS,
+                       timeout=remaining)
+    except subprocess.TimeoutExpired:
+        raise Refused("Acid2 runtime deadline exceeded") from None
+    frame = read_ppm(ppm)
+    status, detail = masks.compare_masked(frame, reference, mask, cells)
+    differing = sum(1 for index, (actual, expected) in enumerate(zip(frame, reference))
+                    if not mask[index] and actual != expected)
+    masked = sum(mask)
+    return {
+        "profile": kind,
+        "rom_kind": rom_kind,
+        "runner_model": profile["runner_model"],
+        "mode": profile["mode"],
+        "hardware_claim": False,
+        "rom": {"path": derivative_path, "sha256": hashlib.sha256(rom).hexdigest(),
+                "size_bytes": len(rom)},
+        "reference": {"path": profile["reference"],
+                      "sha256": hashlib.sha256(reference_bytes).hexdigest(),
+                      "size_bytes": len(reference_bytes)},
+        "mask": {"path": f"masks/{rom_kind}.bin",
+                 "sha256": hashlib.sha256(mask).hexdigest(),
+                 "masked_pixels": masked, "compared_pixels": W * H - masked},
+        "runner_sha256": runner_sha256,
+        "guest_budget_half_dots": ADMITTED_GUEST_BUDGET_HALF_DOTS,
+        "verdict": "pass" if status == 0 else "mismatch",
+        "differing_unmasked_pixels": differing,
+        "detail": detail,
+    }
+
+
+def _run_admitted_mode(args: argparse.Namespace) -> int:
+    if not (args.runner and args.source_revision and args.fixture_manifest
+            and args.current_build_qualification):
+        print("acid2 refused: approved mode requires runner, source revision, fixture manifest, "
+              "and current build qualification")
+        return 2
+    root = HERE.parent.parent.resolve(strict=True)
+    source_revision = args.source_revision
+    try:
+        adapter_path = HERE / "verify-diagnostic-admission.py"
+        spec = importlib.util.spec_from_file_location("phase24_acid2_admission", adapter_path)
+        if spec is None or spec.loader is None:
+            raise Refused("admission checker unavailable")
+        adapter = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(adapter)
+        fixture_path = args.fixture_manifest.resolve(strict=True)
+        fixture_relative = adapter.repository_relative_path(root, fixture_path)
+        if fixture_relative != "fixtures/acid2/manifest.json":
+            raise Refused("fixture manifest path is not the admitted Acid2 manifest")
+        for relative, path in (("tests/scripts/run-acid2-local.py", pathlib.Path(__file__)),
+                               (fixture_relative, fixture_path)):
+            adapter.require_worktree_source_file(root, source_revision, relative, path)
+        validated = adapter.check_diagnostic_closeout(
+            root, source_revision, "acid2", require_approved=True)
+        members = validated.get("_acid2_bundle_content")
+        if not isinstance(members, dict):
+            raise Refused("approved Acid2 bundle bytes unavailable")
+        manifest_raw = adapter.read_source_file(root, source_revision, fixture_relative)
+        if fixture_path.read_bytes() != manifest_raw:
+            raise Refused("fixture manifest differs from immutable source revision")
+        generic_manifest = json.loads(manifest_raw.decode("utf-8", "strict"))
+        manifest_bytes = members.get("build-manifest.json")
+        if not isinstance(manifest_bytes, bytes):
+            raise Refused("validated Acid2 member manifest unavailable")
+        manifest = json.loads(manifest_bytes.decode("utf-8", "strict"))
+        if (generic_manifest.get("schema_version") != 1
+                or generic_manifest.get("decision", {}).get("status") != "approved"):
+            raise Refused("generic Acid2 fixture admission is not approved")
+
+        qualification = root / "tests/scripts/verify-cgb-candidates.py"
+        adapter.require_worktree_source_file(
+            root, source_revision, "tests/scripts/verify-cgb-candidates.py", qualification)
+        qualification_result = subprocess.run(
+            [sys.executable, "-I", str(qualification), "--check-build-qualification",
+             "--repo-root", str(root), "--source-revision", source_revision,
+             "--runner", str(args.runner.resolve(strict=True)),
+             "--current-build-qualification", str(args.current_build_qualification.resolve(strict=True))],
+            cwd=root, capture_output=True, timeout=10, check=False)
+        if (len(qualification_result.stdout) > MAX_RUNNER_OUTPUT
+                or len(qualification_result.stderr) > MAX_RUNNER_OUTPUT
+                or qualification_result.returncode != 0
+                or b"PASS: current runner qualification" not in qualification_result.stdout):
+            raise Refused("current runner qualification refused")
+
+        deadline = time.monotonic() + 25
+        results = []
+        for profile in ("dmg", "dmg-on-cgb", "cgb"):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise Refused("Acid2 total 25-second deadline exceeded")
+            results.append(run_admitted_comparison(members, manifest, args.runner.resolve(),
+                                                   profile, remaining))
+        output = {"status": "pass" if all(row["verdict"] == "pass" for row in results)
+                  else "mismatch", "source_revision": source_revision,
+                  "derivative_count": 2, "comparison_count": len(results),
+                  "deadline_seconds": 25, "comparisons": results}
+        print(json.dumps(output, sort_keys=True, separators=(",", ":")))
+        return 0 if output["status"] == "pass" else 1
+    except (OSError, ValueError, RuntimeError, Refused, subprocess.SubprocessError,
+            json.JSONDecodeError) as exc:
+        print(f"acid2 refused: {exc}")
+        return 2
 
 
 def self_test() -> int:
@@ -279,9 +471,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rom", type=pathlib.Path)
     ap.add_argument("--reference", type=pathlib.Path)
     ap.add_argument("--runner", type=pathlib.Path)
+    ap.add_argument("--require-approved", action="store_true")
+    ap.add_argument("--source-revision")
+    ap.add_argument("--fixture-manifest", type=pathlib.Path)
+    ap.add_argument("--current-build-qualification", type=pathlib.Path)
     ap.add_argument("--rom-kind", choices=("cgb-acid2", "dmg-acid2"))
     ap.add_argument("--manifest", type=pathlib.Path, default=DEFAULT_MANIFEST)
     args = ap.parse_args(argv)
+    if args.require_approved:
+        if args.rom or args.reference or args.rom_kind:
+            ap.error("--require-approved cannot be combined with upstream-pin inputs")
+        return _run_admitted_mode(args)
     if args.self_test_tracer:
         if args.runner is None:
             ap.error("--self-test-tracer requires --runner")

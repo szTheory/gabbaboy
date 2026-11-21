@@ -1,27 +1,123 @@
 {
-  "phase": 23,
-  "phase_title": "Qualified v0.4.0 Release",
-  "stage": "Completed Phase 23 software evidence; enclosing protected planning closeout must pass before owner handoff",
-  "completed_plan_count": 9,
-  "next_stage": "v0.4 milestone audit",
-  "next_command": "/gsd-audit-milestone",
-  "who_acts_next": "owner after the agent finishes protected closeout",
-  "auto_advance": false,
-  "auto_chain_active": false,
-  "release_url": "https://github.com/szTheory/gabbaboy/releases/tag/v0.4.0",
-  "release_source": "3de1b0e427f37a202be4469dd818266f359c8b20",
-  "publication_control": "fbea1e2cc70f7c2ab9ea5820fa92ca18ddf997e8",
-  "publisher_run": 43526085579,
-  "publisher_attempt": 1,
-  "remaining_release_requests": 0,
-  "lesson_sha": "293c9fa7743b10f130a99514d6fdf091c9d4761e",
-  "independent_public_readback": "pass",
-  "pending_requirements": [
-    "FIXT-01",
-    "RIGHTS-01",
-    "DIAG-01",
-    "DIAG-02"
+  "version": "1.0",
+  "timestamp": "2026-11-21T05:42:00Z",
+  "phase": 24,
+  "phase_name": "Resolve remaining v0.4 evidence and verification gaps",
+  "phase_dir": ".planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps",
+  "plan": 1,
+  "task": 36,
+  "total_tasks": 38,
+  "status": "in_progress",
+  "completed_tasks": [
+    {
+      "id": 27,
+      "name": "D-227 marker recovery",
+      "status": "done",
+      "commit": "0df4583"
+    },
+    {
+      "id": 28,
+      "name": "D-227 receipt seam",
+      "status": "done",
+      "commit": "a1694ca"
+    },
+    {
+      "id": 33,
+      "name": "D-229 canonical bootstrap recovery",
+      "status": "done",
+      "commit": "4b8a04e"
+    },
+    {
+      "id": 34,
+      "name": "D-229 receipt seam",
+      "status": "done",
+      "commit": "80a0f57"
+    }
   ],
-  "updated_at": "2026-11-14T01:02:14.335834+00:00",
-  "documentation_boundary_sha": "e3b418dfbdb8b61d1c3088c34fb8909ad002efbd"
+  "remaining_tasks": [
+    {
+      "id": 29,
+      "name": "D-227 guarded qualification",
+      "status": "stopped_historical",
+      "note": "Preserve the D-227 inventory/schema stop and all receipts."
+    },
+    {
+      "id": 30,
+      "name": "D-228 CTest schema recovery",
+      "status": "blocked_historical",
+      "note": "Direct controls passed; bootstrap denied for omitted D-227 pins; no retry."
+    },
+    {
+      "id": 31,
+      "name": "D-228 receipt seam",
+      "status": "not_started_historical",
+      "note": "Never started; do not replay."
+    },
+    {
+      "id": 32,
+      "name": "D-228 guarded qualification",
+      "status": "not_started_historical",
+      "note": "Never started; do not replay."
+    },
+    {
+      "id": 35,
+      "name": "D-229 guarded qualification",
+      "status": "stopped_historical",
+      "note": "Ten focused CTests and code review passed; security review OPEN_THREATS for pre-push hook and recursive submodule side effects. No external action; replacement spent."
+    },
+    {
+      "id": 36,
+      "name": "D-230 push side-effect closure",
+      "status": "active",
+      "note": "One gate-only replacement adds command-level hook/recursion controls, causal local Git fixtures, and distinct canonical d230-bootstrap.json."
+    },
+    {
+      "id": 37,
+      "name": "D-230 receipt seam",
+      "status": "not_started",
+      "note": "Blocked on T36 frozen direct/bootstrap pass; rebind only the existing allowlisted seam."
+    },
+    {
+      "id": 38,
+      "name": "D-230 qualification and closeout",
+      "status": "not_started",
+      "note": "Blocked on T36/T37; preserve inherited qualification, review, protected-promotion, and D-209 lifecycle limits."
+    }
+  ],
+  "blockers": [
+    {
+      "description": "Independent D-230 plan check must pass after route reconciliation and before the checked-boundary commit.",
+      "type": "workflow_gate",
+      "workaround": "Run the GSD plan checker; address a concrete in-scope plan defect before committing the boundary."
+    }
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [],
+  "decisions": [
+    {
+      "decision": "Preserve D-228 denial and D-229 T33/T34 passes plus T35 security OPEN_THREATS/no-push as immutable history.",
+      "rationale": "Do not replay or reuse predecessor receipts/reviews as D-230 evidence.",
+      "phase": "24"
+    },
+    {
+      "decision": "D-230 authorizes one checked same-plan boundary and one gate-only replacement for the two fixed-push side effects.",
+      "rationale": "Add --no-verify and --recurse-submodules=no, prove suppression with causal local bare-Git controls, publish only distinct canonical d230-bootstrap.json, then resume the existing seam/qualification route. No candidate/review/matrix/CI/merge/closure allowance resets.",
+      "phase": "24"
+    }
+  ],
+  "uncommitted_files": [
+    " M .planning/.continue-here.md",
+    " M .planning/HANDOFF.json",
+    " M .planning/ROADMAP.md",
+    " M .planning/STATE.md",
+    " M .planning/context/DECISIONS.md",
+    " M .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md",
+    " M .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md",
+    " M .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md",
+    " M .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-DISCUSSION-LOG.md",
+    " M .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-RESEARCH.md",
+    " M .planning/state.json"
+  ],
+  "next_action": "Run the independent GSD plan checker on the reconciled D-230 plan. If clean, commit one checked boundary as a sole-parent child of e6926b69fde285917c2a6cedc42188085420a427 preserving gate blob d274e410cb13775457581a151eded15dd692edff/mode 100644, then continue $gsd-autonomous --from 24 through T36-T38 under all inherited gates.",
+  "context_notes": "D-229 T33/T34 passed; T35 passed the ten focused CTests and code review but security review OPEN_THREATS found unledgered pre-push-hook and recursive-submodule side effects. No push/matrix/merge occurred; D-229 replacement spent. D-230 is active: checked parent e6926b69fde285917c2a6cedc42188085420a427, unchanged gate blob d274e410cb13775457581a151eded15dd692edff/mode 100644; T36 one gate-only correction and distinct d230-bootstrap.json; T37 existing seam after frozen direct/bootstrap; T38 inherited qualification and protected lifecycle. Preserve D-228/D-229 evidence, all D-209 dispositions, FIXT-01 Pending, failed unreplayed Acid2, Task 7 deferred, D-103 incomplete, release bytes, protected branch rules and all exclusions. No limits reset; any frozen failure stops without retry. Preserve generated .planning/state.json."
 }

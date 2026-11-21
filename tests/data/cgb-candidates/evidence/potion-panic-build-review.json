@@ -1,0 +1,252 @@
+{
+  "schema_version": 1,
+  "kind": "potion-panic-creator-release-and-build-gate-review",
+  "candidate_id": "potion-panic-gbcompo25",
+  "creator_page": {
+    "url": "https://deved.itch.io/potion-panic",
+    "release_label": "GB Compo 2025 demo",
+    "rom_download_label": "ROM file (GB Compo 2025 demo)",
+    "rom_display_size": "256 kB",
+    "source_link": "https://codeberg.org/DevEd/potion-panic",
+    "code_license_label": "MIT License",
+    "asset_license_label": "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International",
+    "offering": "Name your own price; the page offers a zero-cost download route."
+  },
+  "linked_source": {
+    "repository": "https://codeberg.org/DevEd/potion-panic",
+    "ref": "gbcompo25",
+    "commit": "321b8365d31a3239d3d7f54831d0339991e2c49c",
+    "root_tree_sha1": "a999f0b5774cad61057eb07cae38a89ce5375772",
+    "readme_path": "README.md",
+    "readme_sha256": "92e1258a0535adbfdc305e82e2774162d871af7a634f6e5eef038a780b1ca353",
+    "readme_identity": "The pinned README describes the project as a Game Boy Color game created for GBCompo 2025.",
+    "relationship": "The creator page labels the offered ROM as the GB Compo 2025 demo and links this repository; the pinned README describes the same competition entry. No build receipt, signed artifact manifest, or other source-to-ROM identity binds the downloaded bytes to this commit.",
+    "root_license": {
+      "path": "LICENSE",
+      "size_bytes": 1083,
+      "sha256": "05a737cab7911cce77ab9057d1129c241b02d69b00e5f1ef1409f5626fe4d55b"
+    },
+    "submodule": {
+      "path": "hardware.inc",
+      "repository": "https://github.com/gbdev/hardware.inc",
+      "revision": "97e979bd977b469c6dbefae15f581b27d1ba8e35"
+    }
+  },
+  "creator_download": {
+    "response_filename": "potionpanic_jam.gbc",
+    "review_storage": "build/phase24/source-review/potion-panic-official/potion-panic.gb (ignored local review storage)",
+    "size_bytes": 262144,
+    "sha256": "86922a48308031d5ca7e79cecbfbe3b4d41c8f094e0c2a5f90b6ced362d708f8",
+    "header": {
+      "cgb_flag": 192,
+      "global_checksum_calculated": 5637,
+      "global_checksum_stored": 5637,
+      "header_checksum_calculated": 113,
+      "header_checksum_stored": 113,
+      "mapper_type": 28,
+      "ram_size_code": 0,
+      "rom_size_code": 3,
+      "title": "POTION PANIC"
+    },
+    "canonical_nintendo_logo_present": true
+  },
+  "sidecar": {
+    "response_filename": "LICENSE",
+    "review_storage": "build/phase24/source-review/potion-panic-official/LICENSE (ignored local review storage)",
+    "size_bytes": 1083,
+    "sha256": "05a737cab7911cce77ab9057d1129c241b02d69b00e5f1ef1409f5626fe4d55b",
+    "byte_identical_to_pinned_source_root_license": true,
+    "scope": "This sidecar is the pinned source root MIT license. The page separately labels assets CC BY-NC-SA 4.0; the sidecar alone does not state that asset scope."
+  },
+  "source_build_gate": {
+    "source_build_performed": false,
+    "build_script": {
+      "path": "build.sh",
+      "sha256": "98bfb415d37016b356ceccddc27f9a79a49e1b18306061a252a8ca889d9bda48",
+      "size_bytes": 1234
+    },
+    "converter": {
+      "path": "Tools/convertmap.py",
+      "sha256": "d3511bdc1c74179de4717f94a5262f95389d6eedace965845dd3b8b54b3188a2",
+      "size_bytes": 8947,
+      "attribution": "The file embeds a WLE encoder attributed to Pigu/AYCE."
+    },
+    "converter_in_build_script": true,
+    "converter_disposition": "Excluded by D-207; not invoked or copied.",
+    "levels_tree": {
+      "tracked_file_count": 17,
+      "tracked_extensions": [
+        ".json",
+        ".tiled-project",
+        ".tiled-session",
+        ".tmx",
+        ".tsx"
+      ],
+      "top_level_json_maps": [
+        "Levels/DarkForest1.json",
+        "Levels/DarkForest2.json",
+        "Levels/DarkForest3.json",
+        "Levels/DarkForest4.json",
+        "Levels/DarkForest5.json",
+        "Levels/testlevel.json"
+      ],
+      "generated_inc_or_bin_outputs_tracked": [],
+      "assembler_includes_missing_generated_maps": [
+        "Levels/testlevel.inc",
+        "Levels/DarkForest1.inc",
+        "Levels/DarkForest2.inc",
+        "Levels/DarkForest3.inc",
+        "Levels/DarkForest4.inc",
+        "Levels/DarkForest5.inc"
+      ]
+    },
+    "toolchain_versions_pinned": false,
+    "reviewed_build_closure_without_converter": false,
+    "blocker": "No source build was performed: the pinned build.sh invokes the pinned Tools/convertmap.py, whose WLE encoder is attributed to Pigu/AYCE and is excluded by D-207; the pinned Levels tree has no generated map .inc or .bin outputs, no reviewed source-build closure omits that converter, and the creator-published prebuilt ROM has no build receipt binding it to the pinned source commit.",
+    "reviewed_build_gate_inputs": [
+      {
+        "path": "README.md",
+        "sha256": "92e1258a0535adbfdc305e82e2774162d871af7a634f6e5eef038a780b1ca353",
+        "size_bytes": 792
+      },
+      {
+        "path": "build.sh",
+        "sha256": "98bfb415d37016b356ceccddc27f9a79a49e1b18306061a252a8ca889d9bda48",
+        "size_bytes": 1234
+      },
+      {
+        "path": "Main.asm",
+        "sha256": "b41b09d58e14c23cefc8e808e05f20fc89c8da7f0faf91d6aa53c83c394d6f34",
+        "size_bytes": 18340
+      },
+      {
+        "path": "Tools/convertmap.py",
+        "sha256": "d3511bdc1c74179de4717f94a5262f95389d6eedace965845dd3b8b54b3188a2",
+        "size_bytes": 8947
+      },
+      {
+        "path": "GameModes/Level.asm",
+        "sha256": "a8f189693e1fecbf7f2c7dee941ee7722148b8d29c292230ff33bd9d4c6bf4ee",
+        "size_bytes": 30558
+      },
+      {
+        "path": "Levels/DarkForest1.json",
+        "sha256": "05f154317f05402dc963d20decbe5cc11ebbbbc325457dc7f5da7615404fa006",
+        "size_bytes": 5425
+      },
+      {
+        "path": "Levels/DarkForest2.json",
+        "sha256": "bf8fdfebcd13f63fafddf683f4bc312843842e73e0f1b5dcf68b570a5f98ad63",
+        "size_bytes": 6356
+      },
+      {
+        "path": "Levels/DarkForest3.json",
+        "sha256": "a8223aabdfbe59ca19d92d258e520f302aa4c020a32e730bc2e33d910b0b64e9",
+        "size_bytes": 5862
+      },
+      {
+        "path": "Levels/DarkForest4.json",
+        "sha256": "00300f96f4e16ba4dc0bae2c0f5a160653546c5d595169d7530cf63a0232f904",
+        "size_bytes": 6908
+      },
+      {
+        "path": "Levels/DarkForest5.json",
+        "sha256": "565d8f1894c11ac142c212ac58c1cc199ee7e2b6e596d99f2c8fa768a0759227",
+        "size_bytes": 6875
+      },
+      {
+        "path": "Levels/testlevel.json",
+        "sha256": "86c8e92686d3376ac7f1560f9006c89b44f30a38b2c1eeb7357e543cb8cdeb01",
+        "size_bytes": 3717
+      }
+    ]
+  },
+  "bootless_derivative_review": {
+    "review_storage": "build/phase24/source-review/potion-panic-official/potion-panic-bootless.gbc (ignored local review storage)",
+    "filename": "potion-panic-bootless.gbc",
+    "size_bytes": 262144,
+    "sha256": "186ba4b7ba0f755eeb2feeaaf4c204a8152757d5fd2200de2d6bdaeea90c86bb",
+    "header": {
+      "cgb_flag": 192,
+      "global_checksum_calculated": 191,
+      "global_checksum_stored": 191,
+      "header_checksum_calculated": 113,
+      "header_checksum_stored": 113,
+      "mapper_type": 28,
+      "ram_size_code": 0,
+      "rom_size_code": 3,
+      "title": "POTION PANIC"
+    },
+    "logo_zero_after_transform": true,
+    "transform": {
+      "method": "Copy the creator-published ROM; zero all bytes at inclusive offsets 0x0104–0x0133; recompute only the global checksum at inclusive offsets 0x014E–0x014F using the Game Boy global checksum; preserve all other bytes.",
+      "logo_zero_range_inclusive": [
+        260,
+        307
+      ],
+      "global_checksum_range_inclusive": [
+        334,
+        335
+      ],
+      "changed_offset_count": 44,
+      "changed_offsets": [
+        260,
+        261,
+        262,
+        263,
+        264,
+        265,
+        267,
+        268,
+        269,
+        271,
+        273,
+        275,
+        277,
+        278,
+        279,
+        280,
+        281,
+        283,
+        284,
+        285,
+        286,
+        287,
+        288,
+        289,
+        290,
+        291,
+        292,
+        293,
+        294,
+        295,
+        296,
+        297,
+        298,
+        299,
+        300,
+        301,
+        302,
+        303,
+        304,
+        305,
+        306,
+        307,
+        334,
+        335
+      ],
+      "all_changed_offsets_within_allowed_ranges": true,
+      "header_mode_mapper_and_size_fields_preserved": true,
+      "executable_bytes_outside_allowed_ranges_preserved": true
+    },
+    "original_and_derivative_staged": false
+  },
+  "candidate_use": {
+    "creator_prebuilt_metadata_observed": true,
+    "candidate_rom_admitted": false,
+    "candidate_execution_performed": false,
+    "progress_or_receipt_observed": false,
+    "reproducible_source_build_claimed": false,
+    "reason": "No source build was performed: the pinned build.sh invokes the pinned Tools/convertmap.py, whose WLE encoder is attributed to Pigu/AYCE and is excluded by D-207; the pinned Levels tree has no generated map .inc or .bin outputs, no reviewed source-build closure omits that converter, and the creator-published prebuilt ROM has no build receipt binding it to the pinned source commit."
+  }
+}

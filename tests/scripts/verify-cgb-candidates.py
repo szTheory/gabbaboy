@@ -78,12 +78,185 @@ RECORDS = {
     "potion-panic-gbcompo25": "tests/data/cgb-candidates/potion-panic.json",
     "ucity-1.3": "tests/data/cgb-candidates/ucity-1.3.json",
 }
+CLOSEOUT_RECORD_PATH = "tests/data/v04-closeout.json"
 CONTRACT_PATHS = (
     "tests/scripts/verify-cgb-candidates.py",
     "tests/scripts/verify-fixture-admission.py",
     "tests/cmake/game-evidence.cmake",
     "docs/cgb-game-candidates.md",
+    CLOSEOUT_RECORD_PATH,
 )
+CLOSEOUT_SOURCE_IDENTITIES = {
+    "potion-panic-gbcompo25": (
+        "https://codeberg.org/DevEd/potion-panic", "gbcompo25",
+        "321b8365d31a3239d3d7f54831d0339991e2c49c", "a999f0b5774cad61057eb07cae38a89ce5375772",
+    ),
+    "ucity-1.3": (
+        "https://codeberg.org/SkyLyrac/ucity", "v1.3",
+        "d1880a2a112d7c26f16c0fc06a15b6c32fdc9137", "a4740129e7781f2fb7eca0086078930d8de39c9b",
+    ),
+    "dmg-acid2-v1.0": (
+        "https://github.com/mattcurrie/dmg-acid2", "v1.0",
+        "dc2295408f881637ff69f784d8d93f3d2db30181", "a59741f15579a82205fff557dd000a5ebb6d7f6e",
+    ),
+    "cgb-acid2-v1.1": (
+        "https://github.com/mattcurrie/cgb-acid2", "v1.1",
+        "fa5b7f86d6fb599f79e55169494d981a7af75a31", "a541bf54356809dc04cc050f8fc14d9620649f88",
+    ),
+    "gbmicrotest-463eb6b": (
+        "https://github.com/aappleby/gbmicrotest", "463eb6bc0fe31d61781ef63060ad6d74090c0255",
+        "463eb6bc0fe31d61781ef63060ad6d74090c0255", "9b692d1a028beea00a9fc08b89bc6160dd268efa",
+    ),
+}
+CLOSEOUT_COMPONENT_OUTCOMES = {
+    "potion-panic-gbcompo25": {
+        "source-code": "supported", "audio-driver": "supported", "hardware-inc": "supported",
+        "visual-assets": "supported", "music-assets": "supported", "converter-code": "unresolved",
+    },
+    "ucity-1.3": {
+        "gpl-header-code": "supported", "gbt-player": "supported", "media": "supported",
+        "hardware-inc": "unresolved",
+    },
+    "dmg-acid2-v1.0": {
+        "source-code": "supported", "mgblib-code": "supported", "mgblib-font-data": "excluded-by-design",
+        "footer-and-reference-images": "supported", "project-font-replacement": "not-created",
+        "diagnostic-output": "not-created",
+    },
+    "cgb-acid2-v1.1": {
+        "source-code": "supported", "mgblib-code": "supported", "mgblib-font-data": "excluded-by-design",
+        "footer-and-reference-images": "supported", "project-font-replacement": "not-created",
+        "diagnostic-output": "not-created",
+    },
+    "gbmicrotest-463eb6b": {
+        "source-code": "supported", "prebuilt-roms": "unresolved", "embedded-logo": "unresolved",
+    },
+}
+CLOSEOUT_COMPONENT_IDENTITIES = {
+    "potion-panic-gbcompo25": {
+        "source-code": ("Engine, GameModes, Objects, Main.asm (Git archive at pinned commit)", "a999f0b5774cad61057eb07cae38a89ce5375772", 327680, "0edd8efc05f22c72c6e40777f16d26b8a6f677325c33164258c551f62826cc16"),
+        "audio-driver": ("Audio/GBMod_Player.asm", "921e287aca62d7daf7275ed027c282be2357b879", 55015, "800098146c426471ba723f115b87bb534da2d1145588db37c8d39b1ba140a9a6"),
+        "hardware-inc": ("hardware.inc/hardware.inc at gitlink commit 97e979bd977b469c6dbefae15f581b27d1ba8e35", "97e979bd977b469c6dbefae15f581b27d1ba8e35", 43920, "867733145f25f44d30a0880b11e507e5dfb9442cbba399924f721c92b071df4e"),
+        "visual-assets": ("GFX, Levels, Tilesets (Git archive at pinned commit)", "a999f0b5774cad61057eb07cae38a89ce5375772", 440320, "5940c2a3d36f6ca4b1b8c1e7d2d98f00ed1259919621f3778296b8e9f7308cac"),
+        "music-assets": ("Audio/Modules (Git archive at pinned commit)", "a999f0b5774cad61057eb07cae38a89ce5375772", 276480, "84470edb337e1382cd9097e0509bc13ed19416d50364a889b1e404131586546a"),
+        "converter-code": ("Tools (Git archive at pinned commit)", "a999f0b5774cad61057eb07cae38a89ce5375772", 30720, "39b9093953d92a1c0710b4bf8fb3289e88e04803a299c8b8ef989de3e6c5739a"),
+    },
+    "ucity-1.3": {
+        "gpl-header-code": ("source (Git archive at pinned commit)", "a4740129e7781f2fb7eca0086078930d8de39c9b", 1341440, "d2427a28f42487c26373ea6543814b6ad1f94f0c242f396e478c80fece24f681"),
+        "gbt-player": ("source/engine/gbt_player.asm, gbt_player.inc, gbt_player_bank1.asm (Git archive)", "a4740129e7781f2fb7eca0086078930d8de39c9b", 51200, "9ade18a5a5d6cbc39e02de5938f34c53f0e03f746f006f8db459d82eae2f9cd2"),
+        "media": ("data/gfx, data/music, resources/gfx, and three resources/music modules (Git archive)", "a4740129e7781f2fb7eca0086078930d8de39c9b", 819200, "a789c4b755a667ea2ca21bc039b04b4100a6f7a592426098e5a1746caeedb8a7"),
+        "hardware-inc": ("source/engine/hardware.inc (included by 81 assembly files)", "a4740129e7781f2fb7eca0086078930d8de39c9b", 17860, "05f43643bf29459f6a86b2fedf00b887133b98038fa4f51112ced0f01a762715"),
+    },
+    "dmg-acid2-v1.0": {
+        "source-code": ("src and inc (Git archive at pinned commit)", "a59741f15579a82205fff557dd000a5ebb6d7f6e", 20480, "c57123046aa3dc824ad60e9363d0bb701428a3de5af57d8cf03269857bd0403e"),
+        "mgblib-code": ("mgblib gitlink commit 5d829bf2ffa1447dcfd63c5dab2c44488632617e (source code only)", "5d829bf2ffa1447dcfd63c5dab2c44488632617e", 1068, "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044"),
+        "mgblib-font-data": ("mgblib font data excluded by Phase 22 D-01", "5d829bf2ffa1447dcfd63c5dab2c44488632617e", 0, None),
+        "footer-and-reference-images": ("img tree at pinned commit (Git archive)", "9ebf5fb9c33685947e89f8e0170b77be1672a08a", 1310720, "2b43b4daafc6a9c0f89dab7fcfc52549b6aed285b6f3f09eb57c716df7245ee7"),
+        "project-font-replacement": ("planned project-authored glyph replacement", None, 0, None),
+        "diagnostic-output": ("planned dmg-acid2 derivative", None, 0, None),
+    },
+    "cgb-acid2-v1.1": {
+        "source-code": ("src and inc (Git archive at pinned commit)", "a541bf54356809dc04cc050f8fc14d9620649f88", 30720, "976692a7e1a95ef72774e6b5f17b73c61b7341f703e44f77d33e89946a404a60"),
+        "mgblib-code": ("mgblib gitlink commit 5d829bf2ffa1447dcfd63c5dab2c44488632617e (source code only)", "5d829bf2ffa1447dcfd63c5dab2c44488632617e", 1068, "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044"),
+        "mgblib-font-data": ("mgblib font data excluded by Phase 22 D-01", "5d829bf2ffa1447dcfd63c5dab2c44488632617e", 0, None),
+        "footer-and-reference-images": ("img tree at pinned commit (Git archive)", "65d8d4c0057ac716c632fb8ae28628b214c4a801", 1628160, "262917f4a9a912e5fea7b8af8d9370f6c347337590e0b823fc153a1bb59e1e2e"),
+        "project-font-replacement": ("planned project-authored glyph replacement", None, 0, None),
+        "diagnostic-output": ("planned cgb-acid2 derivative", None, 0, None),
+    },
+    "gbmicrotest-463eb6b": {
+        "source-code": ("tests source tree (Git archive at pinned commit)", "37d28f327e3c297002ffc7ef583793b021c54b67", 583680, "dfc1147b72b61f76dcdf7ed60597f0b6cc9c42de249ea69f39712a8d0cd2f8e6"),
+        "prebuilt-roms": ("bin tree (513 Git-identified ROMs; payload bytes and SHA-256 intentionally not fetched)", "33114fe9b564cf1ace013400900f71887e1243d3", 18874368, None),
+        "embedded-logo": ("tests tree used to generate ROM header content; generated output bytes not fetched", "37d28f327e3c297002ffc7ef583793b021c54b67", 183031, None),
+    },
+}
+CLOSEOUT_NOTICE_IDENTITIES = {
+    "potion-panic-gbcompo25": {
+        "source-code": (("LICENSE", "1d6196068ffdc67d5eb655b15c4ea269d1e471e1", 1083, "05a737cab7911cce77ab9057d1129c241b02d69b00e5f1ef1409f5626fe4d55b", "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/LICENSE"),),
+        "audio-driver": (("LICENSE", "1d6196068ffdc67d5eb655b15c4ea269d1e471e1", 1083, "05a737cab7911cce77ab9057d1129c241b02d69b00e5f1ef1409f5626fe4d55b", "https://codeberg.org/DevEd/potion-panic/src/commit/321b8365d31a3239d3d7f54831d0339991e2c49c/LICENSE"),),
+        "visual-assets": (("tests/data/cgb-candidates/evidence/potion-panic-asset-notice.txt", "1d97bbc1103705246f4d2e04261cc2b1648ff45f", 2084, "7660c7fd8b22b271a36a033830d0531f6f1c994d937a09b1a82917438873a43b", "https://creativecommons.org/licenses/by-nc-sa/4.0/"),),
+        "music-assets": (("tests/data/cgb-candidates/evidence/potion-panic-asset-notice.txt", "1d97bbc1103705246f4d2e04261cc2b1648ff45f", 2084, "7660c7fd8b22b271a36a033830d0531f6f1c994d937a09b1a82917438873a43b", "https://creativecommons.org/licenses/by-nc-sa/4.0/"),),
+        "hardware-inc": (("LICENSE", "670154e3538863b2d9891fd5483160fbdfc89164", 6555, "36ffd9dc085d529a7e60e1276d73ae5a030b020313e6c5408593a6ae2af39673", "https://github.com/gbdev/hardware.inc/blob/97e979bd977b469c6dbefae15f581b27d1ba8e35/LICENSE"),),
+    },
+    "ucity-1.3": {
+        "gpl-header-code": (("gpl-3.0.txt", "94a9ed024d3859793618152ea559a168bbcbb5e2", 35147, "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903", "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/gpl-3.0.txt"), ("readme.rst", "a2929a19cb912a42372066f9461ec445114a9e76", 4610, "b715f12604e95f59cbfa9e0900ed296aba3cc334edeed50e92b6be520d84994f", "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/readme.rst")),
+        "gbt-player": (("source/engine/gbt_player.asm", "5c541ac1847d9a402c4649da54b7957853f270f8", 14115, "8008112d8507293d8d57af2d0e43ea3e15bff59684e09c8133c773fb4adc5239", "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/source/engine/gbt_player.asm"),),
+        "media": (("readme.rst", "a2929a19cb912a42372066f9461ec445114a9e76", 4610, "b715f12604e95f59cbfa9e0900ed296aba3cc334edeed50e92b6be520d84994f", "https://codeberg.org/SkyLyrac/ucity/src/commit/d1880a2a112d7c26f16c0fc06a15b6c32fdc9137/readme.rst"),),
+    },
+    "dmg-acid2-v1.0": {
+        "source-code": (("LICENSE", "77b34a180b3fd2fba8c083bbc5ebbe04fbafb4a5", 1068, "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044", "https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/LICENSE"),),
+        "mgblib-code": (("LICENSE", "5d829bf2ffa1447dcfd63c5dab2c44488632617e", 1068, "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044", "https://github.com/mattcurrie/mgblib/blob/5d829bf2ffa1447dcfd63c5dab2c44488632617e/LICENSE"),),
+        "footer-and-reference-images": (("LICENSE", "77b34a180b3fd2fba8c083bbc5ebbe04fbafb4a5", 1068, "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044", "https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/LICENSE"),),
+    },
+    "cgb-acid2-v1.1": {
+        "source-code": (("LICENSE", "77b34a180b3fd2fba8c083bbc5ebbe04fbafb4a5", 1068, "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044", "https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/LICENSE"),),
+        "mgblib-code": (("LICENSE", "5d829bf2ffa1447dcfd63c5dab2c44488632617e", 1068, "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044", "https://github.com/mattcurrie/mgblib/blob/5d829bf2ffa1447dcfd63c5dab2c44488632617e/LICENSE"),),
+        "footer-and-reference-images": (("LICENSE", "77b34a180b3fd2fba8c083bbc5ebbe04fbafb4a5", 1068, "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044", "https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/LICENSE"),),
+    },
+    "gbmicrotest-463eb6b": {
+        "source-code": (("LICENSE", "ca05fdbac9ec607636037171ee3856ea2a3378dd", 1065, "0b3557142dfcce65428fafb9c8254d9d59c027a008af4810867efd7342b77c25", "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/LICENSE"),),
+    },
+}
+POTION_PANIC_BUILD_REVIEW = {
+    "metadata_path": "tests/data/cgb-candidates/evidence/potion-panic-build-review.json",
+    "metadata_sha256": "2ac08bec57e239effc247ad9e0af673873b40279c506abe2102449f986d82ecc",
+    "review_storage": "build/phase24/source-review/potion-panic-official/",
+    "original_filename": "potionpanic_jam.gbc",
+    "original_size_bytes": 262144,
+    "original_sha256": "86922a48308031d5ca7e79cecbfbe3b4d41c8f094e0c2a5f90b6ced362d708f8",
+    "sidecar_filename": "LICENSE",
+    "sidecar_sha256": "05a737cab7911cce77ab9057d1129c241b02d69b00e5f1ef1409f5626fe4d55b",
+    "derivative_filename": "potion-panic-bootless.gbc",
+    "derivative_sha256": "186ba4b7ba0f755eeb2feeaaf4c204a8152757d5fd2200de2d6bdaeea90c86bb",
+    "candidate_payload_staged": False,
+    "admission_performed": False,
+    "runtime_performed": False,
+}
+POTION_PANIC_SOURCE_INVENTORY_SHA256 = "be7aa010deab9569ceac07e3a03a21a63604cfbbb451196e6b5406b60802c5c9"
+CLOSEOUT_POTION_PANIC_SUBMODULE = {
+    "path": "hardware.inc",
+    "repository": "https://github.com/gbdev/hardware.inc",
+    "revision": "97e979bd977b469c6dbefae15f581b27d1ba8e35",
+}
+CLOSEOUT_GAME_OUTCOMES = ("rights-no-go", "rights-no-go")
+CLOSEOUT_PRIMARY_NO_PAYLOAD_FIELDS = (
+    "builds_performed", "candidate_payloads_staged", "admission_performed",
+)
+CLOSEOUT_COMPONENT_TERMS = {
+    "potion-panic-gbcompo25": {
+        "source-code": "MIT License for project code; the creator page separately labels code MIT.",
+        "audio-driver": "The pinned Audio/GBMod_Player.asm identifies the driver as by DevEd; root LICENSE is MIT.",
+        "hardware-inc": "CC0 1.0 Universal at the exact hardware.inc submodule commit.",
+        "visual-assets": "D-207 accepts the creator page CC BY-NC-SA 4.0 asset label for this exact linked source component as a bounded category-level inference; noncommercial use with attribution, changes identified, and share-alike for adaptations.",
+        "music-assets": "D-207 accepts the creator page CC BY-NC-SA 4.0 asset label for this exact linked source component as a bounded category-level inference; noncommercial use with attribution, changes identified, and share-alike for adaptations.",
+        "converter-code": "The root MIT notice is present, but Tools/convertmap.py attributes an embedded WLE encoder to Pigu/AYCE without a separate grant or notice.",
+    },
+    "ucity-1.3": {
+        "gpl-header-code": "GPL-3.0-or-later applies only to source files carrying the GPL header, as the exact release README states.",
+        "gbt-player": "BSD-2-Clause for the three GBT Player source files, as identified in the exact source review.",
+        "media": "CC BY-SA 4.0 for graphics and music, identified by the exact release README.",
+        "hardware-inc": "source/engine/hardware.inc has no GPL header or separate license notice; its preamble says it is based on Jones hardware.inc and Carsten Sorensen ideas.",
+    },
+    "dmg-acid2-v1.0": {
+        "source-code": "MIT License at the exact pinned root LICENSE.",
+        "mgblib-code": "MIT License at the exact mgblib gitlink commit.",
+        "mgblib-font-data": "Third-party font data is excluded from the planned derivative; project-authored replacement glyphs are required.",
+        "footer-and-reference-images": "D-207 accepts each pinned root MIT grant as covering only this repository version's img tree; this is a bounded repository-level inference, not an image-specific upstream statement.",
+        "project-font-replacement": "Project-authored replacement glyphs have not been created.",
+        "diagnostic-output": "No font-replaced, text-masked derivative or output notice has been created.",
+    },
+    "cgb-acid2-v1.1": {
+        "source-code": "MIT License at the exact pinned root LICENSE.",
+        "mgblib-code": "MIT License at the exact mgblib gitlink commit.",
+        "mgblib-font-data": "Third-party font data is excluded from the planned derivative; project-authored replacement glyphs are required.",
+        "footer-and-reference-images": "D-207 accepts each pinned root MIT grant as covering only this repository version's img tree; this is a bounded repository-level inference, not an image-specific upstream statement.",
+        "project-font-replacement": "Project-authored replacement glyphs have not been created.",
+        "diagnostic-output": "No font-replaced, text-masked derivative or output notice has been created.",
+    },
+    "gbmicrotest-463eb6b": {
+        "source-code": "MIT License at the exact pinned root LICENSE; this does not establish permission for generated ROMs.",
+        "prebuilt-roms": "The root MIT notice is present for source, but permission for all 513 generated ROM outputs is not established.",
+        "embedded-logo": "The build sources use a Nintendo-logo header directive; no component grant for the embedded logo output was identified.",
+    },
+}
 RUNNER_BUILD_INPUTS = (
     "CMakeLists.txt",
     "cmake/StateVersion.cmake",
@@ -1745,6 +1918,472 @@ def record_path(root: Path, relative: str) -> dict[str, Any]:
     return parse_json(raw, relative)
 
 
+def validate_closeout_data(value: dict[str, Any], stage: str,
+                           require_satisfied: bool = False) -> tuple[int, list[str]]:
+    """Validate exact named-source rights facts without promoting unresolved grants."""
+    require_keys(value, {
+        "schema", "input_commit", "sources", "ordered_games", "requirements", "build_tools",
+    }, "closeout")
+    if value["schema"] != "gabbaboy-v04-closeout-v1":
+        raise Reject("candidate-closeout-schema-unsupported")
+    if not isinstance(value["input_commit"], str) or not HEX40.fullmatch(value["input_commit"]):
+        raise Reject("candidate-closeout-input-commit-invalid")
+    sources = value["sources"]
+    if not isinstance(sources, list) or len(sources) != len(CLOSEOUT_SOURCE_IDENTITIES):
+        raise Reject("candidate-closeout-source-set-invalid")
+    source_map: dict[str, dict[str, Any]] = {}
+    unresolved: list[str] = []
+    for source in sources:
+        if not isinstance(source, dict):
+            raise Reject("candidate-closeout-source-invalid")
+        require_keys(source, {
+            "id", "repository", "ref", "commit", "root_tree_sha1", "relationship", "components",
+        }, "closeout.source")
+        source_id = source["id"]
+        if source_id not in CLOSEOUT_SOURCE_IDENTITIES or source_id in source_map:
+            raise Reject("candidate-closeout-source-set-invalid")
+        expected_repository, expected_ref, expected_commit, expected_tree = CLOSEOUT_SOURCE_IDENTITIES[source_id]
+        if (source["repository"], source["ref"], source["commit"], source["root_tree_sha1"]) != (
+                expected_repository, expected_ref, expected_commit, expected_tree):
+            raise Reject("candidate-closeout-source-identity-mismatch", source_id)
+        safe_text(source["relationship"], f"{source_id}.relationship", 2048)
+        components = source["components"]
+        expected_components = CLOSEOUT_COMPONENT_OUTCOMES[source_id]
+        if not isinstance(components, list) or len(components) != len(expected_components):
+            raise Reject("candidate-closeout-component-set-invalid", source_id)
+        component_map: dict[str, dict[str, Any]] = {}
+        for component in components:
+            if not isinstance(component, dict):
+                raise Reject("candidate-closeout-component-invalid", source_id)
+            require_keys(component, {
+                "id", "outcome", "terms", "scope", "identity", "notices", "evidence", "obligations", "blocker",
+            }, f"{source_id}.component")
+            component_id = component["id"]
+            if component_id not in expected_components or component_id in component_map:
+                raise Reject("candidate-closeout-component-set-invalid", source_id)
+            expected_outcome = expected_components[component_id]
+            if component["outcome"] != expected_outcome:
+                raise Reject("candidate-closeout-rights-overclaim", f"{source_id}/{component_id}")
+            safe_text(component["terms"], f"{source_id}/{component_id}.terms", 1024)
+            if component["terms"] != CLOSEOUT_COMPONENT_TERMS[source_id][component_id]:
+                raise Reject("candidate-closeout-terms-mismatch", f"{source_id}/{component_id}")
+            scope = component["scope"]
+            if not isinstance(scope, dict):
+                raise Reject("candidate-closeout-scope-invalid", f"{source_id}/{component_id}")
+            require_keys(scope, {"local_build", "repository", "public_ci"},
+                         f"{source_id}/{component_id}.scope")
+            scope_values = set(scope.values())
+            allowed_scope = {"supported", "unresolved", "excluded", "not-created", "not-applicable"}
+            if not scope_values or not scope_values <= allowed_scope:
+                raise Reject("candidate-closeout-scope-invalid", f"{source_id}/{component_id}")
+            identity = component["identity"]
+            if not isinstance(identity, dict):
+                raise Reject("candidate-closeout-component-identity-invalid", f"{source_id}/{component_id}")
+            require_keys(identity, {"path", "object_id", "size_bytes", "sha256"},
+                         f"{source_id}/{component_id}.identity")
+            safe_text(identity["path"], f"{source_id}/{component_id}.identity.path", 1024)
+            object_id = identity["object_id"]
+            size_bytes = identity["size_bytes"]
+            digest = identity["sha256"]
+            if object_id is not None and (not isinstance(object_id, str) or not HEX40.fullmatch(object_id)):
+                raise Reject("candidate-closeout-component-identity-invalid", f"{source_id}/{component_id}")
+            if not isinstance(size_bytes, int) or isinstance(size_bytes, bool) or size_bytes < 0:
+                raise Reject("candidate-closeout-component-identity-invalid", f"{source_id}/{component_id}")
+            if digest is not None and (not isinstance(digest, str) or not HEX64.fullmatch(digest)):
+                raise Reject("candidate-closeout-component-identity-invalid", f"{source_id}/{component_id}")
+            if expected_outcome not in {"not-created", "excluded-by-design"} \
+                    and (object_id is None or size_bytes == 0):
+                raise Reject("candidate-closeout-component-identity-invalid", f"{source_id}/{component_id}")
+            if digest is None and expected_outcome not in {"unresolved", "excluded-by-design", "not-created"}:
+                raise Reject("candidate-closeout-component-digest-missing", f"{source_id}/{component_id}")
+            if (identity["path"], object_id, size_bytes, digest) != \
+                    CLOSEOUT_COMPONENT_IDENTITIES[source_id][component_id]:
+                raise Reject("candidate-closeout-component-identity-mismatch", f"{source_id}/{component_id}")
+            notices = component["notices"]
+            if not isinstance(notices, list) or len(notices) > 8:
+                raise Reject("candidate-closeout-notices-invalid", f"{source_id}/{component_id}")
+            for notice in notices:
+                if not isinstance(notice, dict):
+                    raise Reject("candidate-closeout-notices-invalid", f"{source_id}/{component_id}")
+                require_keys(notice, {"path", "object_id", "size_bytes", "sha256", "url"},
+                             f"{source_id}/{component_id}.notice")
+                safe_text(notice["path"], f"{source_id}/{component_id}.notice.path", 512)
+                safe_text(notice["url"], f"{source_id}/{component_id}.notice.url", 1024)
+                if (not isinstance(notice["object_id"], str) or not HEX40.fullmatch(notice["object_id"])
+                        or not isinstance(notice["size_bytes"], int) or isinstance(notice["size_bytes"], bool)
+                        or notice["size_bytes"] <= 0 or not isinstance(notice["sha256"], str)
+                        or not HEX64.fullmatch(notice["sha256"])):
+                    raise Reject("candidate-closeout-notices-invalid", f"{source_id}/{component_id}")
+            notice_identities = tuple((notice["path"], notice["object_id"], notice["size_bytes"],
+                                       notice["sha256"], notice["url"]) for notice in notices)
+            if notice_identities != CLOSEOUT_NOTICE_IDENTITIES.get(source_id, {}).get(component_id, ()):
+                raise Reject("candidate-closeout-notice-identity-mismatch", f"{source_id}/{component_id}")
+            evidence = component["evidence"]
+            obligations = component["obligations"]
+            if (not isinstance(evidence, list) or not evidence or len(evidence) > 16
+                    or any(not isinstance(item, str) or not item.strip() for item in evidence)):
+                raise Reject("candidate-closeout-evidence-invalid", f"{source_id}/{component_id}")
+            if (not isinstance(obligations, list) or len(obligations) > 16
+                    or any(not isinstance(item, str) or not item.strip() for item in obligations)):
+                raise Reject("candidate-closeout-obligations-invalid", f"{source_id}/{component_id}")
+            blocker = component["blocker"]
+            if expected_outcome == "supported":
+                if scope != {"local_build": "supported", "repository": "supported", "public_ci": "supported"} \
+                        or blocker is not None or not obligations or not notices:
+                    raise Reject("candidate-closeout-positive-scope-incomplete", f"{source_id}/{component_id}")
+            elif expected_outcome == "unresolved":
+                safe_text(blocker, f"{source_id}/{component_id}.blocker", 2048)
+                if scope != {"local_build": "unresolved", "repository": "unresolved", "public_ci": "unresolved"} \
+                        or notices:
+                    raise Reject("candidate-closeout-unresolved-scope-overclaim", f"{source_id}/{component_id}")
+                unresolved.append(f"{source_id}/{component_id}")
+            elif expected_outcome == "excluded-by-design":
+                if blocker is not None or scope_values != {"excluded"}:
+                    raise Reject("candidate-closeout-exclusion-invalid", f"{source_id}/{component_id}")
+            elif expected_outcome == "not-created":
+                if blocker is not None or scope_values != {"not-created"} or object_id is not None \
+                        or size_bytes != 0 or digest is not None:
+                    raise Reject("candidate-closeout-not-created-invalid", f"{source_id}/{component_id}")
+            component_map[component_id] = component
+        if set(component_map) != set(expected_components):
+            raise Reject("candidate-closeout-component-set-invalid", source_id)
+        source_map[source_id] = source
+    if set(source_map) != set(CLOSEOUT_SOURCE_IDENTITIES):
+        raise Reject("candidate-closeout-source-set-invalid")
+
+    ordered_games = value["ordered_games"]
+    if not isinstance(ordered_games, dict):
+        raise Reject("candidate-closeout-game-outcome-invalid")
+    require_keys(ordered_games, {
+        "primary", "fallback", "primary_outcome", "fallback_outcome", "builds_performed",
+        "rom_payloads_acquired", "candidate_payloads_staged", "admission_performed",
+        "primary_prebuilt_review",
+    }, "closeout.ordered_games")
+    if (ordered_games["primary"], ordered_games["fallback"]) != (CANDIDATES[0][0], CANDIDATES[1][0]):
+        raise Reject("candidate-closeout-game-order-invalid")
+    if (ordered_games["primary_outcome"], ordered_games["fallback_outcome"]) != CLOSEOUT_GAME_OUTCOMES:
+        raise Reject("candidate-closeout-game-outcome-invalid")
+    if ordered_games["rom_payloads_acquired"] is not True:
+        raise Reject("candidate-closeout-prebuilt-review-mismatch", "official ROM acquisition must be recorded")
+    primary_review = ordered_games["primary_prebuilt_review"]
+    if not isinstance(primary_review, dict) or primary_review != POTION_PANIC_BUILD_REVIEW:
+        raise Reject("candidate-closeout-prebuilt-review-mismatch")
+    if any(ordered_games[key] is not False for key in CLOSEOUT_PRIMARY_NO_PAYLOAD_FIELDS):
+        raise Reject("candidate-closeout-unqualified-game-activity")
+
+    requirement_owners = {"FIXT-01": "Phase 21", "RIGHTS-01": "Phase 20",
+                          "DIAG-01": "Phase 22", "DIAG-02": "Phase 22"}
+    requirements = value["requirements"]
+    if not isinstance(requirements, list) or len(requirements) != len(requirement_owners):
+        raise Reject("candidate-closeout-requirements-invalid")
+    requirement_map: dict[str, dict[str, Any]] = {}
+    for requirement in requirements:
+        if not isinstance(requirement, dict):
+            raise Reject("candidate-closeout-requirements-invalid")
+        require_keys(requirement, {"id", "owner", "status", "reason"}, "closeout.requirement")
+        requirement_id = requirement["id"]
+        if requirement_id not in requirement_owners or requirement_id in requirement_map \
+                or requirement["owner"] != requirement_owners[requirement_id] \
+                or requirement["status"] != "Pending":
+            raise Reject("candidate-closeout-requirement-promotion", str(requirement_id))
+        safe_text(requirement["reason"], f"{requirement_id}.reason", 2048)
+        requirement_map[requirement_id] = requirement
+    if set(requirement_map) != set(requirement_owners):
+        raise Reject("candidate-closeout-requirements-invalid")
+
+    tools = value["build_tools"]
+    if not isinstance(tools, list) or len(tools) != len(CLOSEOUT_SOURCE_IDENTITIES):
+        raise Reject("candidate-closeout-build-tools-invalid")
+    tool_sources: set[str] = set()
+    for item in tools:
+        if not isinstance(item, dict):
+            raise Reject("candidate-closeout-build-tools-invalid")
+        require_keys(item, {"source_id", "status", "reason"}, "closeout.build_tool")
+        if item["source_id"] not in CLOSEOUT_SOURCE_IDENTITIES or item["source_id"] in tool_sources \
+                or item["status"] != "not-observed":
+            raise Reject("candidate-closeout-build-tools-invalid")
+        safe_text(item["reason"], "closeout.build_tool.reason", 1024)
+        tool_sources.add(item["source_id"])
+    if tool_sources != set(CLOSEOUT_SOURCE_IDENTITIES):
+        raise Reject("candidate-closeout-build-tools-invalid")
+
+    if require_satisfied:
+        if stage == "games":
+            game_unresolved = [item for item in unresolved
+                               if item.startswith((CANDIDATES[0][0] + "/", CANDIDATES[1][0] + "/"))]
+            if game_unresolved:
+                raise Reject("candidate-closeout-rights-unresolved", ",".join(game_unresolved))
+            if ordered_games["primary_outcome"] != "complete" or ordered_games["fallback_outcome"] != "complete":
+                raise Reject("candidate-closeout-games-incomplete")
+        elif stage == "rights" and unresolved:
+            raise Reject("candidate-closeout-rights-unresolved", ",".join(unresolved))
+        elif stage in {"pre-ci", "final"} and any(
+                requirement["status"] != "Complete" for requirement in requirement_map.values()):
+            raise Reject("candidate-closeout-requirements-pending",
+                         ",".join(sorted(requirement_map)))
+    return len(sources), unresolved
+
+
+def validate_closeout(root: Path, revision: str, stage: str,
+                      require_satisfied: bool = False) -> tuple[int, list[str]]:
+    validate_source_contract(root, revision)
+    record = record_path(root, CLOSEOUT_RECORD_PATH)
+    result = validate_closeout_data(record, stage, require_satisfied)
+    _validate_potion_panic_closeout_review(root, record)
+    return result
+
+
+def _validate_potion_panic_closeout_review(root: Path, closeout: dict[str, Any]) -> None:
+    """Bind the allowed local-only creator download metadata to the primary no-go record."""
+    ordered = closeout["ordered_games"]
+    review = ordered["primary_prebuilt_review"]
+    evidence_raw = read_regular(root, review["metadata_path"])
+    if sha256(evidence_raw) != review["metadata_sha256"]:
+        raise Reject("candidate-closeout-prebuilt-review-mismatch", "metadata digest")
+    evidence = parse_json(evidence_raw, review["metadata_path"])
+    if (evidence.get("schema_version"), evidence.get("kind"), evidence.get("candidate_id")) != (
+            1, "potion-panic-creator-release-and-build-gate-review", CANDIDATES[0][0]):
+        raise Reject("candidate-closeout-prebuilt-review-mismatch", "metadata identity")
+    notice_identity = CLOSEOUT_NOTICE_IDENTITIES[CANDIDATES[0][0]]["visual-assets"][0]
+    notice_raw = read_regular(root, notice_identity[0])
+    notice_object_id = hashlib.sha1(b"blob " + str(len(notice_raw)).encode("ascii") + b"\0" + notice_raw).hexdigest()
+    if (len(notice_raw), sha256(notice_raw), notice_object_id) != (
+            notice_identity[2], notice_identity[3], notice_identity[1]):
+        raise Reject("candidate-closeout-notice-identity-mismatch", "Potion Panic asset notice bytes")
+    notice_text = " ".join(notice_raw.decode("utf-8", errors="strict").split())
+    for required_text in (
+        "GFX`, `Levels`, `Tilesets`, and `Audio/Modules",
+        "https://deved.itch.io/potion-panic",
+        "This notice does not relicense the source code identified as MIT",
+        "does not assert a blanket CC BY-NC-SA license for every ROM or other combined work",
+    ):
+        if required_text not in notice_text:
+            raise Reject("candidate-closeout-notice-identity-mismatch", required_text)
+    record_path_value = RECORDS[CANDIDATES[0][0]]
+    primary = record_path(root, record_path_value)
+    if disposition_status(primary) != "no-go" or primary.get("disposition", {}).get("category") != "rights":
+        raise Reject("candidate-closeout-primary-record-mismatch")
+    source = _observed_value(primary, "source")
+    expected_source = CLOSEOUT_SOURCE_IDENTITIES[CANDIDATES[0][0]]
+    if (source.get("repository"), source.get("revision")) != (expected_source[0], expected_source[2]):
+        raise Reject("candidate-closeout-primary-record-mismatch", "source")
+    inventory = source.get("inventory")
+    if not isinstance(inventory, list) or sha256(json.dumps(
+            inventory, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")) != POTION_PANIC_SOURCE_INVENTORY_SHA256 \
+            or source.get("submodules") != [CLOSEOUT_POTION_PANIC_SUBMODULE]:
+        raise Reject("candidate-closeout-primary-record-mismatch", "source inventory")
+    if primary.get("build", {}).get("state") != "not_observed" \
+            or primary["build"].get("blocked_by") != "rights":
+        raise Reject("candidate-closeout-primary-record-mismatch", "build cutoff")
+    if primary.get("admission", {}).get("state") != "observed" \
+            or primary["admission"].get("value", {}).get("decision_status") != "no-go":
+        raise Reject("candidate-closeout-primary-record-mismatch", "admission")
+    for field in ("rom", "execution", "progress", "observations", "receipt"):
+        fact = primary.get(field, {})
+        if fact.get("state") != "not_observed" or fact.get("blocked_by") != "rights":
+            raise Reject("candidate-closeout-primary-record-mismatch", field)
+    admission_evidence = primary["admission"]["value"].get("evidence")
+    prebuilt = admission_evidence.get("creator_published_prebuilt") if isinstance(admission_evidence, dict) else None
+    if not isinstance(prebuilt, dict):
+        raise Reject("candidate-closeout-primary-record-mismatch", "prebuilt metadata")
+    if (prebuilt.get("filename"), prebuilt.get("size_bytes"), prebuilt.get("sha256")) != (
+            review["original_filename"], review["original_size_bytes"], review["original_sha256"]):
+        raise Reject("candidate-closeout-primary-record-mismatch", "original ROM")
+    sidecar = prebuilt.get("sidecar")
+    if not isinstance(sidecar, dict) or (sidecar.get("filename"), sidecar.get("sha256")) != (
+            review["sidecar_filename"], review["sidecar_sha256"]):
+        raise Reject("candidate-closeout-primary-record-mismatch", "sidecar")
+    derivative = prebuilt.get("bootless_derivative")
+    if not isinstance(derivative, dict) or derivative.get("sha256") != review["derivative_sha256"]:
+        raise Reject("candidate-closeout-primary-record-mismatch", "derivative")
+    build_review = evidence.get("bootless_derivative_review")
+    original = evidence.get("creator_download")
+    sidecar_evidence = evidence.get("sidecar")
+    linked_source = evidence.get("linked_source")
+    if not isinstance(original, dict) or (original.get("response_filename"), original.get("size_bytes"),
+            original.get("sha256")) != (review["original_filename"], review["original_size_bytes"],
+                                         review["original_sha256"]):
+        raise Reject("candidate-closeout-prebuilt-review-mismatch", "original evidence")
+    if not isinstance(sidecar_evidence, dict) or (sidecar_evidence.get("response_filename"),
+            sidecar_evidence.get("sha256")) != (review["sidecar_filename"], review["sidecar_sha256"]):
+        raise Reject("candidate-closeout-prebuilt-review-mismatch", "sidecar evidence")
+    if not isinstance(build_review, dict) or build_review.get("sha256") != review["derivative_sha256"]:
+        raise Reject("candidate-closeout-prebuilt-review-mismatch", "derivative evidence")
+    if not isinstance(linked_source, dict) or (linked_source.get("repository"), linked_source.get("commit")) != (
+            source["repository"], source["revision"]):
+        raise Reject("candidate-closeout-prebuilt-review-mismatch", "source relationship")
+    if (source.get("repository"), source.get("revision")) != (expected_source[0], expected_source[2]) \
+            or linked_source.get("root_tree_sha1") != expected_source[3]:
+        raise Reject("candidate-closeout-prebuilt-review-mismatch", "pinned source identity")
+    creator_page = evidence.get("creator_page")
+    if not isinstance(creator_page, dict) or creator_page.get("url") != "https://deved.itch.io/potion-panic" \
+            or creator_page.get("source_link") != source["repository"] \
+            or creator_page.get("rom_download_label") != "ROM file (GB Compo 2025 demo)":
+        raise Reject("candidate-closeout-prebuilt-review-mismatch", "creator page relationship")
+    root_license = linked_source.get("root_license")
+    if any(not isinstance(item, dict) or not isinstance(item.get("path"), str)
+           or not isinstance(item.get("size_bytes"), int) or isinstance(item.get("size_bytes"), bool)
+           or not isinstance(item.get("sha256"), str) for item in inventory):
+        raise Reject("candidate-closeout-primary-record-mismatch", "source inventory shape")
+    source_inventory = {item["path"]: (item["size_bytes"], item["sha256"]) for item in inventory}
+    sidecar_identity = (review["sidecar_filename"], review["sidecar_sha256"])
+    if not isinstance(root_license, dict) or (root_license.get("path"), root_license.get("sha256")) != sidecar_identity \
+            or source_inventory.get("LICENSE") != (root_license.get("size_bytes"), root_license.get("sha256")):
+        raise Reject("candidate-closeout-prebuilt-review-mismatch", "source license sidecar")
+    source_build_gate = evidence.get("source_build_gate")
+    if not isinstance(source_build_gate, dict):
+        raise Reject("candidate-closeout-prebuilt-review-mismatch", "source build gate")
+    for identity_name in ("build_script", "converter"):
+        identity = source_build_gate.get(identity_name)
+        if not isinstance(identity, dict) or source_inventory.get(identity.get("path")) != (
+                identity.get("size_bytes"), identity.get("sha256")):
+            raise Reject("candidate-closeout-prebuilt-review-mismatch", f"source {identity_name}")
+    expected_original_header = {
+        "title": "POTION PANIC", "cgb_flag": 192, "mapper_type": 28, "rom_size_code": 3,
+        "ram_size_code": 0, "header_checksum_stored": 113, "header_checksum_calculated": 113,
+        "global_checksum_stored": 5637, "global_checksum_calculated": 5637,
+    }
+    expected_derivative_header = {
+        **expected_original_header, "global_checksum_stored": 191, "global_checksum_calculated": 191,
+    }
+    if original.get("header") != expected_original_header or build_review.get("header") != expected_derivative_header:
+        raise Reject("candidate-closeout-prebuilt-review-mismatch", "cartridge header")
+    transform = build_review.get("transform")
+    if not isinstance(transform, dict) or transform.get("logo_zero_range_inclusive") != [260, 307] \
+            or transform.get("global_checksum_range_inclusive") != [334, 335] \
+            or transform.get("changed_offset_count") != 44 \
+            or not isinstance(transform.get("changed_offsets"), list) \
+            or len(transform["changed_offsets"]) != 44 \
+            or any(not isinstance(offset, int) or isinstance(offset, bool)
+                   or not (260 <= offset <= 307 or 334 <= offset <= 335)
+                   for offset in transform["changed_offsets"]) \
+            or len(set(transform["changed_offsets"])) != 44 \
+            or transform.get("all_changed_offsets_within_allowed_ranges") is not True \
+            or transform.get("header_mode_mapper_and_size_fields_preserved") is not True \
+            or transform.get("executable_bytes_outside_allowed_ranges_preserved") is not True:
+        raise Reject("candidate-closeout-prebuilt-review-mismatch", "restricted transform")
+    build_gate = evidence.get("source_build_gate")
+    levels = build_gate.get("levels_tree") if isinstance(build_gate, dict) else None
+    if not isinstance(build_gate, dict) or build_gate.get("source_build_performed") is not False \
+            or build_gate.get("converter_in_build_script") is not True \
+            or build_gate.get("reviewed_build_closure_without_converter") is not False \
+            or build_gate.get("toolchain_versions_pinned") is not False \
+            or not isinstance(levels, dict) or levels.get("generated_inc_or_bin_outputs_tracked") != []:
+        raise Reject("candidate-closeout-prebuilt-review-mismatch", "source-build gate")
+    use = evidence.get("candidate_use")
+    if not isinstance(use, dict) or use.get("candidate_rom_admitted") is not False \
+            or use.get("candidate_execution_performed") is not False \
+            or use.get("reproducible_source_build_claimed") is not False:
+        raise Reject("candidate-closeout-prebuilt-review-mismatch", "candidate use")
+    disposition_evidence = primary.get("disposition", {}).get("evidence")
+    referenced = admission_evidence.get("source_and_build_evidence")
+    if not isinstance(disposition_evidence, dict) or disposition_evidence.get("creator_prebuilt_metadata_path") \
+            != review["metadata_path"] or disposition_evidence.get("creator_prebuilt_metadata_sha256") \
+            != review["metadata_sha256"] or not isinstance(referenced, dict) \
+            or (referenced.get("path"), referenced.get("sha256")) \
+            != (review["metadata_path"], review["metadata_sha256"]):
+        raise Reject("candidate-closeout-primary-record-mismatch", "metadata evidence binding")
+
+
+def closeout_self_test_controls(root: Path) -> int:
+    """Exercise canonical and one-field-mutant closeout records through the production validator."""
+    canonical = record_path(root, CLOSEOUT_RECORD_PATH)
+    sources, unresolved = validate_closeout_data(canonical, "rights")
+    if sources != 5 or not unresolved:
+        raise Reject("candidate-self-test-failed", "closeout baseline was not a blocked five-source record")
+    if canonical["ordered_games"].get("rom_payloads_acquired") is not True \
+            or canonical["ordered_games"].get("candidate_payloads_staged") is not False \
+            or canonical["ordered_games"].get("admission_performed") is not False:
+        raise Reject("candidate-self-test-failed", "local-only ROM acquisition accounting is not truthful")
+
+    controls = 0
+
+    def refuse(mutant: dict[str, Any], code: str, label: str) -> None:
+        nonlocal controls
+        try:
+            validate_closeout_data(mutant, "rights")
+        except Reject as error:
+            if error.code != code:
+                raise Reject("candidate-self-test-failed", f"closeout {label} failed as {error.code}") from None
+        else:
+            raise Reject("candidate-self-test-failed", f"closeout accepted {label}")
+        controls += 1
+
+    mutant = copy.deepcopy(canonical)
+    mutant["sources"][0]["commit"] = "a" * 40
+    refuse(mutant, "candidate-closeout-source-identity-mismatch", "source substitution")
+
+    mutant = copy.deepcopy(canonical)
+    mutant["sources"].append(copy.deepcopy(mutant["sources"][0]))
+    mutant["sources"][-1]["id"] = "extra-game"
+    refuse(mutant, "candidate-closeout-source-set-invalid", "extra candidate")
+
+    mutant = copy.deepcopy(canonical)
+    component = next(item for item in mutant["sources"][0]["components"]
+                     if item["id"] == "converter-code")
+    component["outcome"] = "supported"
+    component["scope"] = {"local_build": "supported", "repository": "supported", "public_ci": "supported"}
+    component["blocker"] = None
+    component["obligations"] = ["synthetic test obligation"]
+    component["notices"] = [{
+        "path": "synthetic-license", "object_id": "b" * 40, "size_bytes": 1,
+        "sha256": "c" * 64, "url": "https://example.invalid/license",
+    }]
+    refuse(mutant, "candidate-closeout-rights-overclaim", "unsupported rights grant")
+
+    mutant = copy.deepcopy(canonical)
+    component = next(item for item in mutant["sources"][0]["components"]
+                     if item["id"] == "converter-code")
+    component["scope"] = {"local_build": "supported", "repository": "supported", "public_ci": "supported"}
+    refuse(mutant, "candidate-closeout-unresolved-scope-overclaim", "unresolved grant scope")
+
+    mutant = copy.deepcopy(canonical)
+    component = next(item for item in mutant["sources"][0]["components"]
+                     if item["id"] == "source-code")
+    component["identity"]["sha256"] = "d" * 64
+    refuse(mutant, "candidate-closeout-component-identity-mismatch", "component digest substitution")
+
+    mutant = copy.deepcopy(canonical)
+    component = next(item for item in mutant["sources"][0]["components"]
+                     if item["id"] == "source-code")
+    component["notices"][0]["sha256"] = "e" * 64
+    refuse(mutant, "candidate-closeout-notice-identity-mismatch", "notice digest substitution")
+
+    mutant = copy.deepcopy(canonical)
+    mutant["sources"][0]["components"].pop()
+    refuse(mutant, "candidate-closeout-component-set-invalid", "missing component")
+
+    mutant = copy.deepcopy(canonical)
+    mutant["ordered_games"]["fallback"] = "third-game"
+    refuse(mutant, "candidate-closeout-game-order-invalid", "fallback substitution")
+
+    mutant = copy.deepcopy(canonical)
+    mutant["ordered_games"]["fallback_outcome"] = "not-attempted-after-primary"
+    refuse(mutant, "candidate-closeout-game-outcome-invalid", "fallback omitted after primary no-go")
+
+    mutant = copy.deepcopy(canonical)
+    mutant["ordered_games"]["rom_payloads_acquired"] = False
+    refuse(mutant, "candidate-closeout-prebuilt-review-mismatch", "unrecorded local ROM acquisition")
+
+    mutant = copy.deepcopy(canonical)
+    mutant["ordered_games"]["primary_prebuilt_review"]["metadata_sha256"] = "f" * 64
+    refuse(mutant, "candidate-closeout-prebuilt-review-mismatch", "changed prebuilt metadata digest")
+
+    mutant = copy.deepcopy(canonical)
+    mutant["ordered_games"]["candidate_payloads_staged"] = True
+    refuse(mutant, "candidate-closeout-unqualified-game-activity", "unadmitted candidate staging")
+
+    mutant = copy.deepcopy(canonical)
+    mutant["ordered_games"]["admission_performed"] = True
+    refuse(mutant, "candidate-closeout-unqualified-game-activity", "unbound fixture admission")
+
+    mutant = copy.deepcopy(canonical)
+    mutant["requirements"][0]["status"] = "Complete"
+    refuse(mutant, "candidate-closeout-requirement-promotion", "requirement promotion")
+    return controls
+
+
 def _validate_record_set(root: Path) -> None:
     directory = root / "tests/data/cgb-candidates"
     if directory.is_symlink():
@@ -3253,6 +3892,7 @@ def self_test(source_root: Path, selected_revision: str | None, controls_only: b
         controls = 8 + primary_reference_controls
         if controls_only:
             controls += _admission_controls(root, project_revision, fixture, primary_ref)
+            controls += closeout_self_test_controls(root)
         else:
             # Keep a known no-go fallback reference valid in the synthetic history.
             _ = primary_no_go_commit
@@ -3270,10 +3910,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     modes.add_argument("--self-test-controls", action="store_true")
     modes.add_argument("--check-record", metavar="PATH")
     modes.add_argument("--check-all", action="store_true")
+    modes.add_argument("--check-closeout", action="store_true")
     modes.add_argument("--write-build-qualification", action="store_true")
     modes.add_argument("--check-build-qualification", action="store_true")
     parser.add_argument("--stage", choices=("source", "rights", "build", "identity", "mode", "progress", "final"))
+    parser.add_argument("--closeout-stage", choices=("rights", "games", "pre-ci", "final"))
     parser.add_argument("--require-final", action="store_true")
+    parser.add_argument("--require-satisfied", action="store_true")
     parser.add_argument("--runner", help="optional repository-contained acceptance runner executable or Python script")
     parser.add_argument("--current-build-qualification")
     parser.add_argument("--qualification")
@@ -3322,6 +3965,17 @@ def main(argv: list[str] | None = None) -> int:
         if not args.source_revision:
             raise Reject("candidate-source-revision-required")
         revision = resolve_source_revision(root, args.source_revision)
+        if args.check_closeout:
+            if args.closeout_stage is None:
+                raise Reject("candidate-closeout-stage-required")
+            source_count, unresolved = validate_closeout(
+                root, revision, args.closeout_stage, args.require_satisfied,
+            )
+            print(f"PASS: closeout stage={args.closeout_stage} sources={source_count} "
+                  f"unresolved_components={len(unresolved)} source={revision}")
+            return 0
+        if args.closeout_stage is not None or args.require_satisfied:
+            raise Reject("candidate-closeout-options-require-check-closeout")
         if args.check_all:
             records, contract = validate_all(
                 root, revision, args.stage, args.require_final, runner_path,

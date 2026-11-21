@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
@@ -17,6 +18,22 @@ ROOT = Path(__file__).resolve().parents[2]
 SPEC_PATH = "tests/data/state-forks.json"
 ROM_SUFFIXES = (".gb", ".gbc")
 REVISION = re.compile(r"^[0-9a-f]{40}$")
+ACTIVE_MANIFEST_COUNT = 20
+ACTIVE_MANIFEST_ROWS = 147
+ACID2_DIAGNOSTIC_PATH = "fixtures/acid2/manifest.json"
+GBMICROTEST_DIAGNOSTIC_PATH = "fixtures/gbmicrotest/manifest.json"
+DIAGNOSTIC_EXCLUSIONS = {
+    ACID2_DIAGNOSTIC_PATH: {
+        "sha256": "7f198d5964a8547d1a122d5d64d395547ba6f365264cdb00abf190a5880c5da6",
+        "reason": "Diagnostic only: Acid2 is unreplayed, including the failed cross-model comparison; this manifest must not produce state-fork cases.",
+    },
+    GBMICROTEST_DIAGNOSTIC_PATH: {
+        "sha256": "d3aedaa5d89f583bea2951a9a58a3190ff2314fafbfa53b7e63e98ed6349cb7c",
+        "reason": "Diagnostic only: do not replay div_inc_timing_a or any of the 512 excluded gbmicrotest names; this manifest must not produce state-fork cases.",
+    },
+}
+RIGHTS_EXCLUSION_PATH = "tests/acid2/manifest.json"
+RIGHTS_EXCLUSION_REASON = "Optional local corpus is rights-gated (G1) and its ROM bytes are absent."
 
 
 class ForkError(Exception):
@@ -48,12 +65,27 @@ def fixture_git_path(manifest_dir: PurePosixPath, filename: str) -> str:
     return (manifest_dir / path).as_posix()
 
 
+def git_environment() -> dict[str, str]:
+    """Keep immutable reads on the requested repository with replacement refs disabled."""
+    allowed = ("PATH", "SYSTEMROOT", "SystemRoot", "WINDIR", "PATHEXT", "COMSPEC",
+               "TMPDIR", "TMP", "TEMP")
+    env = {key: os.environ[key] for key in allowed if key in os.environ}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull,
+               GIT_CONFIG_NOSYSTEM="1", GIT_TERMINAL_PROMPT="0", LC_ALL="C")
+    return env
+
+
+def git_read(repo: Path, *args: str, input_bytes: bytes | None = None,
+             timeout: int = 60) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(["git", "--no-replace-objects", "-C", str(repo), *args],
+                          cwd=repo, env=git_environment(), input=input_bytes,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          check=False, timeout=timeout)
+
+
 def git_blob(rev: str, path: str, repo: Path) -> bytes:
     immutable = git_path(path).as_posix()
-    result = subprocess.run(
-        ["git", "show", f"{rev}:{immutable}"], cwd=repo,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
-    )
+    result = git_read(repo, "show", f"{rev}:{immutable}")
     if result.returncode:
         raise ForkError(f"immutable revision {rev} has no readable {immutable}: {result.stderr.decode(errors='replace').strip()}")
     return result.stdout
@@ -62,10 +94,11 @@ def git_blob(rev: str, path: str, repo: Path) -> bytes:
 def checked_rev(value: str, repo: Path) -> str:
     if not REVISION.fullmatch(value):
         raise ForkError("--rev must be a resolved immutable 40-character lowercase commit")
-    result = subprocess.run(["git", "cat-file", "-e", f"{value}^{{commit}}"], cwd=repo,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
+    result = git_read(repo, "cat-file", "-t", value)
     if result.returncode:
         raise ForkError(f"--rev is not an available commit: {value}")
+    if result.stdout.strip() != b"commit":
+        raise ForkError(f"--rev is not an unpeeled commit object: {value}")
     return value
 
 
@@ -80,6 +113,87 @@ def load_spec(rev: str, repo: Path) -> tuple[dict, bytes]:
     if spec.get("corpus_union", {}).get("oracle_replay_claim") is not False:
         raise ForkError("fork evidence must remain labelled snapshot-equivalence, not oracle replay")
     return spec, raw
+
+
+def immutable_fixture_manifests(rev: str, repo: Path) -> set[str]:
+    """Enumerate fixture manifests without Git's quoted or line-based path format."""
+    tree = git_read(repo, "ls-tree", "-rz", "--name-only", rev, "--", "fixtures")
+    if tree.returncode:
+        detail = tree.stderr.decode("utf-8", errors="replace").strip()
+        raise ForkError(f"cannot enumerate immutable fixture tree: {detail}")
+
+    manifests: set[str] = set()
+    for path_bytes in tree.stdout.split(b"\0"):
+        if not path_bytes or not path_bytes.endswith(b"/manifest.json"):
+            continue
+        try:
+            manifests.add(path_bytes.decode("utf-8", errors="strict"))
+        except UnicodeDecodeError as exc:
+            raise ForkError(
+                "immutable fixture manifest path is not valid UTF-8: "
+                f"{path_bytes.hex()}"
+            ) from exc
+    return manifests
+
+
+def validate_manifest_census(rev: str, repo: Path, spec: dict) -> list[dict]:
+    active = spec.get("fixture_manifests")
+    excluded = spec.get("excluded")
+    if not isinstance(active, list) or not isinstance(excluded, list):
+        raise ForkError("fixture manifest inventory and exclusions must be arrays")
+    active_paths = []
+    for item in active:
+        if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+            raise ForkError("active fixture manifest entry lacks one path")
+        path = git_path(item["path"]).as_posix()
+        if path in {ACID2_DIAGNOSTIC_PATH, GBMICROTEST_DIAGNOSTIC_PATH}:
+            raise ForkError(f"diagnostic fixture manifest cannot be active: {path}")
+        active_paths.append(path)
+    if len(active_paths) != len(set(active_paths)):
+        raise ForkError("duplicate active fixture manifest")
+
+    excluded_by_path: dict[str, dict] = {}
+    for item in excluded:
+        if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+            raise ForkError("excluded manifest entry lacks one path")
+        path = git_path(item["path"]).as_posix()
+        if path in excluded_by_path:
+            raise ForkError(f"duplicate excluded manifest: {path}")
+        excluded_by_path[path] = item
+    expected_paths = {RIGHTS_EXCLUSION_PATH, *DIAGNOSTIC_EXCLUSIONS}
+    if set(excluded_by_path) != expected_paths:
+        raise ForkError(
+            f"excluded manifest inventory differs from exact policy: missing={sorted(expected_paths-set(excluded_by_path))} extra={sorted(set(excluded_by_path)-expected_paths)}")
+    if set(active_paths) & set(excluded_by_path):
+        raise ForkError("active and excluded manifest sets overlap")
+    rights = excluded_by_path[RIGHTS_EXCLUSION_PATH]
+    if rights.get("reason") != RIGHTS_EXCLUSION_REASON:
+        raise ForkError("optional Acid2 rights-gated exclusion reason changed")
+    actual_manifests = immutable_fixture_manifests(rev, repo)
+    diagnostic_paths = set(DIAGNOSTIC_EXCLUSIONS)
+    expected_active = actual_manifests - diagnostic_paths
+    if actual_manifests != set(active_paths) | diagnostic_paths or set(active_paths) != expected_active:
+        raise ForkError(f"fixture manifest union differs from immutable tree: missing={sorted(actual_manifests-set(active_paths)-diagnostic_paths)} extra={sorted(set(active_paths)-expected_active)}")
+
+    if (spec.get("expected_case_count") != 153 or
+        spec.get("corpus_union", {}).get("fixture_manifest_rom_rows") != ACTIVE_MANIFEST_ROWS or
+        len(active) != ACTIVE_MANIFEST_COUNT or
+        any(not isinstance(item.get("rom_rows"), int) or isinstance(item.get("rom_rows"), bool)
+            for item in active) or
+        sum(item["rom_rows"] for item in active) != ACTIVE_MANIFEST_ROWS or
+        sum(item.get("case_rows", 0) for item in spec.get("acceptance_lists", [])) != 6):
+        raise ForkError("active fixture/acceptance inventory must retain 147+6 rows in 153 cases")
+
+    for path, expected in DIAGNOSTIC_EXCLUSIONS.items():
+        item = excluded_by_path[path]
+        if item.get("sha256") != expected["sha256"]:
+            raise ForkError(f"diagnostic manifest digest pin changed at {path}")
+        if item.get("reason") != expected["reason"]:
+            raise ForkError(f"diagnostic manifest non-execution reason changed at {path}")
+        raw = git_blob(rev, path, repo)
+        if digest(raw) != expected["sha256"]:
+            raise ForkError(f"immutable diagnostic manifest bytes differ from pinned digest at {path}")
+    return active
 
 
 def fork_mutant_source(source: str) -> str:
@@ -133,15 +247,7 @@ def materialize_mutant_core(args: argparse.Namespace) -> None:
 def manifest_cases(rev: str, repo: Path, spec: dict, verify_blobs: bool) -> list[dict]:
     cases: list[dict] = []
     ids: set[str] = set()
-    listed_manifests = {item["path"] for item in spec.get("fixture_manifests", [])}
-    tree = subprocess.run(["git", "ls-tree", "-r", "--name-only", rev, "--", "fixtures"],
-                          cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          text=True, check=False)
-    if tree.returncode:
-        raise ForkError(f"cannot enumerate immutable fixture tree: {tree.stderr.strip()}")
-    actual_manifests = {line for line in tree.stdout.splitlines() if line.endswith("/manifest.json")}
-    if actual_manifests != listed_manifests:
-        raise ForkError(f"fixture manifest union differs from immutable tree: missing={sorted(actual_manifests-listed_manifests)} extra={sorted(listed_manifests-actual_manifests)}")
+    active_manifests = validate_manifest_census(rev, repo, spec)
     catalogs: dict[str, dict] = {}
     for item in spec.get("disposition_catalogs", []):
         raw = git_blob(rev, item["path"], repo)
@@ -167,7 +273,7 @@ def manifest_cases(rev: str, repo: Path, spec: dict, verify_blobs: bool) -> list
             raise ForkError(f"unknown CGB corpus disposition for {row.get('id')}: {status}")
     if dispositions != {"expected_failure": 82, "pass": 16, "prior_observation": 9}:
         raise ForkError(f"CGB corpus expected outcome classes changed: {dispositions}")
-    for item in spec.get("fixture_manifests", []):
+    for item in active_manifests:
         path = git_path(item["path"]).as_posix()
         manifest_dir = PurePosixPath(path).parent
         raw = git_blob(rev, path, repo)
@@ -281,9 +387,6 @@ def manifest_cases(rev: str, repo: Path, spec: dict, verify_blobs: bool) -> list
         })
     if missing_cgb:
         raise ForkError(f"CGB disposition catalog rows have no matching CGB ROM digest in the fixture union: {missing_cgb[:8]}")
-    acid_exclusions = [item for item in spec.get("excluded", []) if item.get("path") == "tests/acid2/manifest.json"]
-    if len(acid_exclusions) != 1 or "rights-gated" not in acid_exclusions[0].get("reason", ""):
-        raise ForkError("optional Acid2 rights/bytes exclusion must stay explicit")
     if len(cases) != spec.get("expected_case_count"):
         raise ForkError(f"corpus union has {len(cases)} rows, expected {spec.get('expected_case_count')}")
     return cases
@@ -676,7 +779,413 @@ def validate_report(report: dict, spec: dict, source: str, rev: str) -> list[str
     return []
 
 
-def self_test(report: dict, spec: dict, source: str, rev: str) -> None:
+def inventory_controls(rev: str, repo: Path, spec: dict) -> tuple[int, int]:
+    positive = manifest_cases(rev, repo, spec, verify_blobs=False)
+    if len(positive) != 153:
+        raise ForkError(f"non-executing inventory produced {len(positive)} cases, expected 153")
+    if any(case.get("source") in DIAGNOSTIC_EXCLUSIONS for case in positive):
+        raise ForkError("diagnostic manifest entered the active case expansion")
+
+    def reject(label: str, mutated: dict, expected: str) -> None:
+        try:
+            validate_manifest_census(rev, repo, mutated)
+        except ForkError as exc:
+            if expected not in str(exc):
+                raise ForkError(f"inventory control {label} refused for wrong reason: {exc}") from exc
+        else:
+            raise ForkError(f"inventory control accepted {label}")
+
+    controls = 0
+    missing = json.loads(json.dumps(spec))
+    missing["excluded"] = [item for item in missing["excluded"]
+                           if item.get("path") != ACID2_DIAGNOSTIC_PATH]
+    reject("missing Acid2 diagnostic exclusion", missing, "excluded manifest inventory differs")
+    controls += 1
+
+    duplicate = json.loads(json.dumps(spec))
+    duplicate["excluded"].append(json.loads(json.dumps(next(
+        item for item in duplicate["excluded"] if item.get("path") == ACID2_DIAGNOSTIC_PATH))))
+    reject("duplicate Acid2 diagnostic exclusion", duplicate, "duplicate excluded manifest")
+    controls += 1
+
+    changed_digest = json.loads(json.dumps(spec))
+    next(item for item in changed_digest["excluded"]
+         if item.get("path") == GBMICROTEST_DIAGNOSTIC_PATH)["sha256"] = "0" * 64
+    reject("changed gbmicrotest digest", changed_digest, "diagnostic manifest digest pin changed")
+    controls += 1
+
+    changed_reason = json.loads(json.dumps(spec))
+    next(item for item in changed_reason["excluded"]
+         if item.get("path") == ACID2_DIAGNOSTIC_PATH)["reason"] = "diagnostic, but replay it"
+    reject("changed Acid2 non-execution reason", changed_reason,
+           "diagnostic manifest non-execution reason changed")
+    controls += 1
+
+    unknown_exclusion = json.loads(json.dumps(spec))
+    unknown_exclusion["excluded"].append({"path": "fixtures/unknown/manifest.json",
+                                          "sha256": "0" * 64, "reason": "unknown"})
+    reject("unknown excluded manifest", unknown_exclusion,
+           "excluded manifest inventory differs")
+    controls += 1
+
+    unknown_active = json.loads(json.dumps(spec))
+    unknown_active["fixture_manifests"].append({"path": "fixtures/unknown/manifest.json",
+                                                "sha256": "0" * 64, "rom_rows": 0})
+    reject("unknown active manifest", unknown_active,
+           "fixture manifest union differs from immutable tree")
+    controls += 1
+
+    activated = json.loads(json.dumps(spec))
+    activated["fixture_manifests"].append({"path": ACID2_DIAGNOSTIC_PATH,
+                                           "sha256": DIAGNOSTIC_EXCLUSIONS[ACID2_DIAGNOSTIC_PATH]["sha256"],
+                                           "rom_rows": 0})
+    reject("diagnostic manifest activation", activated,
+           "diagnostic fixture manifest cannot be active")
+    controls += 1
+    controls += synthetic_path_controls(rev, repo, spec)
+    controls += inventory_cli_controls(rev, repo)
+    return len(positive), controls
+
+
+def inventory_cli_controls(rev: str, repo: Path) -> int:
+    """Prove inventory mode rejects every conflicting operation before Git or output effects."""
+    controls = 0
+    with tempfile.TemporaryDirectory(prefix="state-fork-cli-controls-") as temp_dir:
+        root = Path(temp_dir)
+        trap_dir = root / "bin"
+        trap_dir.mkdir()
+        marker = root / "git-called"
+        trap = trap_dir / "git"
+        marker_literal = "'" + str(marker).replace("'", "'\\''") + "'"
+        trap.write_text(f"#!/bin/sh\nprintf 'called\\n' >> {marker_literal}\nexit 97\n", encoding="utf-8")
+        trap.chmod(0o755)
+        env = git_environment()
+        env["PATH"] = str(trap_dir) + os.pathsep + env.get("PATH", "")
+
+        inputs = root / "inputs"
+        inputs.mkdir()
+        sentinel_bytes = b"do not modify inventory conflict input\n"
+        sentinel_paths = {
+            option: inputs / (option.lstrip("-").replace("-", "_") + ".sentinel")
+            for option in ("--test-exe", "--control-exe", "--mutant-core", "--check")
+        }
+        for path in sentinel_paths.values():
+            path.write_bytes(sentinel_bytes)
+        absent_outputs = {
+            "--report": root / "report.json",
+            "--report-dir": root / "report-dir",
+            "--output": root / "mutant.c",
+            "--build-dir": root / "build-dir",
+        }
+
+        def reject_before_effects(label: str, conflict: list[str]) -> None:
+            marker.unlink(missing_ok=True)
+            command = [sys.executable, "-I", str(Path(__file__).resolve()),
+                       "--inventory-controls", "--rev", rev,
+                       "--repo", str(repo), *conflict]
+            result = subprocess.run(command, cwd=repo, env=env,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    text=True, check=False, timeout=10)
+            combined = result.stdout + result.stderr
+            if (result.returncode != 1
+                    or "verify-state-forks: --inventory-controls is exclusive with every other mode and mode-specific input" not in combined
+                    or result.stdout.strip()
+                    or marker.exists()
+                    or any(path.read_bytes() != sentinel_bytes for path in sentinel_paths.values())
+                    or any(path.exists() for path in absent_outputs.values())):
+                raise ForkError(f"inventory {label} conflict did not refuse before Git/output effects: {combined.strip()}")
+
+        operation_flags = (
+            "--matrix-shard", "--matrix-summary", "--self-test", "--mutants",
+            "--mutant-controls", "--mutant-summary", "--materialize-mutant-core",
+        )
+        for option in operation_flags:
+            reject_before_effects(option, [option])
+            controls += 1
+
+        input_options = (
+            ("--test-exe", str(sentinel_paths["--test-exe"])),
+            ("--control-exe", str(sentinel_paths["--control-exe"])),
+            ("--mutant-core", str(sentinel_paths["--mutant-core"])),
+            ("--shard", "0"),
+            ("--shards", "0"),
+            ("--report", str(absent_outputs["--report"])),
+            ("--report-dir", str(absent_outputs["--report-dir"])),
+            ("--check", str(sentinel_paths["--check"])),
+            ("--output", str(absent_outputs["--output"])),
+            ("--build-dir", str(absent_outputs["--build-dir"])),
+        )
+        for option, value in input_options:
+            reject_before_effects(option, [option, value])
+            controls += 1
+
+        parsed_inventory = parse_args(["--inventory-controls", "--rev", rev, "--repo", str(repo)])
+        if (not parsed_inventory.inventory_controls or parsed_inventory.rev != rev
+                or parsed_inventory.repo != repo.resolve()):
+            raise ForkError("valid inventory-only argument parsing changed")
+        output = root / "materialized.c"
+        parsed = parse_args(["--materialize-mutant-core", "--rev", rev,
+                             "--repo", str(repo), "--output", str(output)])
+        if (not parsed.materialize_mutant_core or parsed.rev != rev
+                or parsed.output != output.resolve()):
+            raise ForkError("materialization-only argument parsing positive changed")
+        controls += 2
+    return controls
+
+
+def synthetic_path_controls(rev: str, repo: Path, spec: dict) -> int:
+    """Exercise raw Git path framing against a disposable manifest tree."""
+    with tempfile.TemporaryDirectory(prefix="state-fork-paths-") as temp_dir:
+        synthetic_repo = Path(temp_dir)
+        git_env = git_environment()
+
+        def git(*args: str, input_bytes: bytes | None = None) -> bytes:
+            result = subprocess.run(
+                ["git", "--no-replace-objects", *args], cwd=synthetic_repo, env=git_env,
+                input=input_bytes, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                check=False,
+            )
+            if result.returncode:
+                detail = result.stderr.decode("utf-8", errors="replace").strip()
+                raise ForkError(f"synthetic inventory Git command failed: {detail}")
+            return result.stdout
+
+        git("init", "-q")
+        git("config", "core.hooksPath", os.devnull)
+        git("config", "user.name", "state-fork-inventory-control")
+        git("config", "user.email", "state-fork-inventory-control@example.invalid")
+        git_env.update({
+            "GIT_AUTHOR_NAME": "state-fork-inventory-control",
+            "GIT_AUTHOR_EMAIL": "state-fork-inventory-control@example.invalid",
+            "GIT_COMMITTER_NAME": "state-fork-inventory-control",
+            "GIT_COMMITTER_EMAIL": "state-fork-inventory-control@example.invalid",
+        })
+
+        source_manifests = [item["path"] for item in spec["fixture_manifests"]]
+        source_manifests.extend(DIAGNOSTIC_EXCLUSIONS)
+        for path in source_manifests:
+            destination = synthetic_repo.joinpath(*PurePosixPath(path).parts)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(git_blob(rev, path, repo))
+
+        def commit_tree(label: str) -> str:
+            git("add", "--all", "--", ".")
+            git("-c", "core.hooksPath=" + os.devnull, "commit", "--quiet", "-m", label)
+            return git("rev-parse", "HEAD").decode("ascii").strip()
+
+        def commit_metadata_path(parent_rev: str, label: str, path: str, content: bytes) -> str:
+            """Commit one raw path through Git metadata without creating a host filename."""
+            git("read-tree", parent_rev)
+            blob = git("hash-object", "-w", "--stdin", input_bytes=content).strip()
+            if not REVISION.fullmatch(blob.decode("ascii", "strict")):
+                raise ForkError("synthetic path control did not produce a full blob object id")
+            record = b"100644 " + blob + b"\t" + path.encode("utf-8") + b"\0"
+            git("update-index", "-z", "--index-info", input_bytes=record)
+            tree = git("write-tree").decode("ascii", "strict").strip()
+            revision = git("commit-tree", tree, "-p", parent_rev, "-m", label).decode(
+                "ascii", "strict").strip()
+            if (not REVISION.fullmatch(revision)
+                    or git("cat-file", "-t", revision).strip() != b"commit"):
+                raise ForkError("synthetic metadata-path control did not produce a commit object")
+            return revision
+
+        base_rev = commit_tree("base manifest inventory")
+        validate_manifest_census(base_rev, synthetic_repo, spec)
+        base_manifests = immutable_fixture_manifests(base_rev, synthetic_repo)
+        if checked_rev(base_rev, synthetic_repo) != base_rev:
+            raise ForkError("exact commit identity positive changed")
+        tag_name = "phase24-annotated-commit-control"
+        git("tag", "--annotate", tag_name, base_rev, "--message", "annotated commit identity control")
+        tag_oid = git("rev-parse", f"refs/tags/{tag_name}").decode("ascii").strip()
+        if (not REVISION.fullmatch(tag_oid)
+                or git("cat-file", "-t", tag_oid).strip() != b"tag"):
+            raise ForkError("annotated identity control did not produce a raw tag object")
+        try:
+            checked_rev(tag_oid, synthetic_repo)
+        except ForkError as exc:
+            if "--rev is not an unpeeled commit object" not in str(exc):
+                raise ForkError(f"annotated tag revision refused for wrong cause: {exc}") from exc
+        else:
+            raise ForkError("annotated tag object was accepted as an immutable commit revision")
+        probe_path = source_manifests[0]
+        base_blob = git_blob(base_rev, probe_path, synthetic_repo)
+
+        # A same-type commit replacement is visible to ordinary Git but must not
+        # redirect either the raw blob reader or the NUL-delimited manifest census.
+        changed_probe = synthetic_repo.joinpath(*PurePosixPath(probe_path).parts)
+        changed_probe.write_bytes(b'{"replacement":"mutant"}\n')
+        added_manifest = synthetic_repo / "fixtures/replacement/manifest.json"
+        added_manifest.parent.mkdir(parents=True, exist_ok=True)
+        added_manifest.write_bytes(b'{"fixtures":[]}\n')
+        mutant_rev = commit_tree("replacement mutant manifest inventory")
+        git("replace", base_rev, mutant_rev)
+        ordinary_blob = subprocess.run(
+            ["git", "-C", str(synthetic_repo), "show", f"{base_rev}:{probe_path}"],
+            cwd=synthetic_repo, env=git_env, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=False,
+        )
+        ordinary_tree = subprocess.run(
+            ["git", "-C", str(synthetic_repo), "ls-tree", "-rz", "--name-only",
+             base_rev, "--", "fixtures"],
+            cwd=synthetic_repo, env=git_env, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=False,
+        )
+        ordinary_manifests = {item.decode("utf-8", "strict")
+                              for item in ordinary_tree.stdout.split(b"\0")
+                              if item.endswith(b"/manifest.json")}
+        if (ordinary_blob.returncode != 0 or ordinary_blob.stdout != b'{"replacement":"mutant"}\n'
+                or added_manifest.relative_to(synthetic_repo).as_posix() not in ordinary_manifests):
+            raise ForkError("replacement-ref control did not prove ordinary Git selected mutant commit data")
+        if (git_blob(base_rev, probe_path, synthetic_repo) != base_blob
+                or immutable_fixture_manifests(base_rev, synthetic_repo) != base_manifests
+                or checked_rev(base_rev, synthetic_repo) != base_rev):
+            raise ForkError("replacement-ref control changed original immutable blob, census, or commit identity")
+        changed_probe.write_bytes(base_blob)
+        added_manifest.unlink()
+        git("read-tree", base_rev)
+
+        # Hostile inherited repository/index selectors must not redirect reads to a
+        # distinguishable decoy or modify its refs/index.
+        decoy = Path(temp_dir) / "decoy"
+        decoy.mkdir()
+        (decoy / "sentinel.txt").write_text("unchanged decoy\n", encoding="utf-8")
+
+        def decoy_git(*args: str) -> bytes:
+            result = subprocess.run(["git", "-C", str(decoy), *args], cwd=decoy,
+                                    env=git_env, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, check=False)
+            if result.returncode:
+                raise ForkError("decoy Git setup failed: " + result.stderr.decode("utf-8", "replace"))
+            return result.stdout
+
+        decoy_git("init", "-q")
+        decoy_git("config", "user.name", "state-fork-decoy")
+        decoy_git("config", "user.email", "state-fork-decoy@example.invalid")
+        decoy_git("add", "sentinel.txt")
+        decoy_git("commit", "-q", "-m", "decoy")
+        decoy_head = decoy_git("rev-parse", "--verify", "HEAD^{commit}").strip()
+        decoy_refs = decoy_git("for-each-ref", "--format=%(refname) %(objectname)")
+        decoy_index = digest((decoy / ".git/index").read_bytes())
+        object_root = decoy / ".git/objects"
+        decoy_objects = digest(b"\0".join(
+            path.relative_to(object_root).as_posix().encode("utf-8") + b"\0" + path.read_bytes()
+            for path in sorted(object_root.rglob("*")) if path.is_file()))
+        hostile = {
+            "GIT_DIR": str(decoy / ".git"),
+            "GIT_WORK_TREE": str(decoy),
+            "GIT_COMMON_DIR": str(decoy / ".git"),
+            "GIT_INDEX_FILE": str(decoy / ".git/index"),
+            "GIT_OBJECT_DIRECTORY": str(decoy / ".git/objects"),
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(decoy / ".git/objects"),
+            "GIT_NAMESPACE": "redirected",
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.bare",
+            "GIT_CONFIG_VALUE_0": "true",
+        }
+        previous = {key: os.environ.get(key) for key in hostile}
+        present = set(hostile).intersection(os.environ)
+        try:
+            os.environ.update(hostile)
+            git_dir = git_read(synthetic_repo, "rev-parse", "--absolute-git-dir").stdout.decode(
+                "utf-8", "strict").strip()
+            worktree = git_read(synthetic_repo, "rev-parse", "--show-toplevel").stdout.decode(
+                "utf-8", "strict").strip()
+            if (Path(git_dir).resolve() != (synthetic_repo / ".git").resolve()
+                    or Path(worktree).resolve() != synthetic_repo.resolve()
+                    or git_blob(base_rev, probe_path, synthetic_repo) != base_blob
+                    or immutable_fixture_manifests(base_rev, synthetic_repo) != base_manifests
+                    or checked_rev(base_rev, synthetic_repo) != base_rev):
+                raise ForkError("hostile Git selectors redirected immutable state-fork reads")
+        finally:
+            for key in hostile:
+                if key in present:
+                    os.environ[key] = previous[key] or ""
+                else:
+                    os.environ.pop(key, None)
+        if (decoy_git("rev-parse", "--verify", "HEAD^{commit}").strip() != decoy_head
+                or decoy_git("for-each-ref", "--format=%(refname) %(objectname)") != decoy_refs
+                or digest((decoy / ".git/index").read_bytes()) != decoy_index
+                or digest(b"\0".join(
+                    path.relative_to(object_root).as_posix().encode("utf-8") + b"\0" + path.read_bytes()
+                    for path in sorted(object_root.rglob("*")) if path.is_file())) != decoy_objects):
+            raise ForkError("hostile Git selector control modified the decoy repository")
+
+        harmless_path = "fixtures/odd\nname/readme.txt"
+        worktree_entries_before = {
+            entry.relative_to(synthetic_repo).as_posix()
+            for entry in synthetic_repo.rglob("*")
+            if entry.relative_to(synthetic_repo).parts[0] != ".git"
+        }
+        harmless_rev = commit_metadata_path(
+            base_rev, "newline non-manifest path", harmless_path, b"not a manifest\n")
+        validate_manifest_census(harmless_rev, synthetic_repo, spec)
+
+        newline_manifest = "fixtures/odd\nsuite/manifest.json"
+        newline_rev = commit_metadata_path(
+            harmless_rev, "newline manifest path", newline_manifest, b"{}\n")
+        try:
+            validate_manifest_census(newline_rev, synthetic_repo, spec)
+        except ForkError as exc:
+            if ("fixture manifest union differs from immutable tree" not in str(exc) or
+                    repr(newline_manifest) not in str(exc)):
+                raise ForkError(
+                    f"newline manifest census control failed for wrong reason: {exc}"
+                ) from exc
+        else:
+            raise ForkError("newline-bearing manifest was omitted from exact census")
+
+        worktree_entries_after = {
+            entry.relative_to(synthetic_repo).as_posix()
+            for entry in synthetic_repo.rglob("*")
+            if entry.relative_to(synthetic_repo).parts[0] != ".git"
+        }
+        if worktree_entries_after != worktree_entries_before:
+            raise ForkError("newline path control materialized Git metadata paths in the host worktree")
+
+        invalid_name = b"invalid-\xff"
+        invalid_manifest_bytes = b"fixtures/" + invalid_name + b"/manifest.json"
+        blob = git("hash-object", "-w", "--stdin", input_bytes=b"{}\n").strip()
+        nested_tree = git(
+            "mktree", "-z",
+            input_bytes=b"100644 blob " + blob + b"\tmanifest.json\0",
+        ).strip()
+        fixtures_entry = next(
+            entry for entry in git("ls-tree", "-z", newline_rev).split(b"\0")
+            if entry.endswith(b"\tfixtures")
+        )
+        _mode, _kind, fixtures_tree = fixtures_entry.split(b"\t", 1)[0].split(b" ")
+        fixture_entries = [entry for entry in git("ls-tree", "-z", fixtures_tree.decode("ascii")).split(b"\0") if entry]
+        fixture_entries.append(b"040000 tree " + nested_tree + b"\t" + invalid_name)
+        new_fixtures_tree = git("mktree", "-z", input_bytes=b"\0".join(fixture_entries) + b"\0").strip()
+        root_entries = []
+        for entry in git("ls-tree", "-z", newline_rev).split(b"\0"):
+            if not entry:
+                continue
+            if entry.endswith(b"\tfixtures"):
+                root_entries.append(b"040000 tree " + new_fixtures_tree + b"\tfixtures")
+            else:
+                root_entries.append(entry)
+        new_root_tree = git("mktree", "-z", input_bytes=b"\0".join(root_entries) + b"\0").strip()
+        invalid_rev = git(
+            "commit-tree", new_root_tree.decode("ascii"), "-p", newline_rev,
+            "-m", "invalid UTF-8 manifest path",
+        ).decode("ascii").strip()
+        try:
+            validate_manifest_census(invalid_rev, synthetic_repo, spec)
+        except ForkError as exc:
+            if ("immutable fixture manifest path is not valid UTF-8" not in str(exc) or
+                    invalid_manifest_bytes.hex() not in str(exc)):
+                raise ForkError(
+                    f"invalid UTF-8 manifest path failed for wrong reason: {exc}"
+                ) from exc
+        else:
+            raise ForkError("invalid UTF-8 manifest path was not rejected deterministically")
+
+    return 10
+
+
+def self_test(report: dict, spec: dict, source: str, rev: str, repo: Path) -> None:
+    inventory_cases, inventory_control_count = inventory_controls(rev, repo, spec)
     corrupted = json.loads(json.dumps(report))
     category_control_spec = json.loads(json.dumps(spec))
     for fixture in category_control_spec.get("generated_field_fixtures", []):
@@ -724,7 +1233,7 @@ def self_test(report: dict, spec: dict, source: str, rev: str) -> None:
             raise ForkError(f"default-only field control failed for wrong reason: {exc}") from exc
     else:
         raise ForkError("census negative control passed after making a field witness default-only")
-    print("state-fork census self-test pass missing-category=refused missing-field-witness=refused default-only-field=refused")
+    print(f"state-fork census self-test pass missing-category=refused missing-field-witness=refused default-only-field=refused inventory-cases={inventory_cases} inventory-controls={inventory_control_count}")
 
 
 def check_report(args: argparse.Namespace) -> None:
@@ -738,7 +1247,7 @@ def check_report(args: argparse.Namespace) -> None:
     validate_report(report, spec, source, rev)
     print(f"state-fork census pass rev={rev} cases={report['case_count']} fields={len(report['field_witnesses'])} categories={len(report['category_witnesses'])}")
     if args.self_test:
-        self_test(report, spec, source, rev)
+        self_test(report, spec, source, rev, args.repo)
 
 
 MUTANT_OBSERVATIONS = {
@@ -1056,17 +1565,18 @@ def mutant_summary(args: argparse.Namespace) -> None:
     print(f"state-fork mutant summary pass rev={rev} fields={len(combined)} proof_classes={proof_class_counts}")
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rev")
     parser.add_argument("--repo", type=Path, default=ROOT)
+    parser.add_argument("--inventory-controls", action="store_true")
     parser.add_argument("--matrix-shard", action="store_true")
     parser.add_argument("--matrix-summary", action="store_true")
     parser.add_argument("--test-exe", type=Path)
     parser.add_argument("--control-exe", type=Path)
     parser.add_argument("--mutant-core", type=Path)
-    parser.add_argument("--shard", type=int, default=0)
-    parser.add_argument("--shards", type=int, default=16)
+    parser.add_argument("--shard", type=int)
+    parser.add_argument("--shards", type=int)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--report-dir", type=Path)
     parser.add_argument("--check", type=Path)
@@ -1077,7 +1587,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--materialize-mutant-core", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--build-dir", type=Path)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    reject_inventory_mode_conflicts(args)
     args.repo = args.repo.resolve()
     if args.test_exe:
         args.test_exe = args.test_exe.resolve()
@@ -1098,10 +1609,38 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+def reject_inventory_mode_conflicts(args: argparse.Namespace) -> None:
+    """Reject mixed inventory requests before resolving paths or reaching Git."""
+    if not args.inventory_controls:
+        return
+    conflicting_modes = (args.matrix_shard, args.matrix_summary, args.self_test,
+                         args.mutants, args.mutant_controls, args.mutant_summary,
+                         args.materialize_mutant_core)
+    conflicting_inputs = (args.test_exe, args.control_exe, args.mutant_core,
+                          args.shard, args.shards, args.report, args.report_dir,
+                          args.check, args.output, args.build_dir)
+    if any(conflicting_modes) or any(value is not None for value in conflicting_inputs):
+        raise ForkError("--inventory-controls is exclusive with every other mode and mode-specific input")
+
+
 def main() -> int:
-    args = parse_args()
     try:
-        if args.matrix_shard:
+        args = parse_args()
+        if args.inventory_controls:
+            if not args.rev:
+                raise ForkError("--inventory-controls needs --rev")
+            rev = checked_rev(args.rev, args.repo)
+            spec, _ = load_spec(rev, args.repo)
+            cases, controls = inventory_controls(rev, args.repo, spec)
+            print(f"state-fork inventory-controls pass rev={rev} cases={cases} controls={controls} runner=0 build=0 configure=0")
+        else:
+            if args.shard is None:
+                args.shard = 0
+            if args.shards is None:
+                args.shards = 16
+        if args.inventory_controls:
+            pass
+        elif args.matrix_shard:
             if not args.test_exe or not args.report or not args.rev:
                 raise ForkError("--matrix-shard needs --rev, --test-exe and --report")
             run_shard(args)

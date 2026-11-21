@@ -91,6 +91,18 @@ def admitted_record() -> dict[str, object]:
 
 
 class CandidateOrderTests(unittest.TestCase):
+    def test_closeout_cli_accepts_rights_and_require_satisfied_options(self) -> None:
+        try:
+            args = CHECKER_MODULE.parse_args([
+                "--check-closeout", "--closeout-stage", "rights", "--require-satisfied",
+                "--repo-root", str(Path.cwd()), "--source-revision", "a" * 40,
+            ])
+        except SystemExit as error:
+            self.fail(f"closeout CLI rejected its staged-rights options (exit {error.code})")
+        self.assertTrue(args.check_closeout)
+        self.assertEqual(args.closeout_stage, "rights")
+        self.assertTrue(args.require_satisfied)
+
     def test_cmake_source_path_key_accepts_windows_slashes_and_rejects_neighbor(self) -> None:
         backslash = r"C:\build\synthetic\src\core\gabbaboy.c"
         forward_slash = "C:/build/synthetic/src/core/gabbaboy.c"

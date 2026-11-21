@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import types
 from pathlib import Path
 
 if not __debug__ or sys.flags.optimize:
@@ -30,10 +31,15 @@ SUPPORT_LEDGER_CONTROL_MARKER = (
 )
 ARCHIVE_HELPER_PATH = ".github/scripts/safe_extract_package.py"
 POLICY_SHA256 = "c5aa1d60a2391e7126e714bcf101292dc86c75ddd1cd6167aea55cdb8b629083"
-REVIEWED_POLICY_COMMIT = "56ff25b6a9a9cad4bb19e4a367e3f7c937975a88"
-REVIEWED_POLICY_SHA256 = "77d78361fd8005d61c9cb605549293ec6869cc40b4cfb5cc92a4d20c60fcf568"
+REVIEWED_POLICY_COMMIT = "5542f45eb436201969015f0478fdde40ba92a5d3"
+REVIEWED_POLICY_SHA256 = "c36763d5655fb9f63f5f19ef4189754263a123f1ec011939f8bb82b7a872e81e"
 REVIEWED_ARCHIVE_HELPER_COMMIT = "37de7e8a9afee6b2b8a263e543279704cbfc1d56"
 REVIEWED_ARCHIVE_HELPER_SHA256 = "54fcfd4869ca2f3d085cfac690804858b42c37d73e7032ff6912a4e972123ce5"
+TRUSTED_FIXTURE_CHECKER_COMMIT = "3de1b0e427f37a202be4469dd818266f359c8b20"
+TRUSTED_FIXTURE_CHECKER_SHA256 = "fda3cca42bf638742230d232779b56627cd0fd68178bae31d7f771714f726159"
+D209_FIXTURE_CHECKER_COMMIT = "96d502d4733ac54aa8bf7fbfd7813065143771dc"
+D209_FIXTURE_CHECKER_SHA256 = "32022b4578426289c24d089c03563a934f964b58bb68c62f5f9bdffcf26e0325"
+FIXTURE_CHECKER_PATH = "tests/scripts/verify-fixture-admission.py"
 GROUPS = {
     "ci": "workflow_policy_group_ci",
     "release_jobs": "workflow_policy_group_release_jobs",
@@ -91,6 +97,31 @@ GROUP_BY_WORKFLOW = {
 }
 EXPECTED_TEST_NAMES = set(GROUPS.values()) | {"workflow_policy_coverage", "workflow_policy_coverage_controls"}
 POLICY_TEST_NAMES = EXPECTED_TEST_NAMES | {"workflow_policy_check"}
+PHASE24_GATE_PATH = ".github/scripts/phase24-promotion-gate.py"
+PHASE24_BOOTSTRAP_PATH = "build/phase24/d230-bootstrap.json"
+PHASE24_BOOTSTRAP_CANONICAL_SHA256 = "e17316b0e18062b46858a992e5d91ed83d96e8dbdb48ea4c03f0aa430be8617a"
+PHASE24_PLAN_REV = "1e1fe73f24255d1a76d9b78a7320a90a4e47de2b"
+PHASE24_PLAN_PARENT = "e6926b69fde285917c2a6cedc42188085420a427"
+PHASE24_PLAN_TREE = "956057b9ca2b136cf9005c249c03c1d2cf8c32f6"
+PHASE24_PLAN_BLOB = "a3c9462f394dc5390451d8d58f20eb07d2fae654"
+PHASE24_PLAN_SHA256 = "5a39f53e085b7b7a94a6d32d3cde891a2dbfe7874509c571e4f31ec346e4fa56"
+PHASE24_PLAN_PATH_SHA256 = "981d088bc4d660fbb67e39db130bb8ec6bba081e6717b99ab9ec825388cdc72e"
+PHASE24_DISCUSSION_REV = "1e1fe73f24255d1a76d9b78a7320a90a4e47de2b"
+PHASE24_DISCUSSION_TREE = "956057b9ca2b136cf9005c249c03c1d2cf8c32f6"
+PHASE24_DISCUSSION_BLOB = "ddd959f1abf4feeb2ca08140e89f8ffc89578737"
+PHASE24_DISCUSSION_SHA256 = "e5fa5c1e510b2e2c47e87154e3f9d7a02e9e70f3a82420ed82659d4a5e70fe3b"
+PHASE24_DISCUSSION_PATH_SHA256 = "3a0e982e59a695cedac174a449e3f1ad3322c943d4e48c772afc85ff6e9b9075"
+PHASE24_CLOSEOUT_REV = "1e1fe73f24255d1a76d9b78a7320a90a4e47de2b"
+PHASE24_CLOSEOUT_TREE = "956057b9ca2b136cf9005c249c03c1d2cf8c32f6"
+PHASE24_CLOSEOUT_BLOB = "cd4855b46aeda1c521372b503b8709217f4c142c"
+PHASE24_CLOSEOUT_SHA256 = "f66e2495bdb81589cda29731501caa0e564d0bbb9c15b9250deaf55c3107435b"
+PHASE24_CLOSEOUT_PATH_SHA256 = "56f44d6804c1ae7ca224578d88d51d10a3bc086f9844bae48bcfaae0f044f703"
+PHASE24_D229_GATE_REV = "4b8a04e259650480a259137b88df20959c86e320"
+PHASE24_D229_GATE_TREE = "b9a1824fd40f9eb3c5855f382370d365ef9ed6dd"
+PHASE24_D229_GATE_BLOB = "d274e410cb13775457581a151eded15dd692edff"
+PHASE24_D229_GATE_SHA256 = "76e3ec4aefc30695f7aa05046a4e06ed587ac36915b351f084293c50db61b0f2"
+PHASE24_GATE_REV_RE = re.compile(r"^[0-9a-f]{40}$")
+PHASE24_GATE_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 ALL_PLATFORMS = ("posix", "windows")
 POSIX_ONLY = ("posix",)
 PREVIEW_BUDGET_JOBS = (
@@ -127,7 +158,7 @@ INSTRUMENTED_POLICY_FUNCTIONS = {
 # are pinned by REVIEWED_POLICY_SHA256; skip only their historical baseline AST diff.
 REVIEWED_CHANGED_POLICY_FUNCTIONS = {
     "_check_ci_planning_lane", "_copy_fixture", "_ledger_mutations", "_mutations",
-    "check_version_window", "check_version_pr_gate", "main", "self_test",
+    "check_preview_player_lane", "check_version_window", "check_version_pr_gate", "main", "self_test",
 }
 ADDED_MUTATION_CONTROLS = (
     ("P20 isolated Linux product verifier is removed", "release.yml", "fixture-product-trust"),
@@ -168,9 +199,23 @@ def reject(message: str) -> None:
     raise CoverageError(message)
 
 
+def git_environment() -> dict[str, str]:
+    allowed = ("PATH", "SYSTEMROOT", "SystemRoot", "WINDIR", "PATHEXT", "COMSPEC",
+               "TMPDIR", "TMP", "TEMP")
+    env = {key: os.environ[key] for key in allowed if key in os.environ}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull,
+               GIT_CONFIG_NOSYSTEM="1", GIT_TERMINAL_PROMPT="0", LC_ALL="C")
+    return env
+
+
+def git_read(root: Path, *args: str, timeout: int = 15) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(["git", "--no-replace-objects", "-C", str(root), *args],
+                          cwd=root, env=git_environment(), capture_output=True,
+                          check=False, timeout=timeout)
+
+
 def baseline_source(root: Path) -> bytes:
-    result = subprocess.run(["git", "show", f"{BASELINE_COMMIT}:{POLICY_PATH}"], cwd=root,
-                            capture_output=True, check=False, timeout=15)
+    result = git_read(root, "show", f"{BASELINE_COMMIT}:{POLICY_PATH}")
     if result.returncode != 0:
         reject(f"immutable workflow-policy source is unavailable: {result.stderr.decode(errors='replace').strip()}")
     digest = hashlib.sha256(result.stdout).hexdigest()
@@ -180,8 +225,7 @@ def baseline_source(root: Path) -> bytes:
 
 
 def reviewed_policy_source(root: Path) -> bytes:
-    result = subprocess.run(["git", "show", f"{REVIEWED_POLICY_COMMIT}:{POLICY_PATH}"], cwd=root,
-                            capture_output=True, check=False, timeout=15)
+    result = git_read(root, "show", f"{REVIEWED_POLICY_COMMIT}:{POLICY_PATH}")
     if result.returncode != 0:
         reject(f"reviewed workflow-policy source is unavailable: {result.stderr.decode(errors='replace').strip()}")
     digest = hashlib.sha256(result.stdout).hexdigest()
@@ -191,8 +235,7 @@ def reviewed_policy_source(root: Path) -> bytes:
 
 
 def reviewed_archive_helper_source(root: Path) -> bytes:
-    result = subprocess.run(["git", "show", f"{REVIEWED_ARCHIVE_HELPER_COMMIT}:{ARCHIVE_HELPER_PATH}"], cwd=root,
-                            capture_output=True, check=False, timeout=15)
+    result = git_read(root, "show", f"{REVIEWED_ARCHIVE_HELPER_COMMIT}:{ARCHIVE_HELPER_PATH}")
     if result.returncode != 0:
         reject(f"reviewed bounded archive helper is unavailable: {result.stderr.decode(errors='replace').strip()}")
     digest = hashlib.sha256(result.stdout).hexdigest()
@@ -207,43 +250,183 @@ def verify_reviewed_policy_identity(candidate: bytes, reviewed: bytes | None) ->
     reviewed_digest = hashlib.sha256(reviewed).hexdigest()
     if reviewed_digest != REVIEWED_POLICY_SHA256:
         reject(f"reviewed workflow-policy source identity has the wrong digest: {reviewed_digest}")
-    # Preserve the complete historical reviewed blob, allowing only the missing
-    # publisher option spelling and the player's existing archive wrapper. The
-    # extracted inner tree still reaches the unchanged product policy checker.
-    original = b'parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2],'
-    corrected = b'parser.add_argument("--root", "--repo-root", type=Path, default=Path(__file__).resolve().parents[2],'
-    if reviewed.count(original) != 1:
-        reject("reviewed workflow-policy root argument is missing or ambiguous")
-    expected = reviewed.replace(original, corrected, 1)
-    old_product_root = (
-        b'        created = True\n'
-        b'        result = subprocess.run(\n'
-        b'            [sys.executable, "-I", str(checker), "--check-product-tree", str(destination),'
-    )
-    new_product_root = (
-        b'        created = True\n'
-        b'        product_root = destination\n'
-        b'        if layout == "player":\n'
-        b'            product_root = destination / "installed-prefix"\n'
-        b'            if (sorted(path.name for path in destination.iterdir()) != ["installed-prefix"]\n'
-        b'                    or not product_root.is_dir() or product_root.is_symlink()):\n'
-        b'                raise Reject("product-archive-player-prefix", "player archive must contain only its installed-prefix directory")\n'
-        b'        result = subprocess.run(\n'
-        b'            [sys.executable, "-I", str(checker), "--check-product-tree", str(product_root),'
-    )
-    if expected.count(old_product_root) != 1:
-        reject("reviewed workflow-policy product root is missing or ambiguous")
-    expected = expected.replace(old_product_root, new_product_root, 1)
-    if candidate != expected:
-        reject("candidate workflow-policy source differs from the exact reviewed publisher corrections")
+    if candidate != reviewed:
+        reject("candidate workflow-policy source differs from the exact reviewed snapshot")
 
 
 def git_text(root: Path, revision: str, path: str) -> bytes:
-    result = subprocess.run(["git", "show", f"{revision}:{path}"], cwd=root,
-                            capture_output=True, check=False, timeout=15)
+    result = git_read(root, "show", f"{revision}:{path}")
     if result.returncode != 0:
         reject(f"immutable candidate source is unavailable: {revision}:{path}")
     return result.stdout
+
+
+def fixture_checker_overlay_hunks() -> tuple[tuple[str, bytes, bytes], ...]:
+    """Fixed, reversible D-209 notice-only changes from the trusted v0.4.0 checker."""
+    return (
+        ("notice constants",
+         b"MAX_MANIFEST_BYTES = 2 * 1024 * 1024\n",
+         b'NOTICE_ACID2_STATUS_BEFORE = (\n'
+         b'    b"bytes are excluded. Runtime comparison has not been performed yet. See\\n"\n'
+         b'    b"fixtures/acid2/SOURCES.md."\n'
+         b')\n'
+         b'NOTICE_ACID2_STATUS_AFTER = (\n'
+         b'    b"bytes are excluded. One software comparison was run: DMG-on-DMG and CGB-on-CGB\\n"\n'
+         b'    b"matched, while DMG-on-CGB differed in all 19,840 compared pixels. The failed\\n"\n'
+         b'    b"cross-model result was not replayed; its cause is not established. These results\\n"\n'
+         b'    b"are controlled-composition evidence, not mode-3 timing evidence. See\\n"\n'
+         b'    b"fixtures/acid2/SOURCES.md and the Phase 24 closeout record."\n'
+         b')\n'
+         b'NOTICE_D209_APPROVED_INDEX_SHA256 = "38820b1dbf48d099438ccc5381d5d75d3b03ea18433e5ea46b7cbd744c1d0011"\n'
+         b'MAX_MANIFEST_BYTES = 2 * 1024 * 1024\n'),
+        ("admission notice overlay call",
+         b"    if current_notice_index != notice_index:\n",
+         b"    if not _notice_index_matches_admission_pin(notice_index, current_notice_index, index_path):\n"),
+        ("current notice digest consumer",
+         b"    if not _notice_digest_table_matches(notice_index, fixture_id, manifest_digest, license_digest):\n",
+         b"    if not _notice_digest_table_matches(current_notice_index, fixture_id, manifest_digest, license_digest):\n"),
+        ("product notice contract description",
+         b'    """Allow the reviewed product-policy paragraph while pinning every other notice byte."""\n',
+         b'    """Allow the baseline, reviewed product claim, or the exact D-209 notice snapshot."""\n'),
+        ("exact product notice snapshot gate",
+         b"    if current_index not in (baseline_index, approved_index):\n"
+         b'        raise Reject("product-source-mismatch", "THIRD_PARTY_NOTICES.md differs outside the approved product-policy paragraph")\n',
+         b"    if (current_index not in (baseline_index, approved_index)\n"
+         b"            and sha256(current_index) != NOTICE_D209_APPROVED_INDEX_SHA256):\n"
+         b'        raise Reject("product-source-mismatch", "THIRD_PARTY_NOTICES.md differs from the exact approved D-209 notice snapshot")\n'),
+        ("admission pin matcher",
+         b"def _product_source_expectations(root: Path, rules: dict, layout: str) -> tuple[dict[str, dict], set[str], bytes]:\n",
+         b"def _notice_index_matches_admission_pin(pinned_index: bytes, current_index: bytes,\n"
+         b"                                        index_path: str) -> bool:\n"
+         b'    """Permit the exact global Acid2 status update while pinning all other notice bytes."""\n'
+         b"    if current_index == pinned_index:\n"
+         b"        return True\n"
+         b'    if (index_path != "THIRD_PARTY_NOTICES.md"\n'
+         b"            or pinned_index.count(NOTICE_ACID2_STATUS_BEFORE) != 1):\n"
+         b"        return False\n"
+         b"    return current_index == pinned_index.replace(NOTICE_ACID2_STATUS_BEFORE,\n"
+         b"                                                  NOTICE_ACID2_STATUS_AFTER, 1)\n"
+         b"\n\n"
+         b"def _product_source_expectations(root: Path, rules: dict, layout: str) -> tuple[dict[str, dict], set[str], bytes]:\n"),
+        ("product notice negative controls",
+         b'        ("historical-digest-row-change",\n'
+         b'         approved.replace(b"59284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c",\n'
+         b'                          b"09284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c", 1)),\n'
+         b"    ]\n",
+         b'        ("historical-digest-row-change",\n'
+         b'         approved.replace(b"59284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c",\n'
+         b'                          b"09284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c", 1)),\n'
+         b'        ("altered-acid2-status", current.replace(b"19,840", b"19,839", 1)),\n'
+         b'        ("status-update-with-unrelated-edit", current + b"unreviewed\\n"),\n'
+         b"    ]\n"),
+        ("admission overlay self-test",
+         b"def self_test_packages(layout: str) -> int:\n",
+         b"def _self_test_acid2_notice_admission_overlay() -> int:\n"
+         b"    pinned = b\"prefix\\n\" + NOTICE_ACID2_STATUS_BEFORE + b\"\\nsuffix\\n\"\n"
+         b"    approved = b\"prefix\\n\" + NOTICE_ACID2_STATUS_AFTER + b\"\\nsuffix\\n\"\n"
+         b"    cases = (\n"
+         b'        ("exact-acid2-status-update", approved, "THIRD_PARTY_NOTICES.md", True),\n'
+         b'        ("status-change-on-other-path", approved, "fixtures/acid2/LICENSE.txt", False),\n'
+         b'        ("altered-status-result", approved.replace(b"19,840", b"19,839", 1),\n'
+         b'         "THIRD_PARTY_NOTICES.md", False),\n'
+         b'        ("unrelated-index-edit", approved + b"unreviewed\\n", "THIRD_PARTY_NOTICES.md", False),\n'
+         b'        ("duplicate-status-anchor", pinned + NOTICE_ACID2_STATUS_BEFORE,\n'
+         b'         "THIRD_PARTY_NOTICES.md", False),\n'
+         b"    )\n"
+         b"    for label, candidate, index_path, expected in cases:\n"
+         b"        actual = _notice_index_matches_admission_pin(pinned, candidate, index_path)\n"
+         b"        if actual is not expected:\n"
+         b'            raise Reject("self-test-acid2-notice-admission-overlay", label)\n'
+         b"    return sum(1 for _, _, _, expected in cases if not expected)\n"
+         b"\n\n"
+         b"def self_test_packages(layout: str) -> int:\n"),
+        ("invoke admission overlay controls",
+         b"        manifest_controls = _run_manifest_mutations(root) + _run_live_byte_mutations(root)\n",
+         b"        manifest_controls = _run_manifest_mutations(root) + _run_live_byte_mutations(root)\n"
+         b"    notice_overlay_controls = _self_test_acid2_notice_admission_overlay()\n"),
+        ("account for admission overlay refusals",
+         b"          f\"{manifest_controls + len(cases) + repository_controls + bounded_controls}\")\n",
+         b"          f\"{manifest_controls + notice_overlay_controls + len(cases) + repository_controls + bounded_controls}\")\n"),
+    )
+
+
+def apply_fixture_checker_overlay(trusted_source: bytes) -> bytes:
+    result = trusted_source
+    for label, before, after in fixture_checker_overlay_hunks():
+        count = result.count(before)
+        if count != 1:
+            reject(f"trusted fixture checker overlay anchor {label} is {'missing' if count == 0 else 'ambiguous'}")
+        result = result.replace(before, after, 1)
+    return result
+
+
+def verify_fixture_checker_overlay(trusted_source: bytes, d209_source: bytes,
+                                   candidate_source: bytes) -> bytes:
+    if hashlib.sha256(trusted_source).hexdigest() != TRUSTED_FIXTURE_CHECKER_SHA256:
+        reject("tagged trusted fixture checker identity differs from v0.4.0")
+    if hashlib.sha256(d209_source).hexdigest() != D209_FIXTURE_CHECKER_SHA256:
+        reject("frozen D-209 fixture checker identity changed")
+    expected = apply_fixture_checker_overlay(trusted_source)
+    if hashlib.sha256(expected).hexdigest() != D209_FIXTURE_CHECKER_SHA256 or expected != d209_source:
+        reject("fixed D-209 notice overlay does not reproduce the frozen checker bytes")
+    restored = expected
+    for label, before, after in reversed(fixture_checker_overlay_hunks()):
+        count = restored.count(after)
+        if count != 1:
+            reject(f"D-209 checker overlay inverse anchor {label} is {'missing' if count == 0 else 'ambiguous'}")
+        restored = restored.replace(after, before, 1)
+    if restored != trusted_source:
+        reject("D-209 checker notice overlay inverse does not reconstruct the trusted tag")
+    if candidate_source != expected:
+        reject("candidate fixture checker differs from the exact D-209 notice overlay")
+    return expected
+
+
+def fixture_checker_overlay_controls(trusted_source: bytes, d209_source: bytes) -> int:
+    if hashlib.sha256(trusted_source).hexdigest() != TRUSTED_FIXTURE_CHECKER_SHA256:
+        reject("fixture checker overlay tag-base positive lacks the trusted v0.4.0 identity")
+    expected = apply_fixture_checker_overlay(trusted_source)
+    controls = 1  # independently pinned tag-base positive
+    verify_fixture_checker_overlay(trusted_source, d209_source, expected)
+    controls += 1  # exact approved overlay positive
+
+    def refused(label: str, operation, expected_reason: str) -> None:
+        try:
+            operation()
+        except CoverageError as error:
+            if expected_reason not in str(error):
+                reject(f"fixture checker overlay control {label} refused for wrong reason: {error}")
+        else:
+            reject(f"fixture checker overlay control accepted {label}")
+
+    refused("wrong trusted base", lambda: verify_fixture_checker_overlay(
+        trusted_source + b"\n", d209_source, expected),
+        "tagged trusted fixture checker identity differs")
+    label, anchor, _after = fixture_checker_overlay_hunks()[0]
+    refused("missing fixed hunk", lambda: apply_fixture_checker_overlay(trusted_source.replace(anchor, b"", 1)),
+            f"overlay anchor {label} is missing")
+    refused("duplicate fixed hunk", lambda: apply_fixture_checker_overlay(
+        trusted_source.replace(anchor, anchor + anchor, 1)),
+        f"overlay anchor {label} is ambiguous")
+
+    mutations = (
+        ("modified status", b"cross-model result was not replayed", b"cross-model result was replayed"),
+        ("changed comparison count", b"19,840 compared pixels", b"19,839 compared pixels"),
+        ("changed approved digest", b"38820b1dbf48d099438ccc5381d5d75d3b03ea18433e5ea46b7cbd744c1d0011",
+         b"48820b1dbf48d099438ccc5381d5d75d3b03ea18433e5ea46b7cbd744c1d0011"),
+        ("modified overlay hunk", b"mode-3 timing evidence", b"mode-3 timing assertion"),
+        ("off-path checker change", b"MAX_FILES = 4096", b"MAX_FILES = 4095"),
+        ("unrelated checker code", b"def check_commit(root: Path", b"def check_commit_mutated(root: Path"),
+    )
+    for label, before, after in mutations:
+        if expected.count(before) != 1:
+            reject(f"fixture checker overlay control {label} target is missing or ambiguous")
+        mutant = expected.replace(before, after, 1)
+        refused(label, lambda mutant=mutant: verify_fixture_checker_overlay(
+            trusted_source, d209_source, mutant),
+            "candidate fixture checker differs from the exact D-209 notice overlay")
+        controls += 1
+    return controls + 3  # wrong base plus missing/duplicate hunk controls
 
 
 def _workflow_job_block_text(workflow: str, job_id: str) -> str | None:
@@ -448,6 +631,7 @@ def _preview_wait_deadlines(job: dict, job_id: str, preview_workflow: str,
         reject(f"preview job {job_id} exact-head waiter must be a standalone unconditional command")
     expected = [
         "python3", ".github/scripts/wait-exact-head-ci.py",
+        "--fail-fast-required-native",
         "--sha", "$EXPECTED_SHA", "--repo", "$GITHUB_REPOSITORY",
         "--require", "required-native",
     ]
@@ -507,9 +691,11 @@ def validate_phase23_timeout_profile(ci_workflow: str, preview_workflow: str,
 
 
 def resolve_commit(root: Path, revision: str) -> str:
-    result = subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}"], cwd=root,
-                            capture_output=True, text=True, check=False, timeout=15)
-    commit = result.stdout.strip()
+    result = git_read(root, "rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}")
+    try:
+        commit = result.stdout.decode("ascii", "strict").strip()
+    except UnicodeDecodeError:
+        commit = ""
     if result.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40,64}", commit):
         reject(f"candidate revision is not an immutable commit: {revision}")
     return commit
@@ -1470,6 +1656,7 @@ def _self_test(root: Path, revision: str) -> int:
     expected_tests = sorted(POLICY_TEST_NAMES | PROCESSOR_RESERVED_TESTS)
     ci_lanes = "\n".join(f"gbb_add_ci_lane_test({name} 0 marker 60 \"\")" for name in expected_tests)
     controls = 0
+    controls += original_object_read_controls()
 
     def rejected(label: str, operation) -> None:
         nonlocal controls
@@ -2097,14 +2284,17 @@ def _self_test(root: Path, revision: str) -> int:
 
     candidate_namespace = {"__name__": "candidate_workflow_policy", "__file__": str(root / POLICY_PATH)}
     exec(compile(candidate_source, POLICY_PATH, "exec"), candidate_namespace)
-    workflow_listing = subprocess.run(
-        ["git", "ls-tree", "-r", "--name-only", candidate, "--", ".github/workflows"],
-        cwd=root, capture_output=True, text=True, check=False, timeout=15,
-    )
+    workflow_listing = git_read(
+        root, "ls-tree", "-rz", "--name-only", candidate, "--", ".github/workflows")
     if workflow_listing.returncode != 0:
-        reject(f"candidate workflow inventory is unavailable: {workflow_listing.stderr.strip()}")
-    candidate_workflows = [path for path in workflow_listing.stdout.splitlines()
-                           if path.startswith(".github/workflows/") and path.endswith(".yml")]
+        reject("candidate workflow inventory is unavailable: " +
+               workflow_listing.stderr.decode("utf-8", "replace").strip())
+    try:
+        candidate_workflows = [path.decode("utf-8", "strict")
+                               for path in workflow_listing.stdout.split(b"\0") if path
+                               if path.startswith(b".github/workflows/") and path.endswith(b".yml")]
+    except UnicodeError:
+        reject("candidate workflow inventory contains a non-UTF-8 path")
     if ".github/workflows/ci.yml" not in candidate_workflows:
         reject("candidate workflow inventory is missing ci.yml")
     required_workflows = {".github/workflows/ci.yml", ".github/workflows/preview.yml",
@@ -2116,7 +2306,7 @@ def _self_test(root: Path, revision: str) -> int:
     candidate_release = git_text(root, candidate, ".github/workflows/release.yml").decode("utf-8")
     # Post-tag recovery profile: keep the generic production checker and every
     # earlier control unchanged. Read the original tagged workflow as immutable data.
-    recovery_source = "3de1b0e427f37a202be4469dd818266f359c8b20"
+    recovery_source = TRUSTED_FIXTURE_CHECKER_COMMIT
     recovery_baseline = _parse_workflow_text(
         git_text(root, recovery_source, ".github/workflows/release.yml").decode("utf-8"),
         "release.yml", candidate_namespace)
@@ -2434,9 +2624,11 @@ def _self_test(root: Path, revision: str) -> int:
     import importlib.util
     import shlex
     trusted_fixture = root / "tests/scripts/verify-fixture-admission.py"
-    fixture_source = git_text(root, recovery_source, "tests/scripts/verify-fixture-admission.py")
-    if trusted_fixture.read_bytes() != fixture_source:
-        reject("release recovery fixture checker differs from the tagged trusted snapshot")
+    fixture_source = git_text(root, recovery_source, FIXTURE_CHECKER_PATH)
+    d209_fixture_source = git_text(root, D209_FIXTURE_CHECKER_COMMIT, FIXTURE_CHECKER_PATH)
+    candidate_fixture_source = trusted_fixture.read_bytes()
+    controls += fixture_checker_overlay_controls(fixture_source, d209_fixture_source)
+    verify_fixture_checker_overlay(fixture_source, d209_fixture_source, candidate_fixture_source)
     spec = importlib.util.spec_from_file_location("release_recovery_fixture_probe", trusted_fixture)
     if spec is None or spec.loader is None:
         reject("release recovery fixture checker cannot be loaded")
@@ -2664,6 +2856,23 @@ def _self_test(root: Path, revision: str) -> int:
                  lambda comment_only_wait=comment_only_wait: validate_phase23_timeout_profile(
                      candidate_ci, comment_only_wait, candidate_namespace))
         current_waiter = _folded_waiter_run(candidate_preview, job_id, preview_tree["jobs"][job_id])
+        missing_fail_fast = current_waiter.replace("--fail-fast-required-native ", "", 1)
+        missing_fail_fast_preview = _replace_folded_waiter_run(candidate_preview, job_id, missing_fail_fast)
+        rejected(f"missing fail-fast opt-in in {job_id}", lambda missing_fail_fast_preview=missing_fail_fast_preview:
+                 validate_phase23_timeout_profile(candidate_ci, missing_fail_fast_preview,
+                                                  candidate_namespace, candidate_release))
+        duplicate_fail_fast = current_waiter.replace(
+            "--fail-fast-required-native", "--fail-fast-required-native --fail-fast-required-native", 1)
+        duplicate_fail_fast_preview = _replace_folded_waiter_run(candidate_preview, job_id, duplicate_fail_fast)
+        rejected(f"duplicate fail-fast opt-in in {job_id}", lambda duplicate_fail_fast_preview=duplicate_fail_fast_preview:
+                 validate_phase23_timeout_profile(candidate_ci, duplicate_fail_fast_preview,
+                                                  candidate_namespace, candidate_release))
+        moved_fail_fast = current_waiter.replace(
+            "--fail-fast-required-native --sha", "--sha", 1) + " --fail-fast-required-native"
+        moved_fail_fast_preview = _replace_folded_waiter_run(candidate_preview, job_id, moved_fail_fast)
+        rejected(f"misplaced fail-fast opt-in in {job_id}", lambda moved_fail_fast_preview=moved_fail_fast_preview:
+                 validate_phase23_timeout_profile(candidate_ci, moved_fail_fast_preview,
+                                                  candidate_namespace, candidate_release))
         dead_branch_waiter = _replace_folded_waiter_run(
             candidate_preview, job_id, f"if false; then {current_waiter}; fi; true")
         rejected(f"unreachable {job_id} exact-head waiter decoy",
@@ -2843,7 +3052,9 @@ def _self_test(root: Path, revision: str) -> int:
     # Preserve the 640 original cases plus both recovery profiles, the receipt
     # runner regression controls, and four real-Git byte controls.
     # Retain the original 694 refusals plus the seven publisher identity mutants.
-    if controls != 701:
+    # D-217 adds six behavior assertions for replacement refs and hostile Git selectors.
+    # D-221 adds nine opt-in presence/order/duplication controls across three preview consumers.
+    if controls != 727:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
 
     # A recovery's verifier overlay must not dirty the source inspected by the
@@ -2938,9 +3149,9 @@ def _self_test(root: Path, revision: str) -> int:
             temporary = scratch / "runner-temp"
             temporary.mkdir()
             clean = temporary / "release-player-source"
-            def git_run(*arguments):
-                subprocess.run(["git", "-C", str(root), *arguments], check=True,
-                               capture_output=True, timeout=15)
+            def git_run(repository: Path, *arguments):
+                subprocess.run(["git", "-C", str(repository), *arguments], check=True,
+                               capture_output=True, timeout=15, env=git_environment())
             def guard_accept(path, revision=tagged_sha):
                 result = subprocess.run([bash, "-c", probe, "guard", str(path), revision],
                                         capture_output=True, text=True, timeout=15)
@@ -2948,8 +3159,13 @@ def _self_test(root: Path, revision: str) -> int:
                     reject(result.stderr.strip())
                 if "state=clean" not in result.stdout:
                     reject("pristine player source: missing clean result")
-            git_run("worktree", "add", "--detach", str(tagged), tagged_sha)
             try:
+                # Keep the real preparation command under test, but place its worktree
+                # metadata in this disposable clone. The source checkout can be read-only.
+                subprocess.run(["git", "clone", "--shared", "--no-checkout", str(root), str(tagged)],
+                               check=True, capture_output=True, timeout=15, env=git_environment())
+                subprocess.run(["git", "-C", str(tagged), "checkout", "--detach", tagged_sha],
+                               check=True, capture_output=True, timeout=15, env=git_environment())
                 guard_accept(tagged)
                 artifact = tagged / "build/downloaded-player/archive-witness"
                 artifact.parent.mkdir(parents=True)
@@ -2993,10 +3209,101 @@ def _self_test(root: Path, revision: str) -> int:
                         or (tagged / "tests/scripts/verify-release-candidate.sh").read_bytes() != overlay_bytes:
                     reject("pristine player source: cleanup changed another namespace")
             finally:
-                for path in (clean, tagged):
-                    if path.exists():
-                        git_run("worktree", "remove", "--force", str(path))
+                if clean.exists() and tagged.exists():
+                    git_run(tagged, "worktree", "remove", "--force", str(clean))
     return controls
+
+
+def original_object_read_controls() -> int:
+    """Prove workflow Git readers ignore replacement refs and hostile repository selectors."""
+    with tempfile.TemporaryDirectory(prefix="workflow-policy-original-objects-") as directory:
+        base = Path(directory)
+        repo = base / "repo"
+        decoy = base / "decoy"
+        repo.mkdir()
+        decoy.mkdir()
+
+        def setup_git(target: Path, *args: str) -> bytes:
+            result = subprocess.run(["git", "-C", str(target), *args], cwd=target,
+                                    env=git_environment(), stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, check=False, timeout=15)
+            if result.returncode:
+                reject("original-object control Git setup failed: " +
+                       result.stderr.decode("utf-8", "replace").strip())
+            return result.stdout
+
+        def commit_control(target: Path, message: str) -> str:
+            setup_git(target, "add", "--all")
+            setup_git(target, "-c", "user.name=Workflow Policy Control", "-c",
+                      "user.email=workflow-control@example.invalid", "commit", "-qm", message)
+            return setup_git(target, "rev-parse", "--verify", "HEAD^{commit}").decode("ascii").strip()
+
+        setup_git(repo, "init", "-q")
+        (repo / "evidence.txt").write_bytes(b"original immutable bytes\n")
+        original = (repo / "evidence.txt").read_bytes()
+        base_revision = commit_control(repo, "original boundary")
+        (repo / "evidence.txt").write_bytes(b"mutant replacement bytes\n")
+        (repo / "extra.txt").write_bytes(b"replacement tree entry\n")
+        mutant = commit_control(repo, "replacement boundary")
+        setup_git(repo, "replace", base_revision, mutant)
+
+        ordinary_blob = setup_git(repo, "show", f"{base_revision}:evidence.txt")
+        ordinary_tree = setup_git(repo, "ls-tree", "-rz", "--name-only", base_revision)
+        if ordinary_blob != b"mutant replacement bytes\n" or b"extra.txt\0" not in ordinary_tree:
+            reject("replacement-ref control did not prove ordinary Git selected mutant blob and tree")
+
+        expected_tree = git_read(repo, "ls-tree", "-rz", "--name-only", base_revision)
+        if (git_text(repo, base_revision, "evidence.txt") != original
+                or expected_tree.returncode != 0 or b"extra.txt\0" in expected_tree.stdout
+                or resolve_commit(repo, base_revision) != base_revision):
+            reject("workflow-policy immutable readers followed replacement objects")
+
+        setup_git(decoy, "init", "-q")
+        (decoy / "evidence.txt").write_bytes(b"decoy bytes\n")
+        decoy_head = commit_control(decoy, "decoy")
+        decoy_refs = setup_git(decoy, "for-each-ref", "--format=%(refname) %(objectname)")
+        decoy_index = hashlib.sha256((decoy / ".git/index").read_bytes()).hexdigest()
+        decoy_object_root = decoy / ".git/objects"
+        decoy_objects = hashlib.sha256(b"\0".join(
+            path.relative_to(decoy_object_root).as_posix().encode("utf-8") + b"\0" + path.read_bytes()
+            for path in sorted(decoy_object_root.rglob("*")) if path.is_file())).hexdigest()
+        hostile = {
+            "GIT_DIR": str(decoy / ".git"),
+            "GIT_WORK_TREE": str(decoy),
+            "GIT_COMMON_DIR": str(decoy / ".git"),
+            "GIT_INDEX_FILE": str(decoy / ".git/index"),
+            "GIT_OBJECT_DIRECTORY": str(decoy / ".git/objects"),
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(decoy / ".git/objects"),
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.bare",
+            "GIT_CONFIG_VALUE_0": "true",
+            "GIT_NAMESPACE": "redirected",
+        }
+        previous = {key: os.environ.get(key) for key in hostile}
+        present = set(hostile).intersection(os.environ)
+        try:
+            os.environ.update(hostile)
+            git_dir = git_read(repo, "rev-parse", "--absolute-git-dir").stdout.decode("utf-8", "strict").strip()
+            worktree = git_read(repo, "rev-parse", "--show-toplevel").stdout.decode("utf-8", "strict").strip()
+            if (Path(git_dir).resolve() != (repo / ".git").resolve()
+                    or Path(worktree).resolve() != repo.resolve()
+                    or git_text(repo, base_revision, "evidence.txt") != original
+                    or b"extra.txt\0" in git_read(repo, "ls-tree", "-rz", "--name-only", base_revision).stdout):
+                reject("hostile Git selectors redirected workflow-policy source reads")
+        finally:
+            for key in hostile:
+                if key in present:
+                    os.environ[key] = previous[key] or ""
+                else:
+                    os.environ.pop(key, None)
+        if (setup_git(decoy, "rev-parse", "--verify", "HEAD^{commit}").decode("ascii").strip() != decoy_head
+                or setup_git(decoy, "for-each-ref", "--format=%(refname) %(objectname)") != decoy_refs
+                or hashlib.sha256((decoy / ".git/index").read_bytes()).hexdigest() != decoy_index
+                or hashlib.sha256(b"\0".join(
+                    path.relative_to(decoy_object_root).as_posix().encode("utf-8") + b"\0" + path.read_bytes()
+                    for path in sorted(decoy_object_root.rglob("*")) if path.is_file())).hexdigest() != decoy_objects):
+            reject("hostile Git selectors changed the workflow-policy decoy repository")
+    return 6
 
 
 def _check(root: Path, build_dir: Path, revision: str) -> None:
@@ -3042,20 +3349,260 @@ def _check(root: Path, build_dir: Path, revision: str) -> None:
     print(f"PASS: workflow policy coverage controls={controls} groups={len(GROUPS)} platform={platform}")
 
 
+def _phase24_object_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            reject(f"Phase 24 bootstrap contains duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _phase24_pinned_gate_source(root: Path, gate_rev: str, gate_sha256: str,
+                                candidate_copy: bytes | None = None) -> bytes:
+    """Load the already-frozen gate by original Git object and bind both local anchors."""
+    if not PHASE24_GATE_REV_RE.fullmatch(gate_rev):
+        reject("Phase 24 gate revision is not a full lowercase commit SHA")
+    if not PHASE24_GATE_DIGEST_RE.fullmatch(gate_sha256):
+        reject("Phase 24 gate digest is not a full lowercase SHA-256")
+
+    receipt = root / PHASE24_BOOTSTRAP_PATH
+    for path in (root / "build", root / "build/phase24", receipt):
+        if path.is_symlink():
+            reject("Phase 24 bootstrap path contains a symlink")
+    if not receipt.is_file() or receipt.stat().st_size > 64 * 1024:
+        reject("Phase 24 bootstrap receipt is missing or oversized")
+    try:
+        bootstrap = json.loads(receipt.read_bytes().decode("utf-8", "strict"),
+                               object_pairs_hook=_phase24_object_pairs,
+                               parse_constant=lambda _value: reject("Phase 24 bootstrap contains a non-finite number"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        reject(f"Phase 24 bootstrap receipt is malformed: {error}")
+    required_top_level = {
+        "schema_version", "kind", "plan", "discussion", "closeout", "loader",
+        "inherited_gate", "gate", "repository", "scope", "history_pins", "trusted_handoff",
+    }
+    required_nested = {
+        "plan": {"rev", "parent", "tree", "blob", "sha256", "path_sha256"},
+        "discussion": {"rev", "tree", "blob", "sha256", "path_sha256"},
+        "closeout": {"rev", "tree", "blob", "sha256", "path_sha256"},
+        "loader": {"sha256"},
+        "inherited_gate": {"rev", "tree", "blob", "sha256", "mode"},
+        "gate": {"rev", "parent", "tree", "blob", "sha256", "old_blob", "old_mode"},
+        "repository": {"root", "git_dir", "branch"},
+        "scope": {"source_allowlist", "correction_allowlist"},
+        "history_pins": {
+            "d209_rev", "d220_candidate", "d221_candidate", "d221_exec_rev", "d221_tree",
+            "d225_gate_blob", "d225_gate_rev", "d225_gate_sha256", "d225_gate_tree",
+            "d225_stop_candidate", "d225_stop_parent", "d225_stop_tree",
+            "d226_coverage_correction_blob", "d226_gate_blob", "d226_gate_parent", "d226_gate_rev",
+            "d226_gate_sha256", "d226_gate_tree", "d226_plan_parent", "d226_plan_rev", "d226_plan_tree",
+            "d226_stop_candidate", "d226_stop_intermediate", "d226_stop_intermediate_parent",
+            "d226_stop_intermediate_tree", "d226_stop_parent", "d226_stop_tree", "d226_waiter_correction_blob",
+            "d227_bootstrap_sha256", "d227_discussion_blob", "d227_discussion_sha256", "d227_gate_blob",
+            "d227_gate_parent", "d227_gate_rev", "d227_gate_sha256", "d227_gate_tree", "d227_plan_blob",
+            "d227_plan_parent", "d227_plan_rev", "d227_plan_sha256", "d227_plan_tree",
+            "d227_seam_coverage_blob", "d227_seam_old_coverage_blob", "d227_seam_parent", "d227_seam_rev",
+            "d227_seam_tree", "d227_stop_candidate", "d227_stop_parent", "d227_stop_tree",
+            "d228_bootstrap_sha256", "d228_denial_output_sha256", "d228_direct_output_sha256",
+            "d228_discussion_blob", "d228_discussion_path_sha256", "d228_discussion_sha256", "d228_gate_blob",
+            "d228_gate_parent", "d228_gate_rev", "d228_gate_sha256", "d228_gate_tree", "d228_plan_blob",
+            "d228_plan_parent", "d228_plan_rev", "d228_plan_sha256", "d228_plan_tree",
+            "d228_stop_continue_blob", "d228_stop_continue_sha256", "d228_stop_handoff_blob",
+            "d228_stop_handoff_sha256", "d228_stop_parent", "d228_stop_rev", "d228_stop_tree",
+            "d229_bootstrap_sha256", "d229_boundary_parent", "d229_boundary_rev", "d229_boundary_tree",
+            "d229_candidate_parent", "d229_candidate_rev", "d229_candidate_tree", "d229_discussion_blob",
+            "d229_discussion_parent", "d229_discussion_path_sha256", "d229_discussion_rev",
+            "d229_discussion_sha256", "d229_discussion_tree", "d229_gate_blob", "d229_gate_mode",
+            "d229_gate_old_blob", "d229_gate_parent", "d229_gate_rev", "d229_gate_sha256", "d229_gate_tree",
+            "d229_handoff_blob", "d229_handoff_sha256",
+            "d229_inherited_gate_blob", "d229_inherited_gate_mode", "d229_inherited_gate_rev",
+            "d229_inherited_gate_sha256", "d229_inherited_gate_tree", "d229_loader_sha256", "d229_phase_continue_blob",
+            "d229_phase_continue_sha256", "d229_plan_blob", "d229_plan_sha256", "d229_roadmap_blob",
+            "d229_roadmap_sha256", "d229_root_continue_blob", "d229_root_continue_sha256", "d229_seam_coverage_blob",
+            "d229_seam_old_coverage_blob", "d229_seam_parent", "d229_seam_rev", "d229_seam_tree",
+            "d229_state_blob", "d229_state_sha256", "d229_t35_code_review", "d229_t35_external_promotion",
+            "d229_t35_security_findings", "d229_t35_security_review", "d229_t35_tests",
+            "d230_discussion_log_blob", "d230_discussion_log_path_sha256", "d230_discussion_log_rev",
+            "d230_discussion_log_sha256", "d230_discussion_log_tree", "planning_hygiene_sha256",
+            "requirements_blob", "roadmap_blob",
+            "state_forks_blob",
+        },
+        "trusted_handoff": {"authority", "plan_rev", "plan_sha256", "gate_rev", "gate_sha256"},
+    }
+    if (type(bootstrap) is not dict or set(bootstrap) != required_top_level
+            or bootstrap.get("kind") != "phase24-d230-bootstrap"
+            or type(bootstrap.get("schema_version")) is not int
+            or bootstrap.get("schema_version") != 1):
+        reject("Phase 24 bootstrap receipt has the wrong identity")
+    for name, required_keys in required_nested.items():
+        value = bootstrap.get(name)
+        if type(value) is not dict or set(value) != required_keys:
+            reject(f"Phase 24 bootstrap {name} schema is invalid")
+    gate = bootstrap.get("gate")
+    handoff = bootstrap.get("trusted_handoff")
+    plan = bootstrap.get("plan")
+    expected_plan = {
+        "rev": PHASE24_PLAN_REV, "parent": PHASE24_PLAN_PARENT, "tree": PHASE24_PLAN_TREE,
+        "blob": PHASE24_PLAN_BLOB, "sha256": PHASE24_PLAN_SHA256,
+        "path_sha256": PHASE24_PLAN_PATH_SHA256,
+    }
+    expected_discussion = {
+        "rev": PHASE24_DISCUSSION_REV, "tree": PHASE24_DISCUSSION_TREE, "blob": PHASE24_DISCUSSION_BLOB,
+        "sha256": PHASE24_DISCUSSION_SHA256, "path_sha256": PHASE24_DISCUSSION_PATH_SHA256,
+    }
+    expected_closeout = {
+        "rev": PHASE24_CLOSEOUT_REV, "tree": PHASE24_CLOSEOUT_TREE, "blob": PHASE24_CLOSEOUT_BLOB,
+        "sha256": PHASE24_CLOSEOUT_SHA256, "path_sha256": PHASE24_CLOSEOUT_PATH_SHA256,
+    }
+    expected_inherited_gate = {
+        "rev": PHASE24_D229_GATE_REV, "tree": PHASE24_D229_GATE_TREE,
+        "blob": PHASE24_D229_GATE_BLOB, "sha256": PHASE24_D229_GATE_SHA256, "mode": "100644",
+    }
+    expected_handoff = {
+        "authority": "gsd-executor", "plan_rev": PHASE24_PLAN_REV,
+        "plan_sha256": PHASE24_PLAN_SHA256, "gate_rev": gate_rev, "gate_sha256": gate_sha256,
+    }
+    if (plan != expected_plan or bootstrap.get("discussion") != expected_discussion
+            or bootstrap.get("closeout") != expected_closeout
+            or bootstrap.get("inherited_gate") != expected_inherited_gate
+            or type(gate) is not dict or type(handoff) is not dict
+            or handoff != expected_handoff or gate.get("rev") != gate_rev
+            or gate.get("sha256") != gate_sha256 or gate.get("parent") != PHASE24_PLAN_REV
+            or gate.get("old_blob") != PHASE24_D229_GATE_BLOB or gate.get("old_mode") != "100644"):
+        reject("Phase 24 gate pin differs from its trusted bootstrap anchor")
+
+    repository = bootstrap["repository"]
+    current_root = git_read(root, "rev-parse", "--show-toplevel")
+    current_git_dir = git_read(root, "rev-parse", "--absolute-git-dir")
+    current_branch = git_read(root, "symbolic-ref", "--quiet", "--short", "HEAD")
+    if any(result.returncode != 0 for result in (current_root, current_git_dir, current_branch)):
+        reject("Phase 24 bootstrap repository identity is unavailable")
+    expected_repository = {
+        "root": current_root.stdout.decode("utf-8", "strict").strip(),
+        "git_dir": current_git_dir.stdout.decode("utf-8", "strict").strip(),
+        "branch": current_branch.stdout.decode("utf-8", "strict").strip(),
+    }
+    if repository != expected_repository or not expected_repository["branch"].startswith("gsd/phase-24-"):
+        reject("Phase 24 bootstrap repository identity differs from this execution")
+    normalized_bootstrap = copy.deepcopy(bootstrap)
+    normalized_bootstrap["repository"] = {"root": "<repo-root>", "git_dir": "<git-dir>", "branch": "<branch>"}
+    try:
+        normalized_bytes = json.dumps(normalized_bootstrap, ensure_ascii=False, sort_keys=True,
+                                      separators=(",", ":"), allow_nan=False).encode("utf-8")
+    except (TypeError, ValueError):
+        reject("Phase 24 bootstrap cannot be canonically encoded")
+    if hashlib.sha256(normalized_bytes).hexdigest() != PHASE24_BOOTSTRAP_CANONICAL_SHA256:
+        reject("Phase 24 bootstrap differs from the exact D230 handoff")
+
+    resolved = resolve_commit(root, gate_rev)
+    if resolved != gate_rev:
+        reject("Phase 24 gate anchor does not name the exact original commit")
+    parent_line = git_read(root, "rev-list", "--parents", "-n", "1", gate_rev)
+    try:
+        commit_and_parents = parent_line.stdout.decode("ascii", "strict").strip().split()
+    except UnicodeDecodeError:
+        reject("Phase 24 gate parent record is malformed")
+    if parent_line.returncode != 0 or commit_and_parents != [gate_rev, gate.get("parent")]:
+        reject("Phase 24 gate anchor is not the bootstrapped single-parent child")
+
+    tree_line = git_read(root, "rev-parse", f"{gate_rev}^{{tree}}")
+    blob_line = git_read(root, "rev-parse", f"{gate_rev}:{PHASE24_GATE_PATH}")
+    if tree_line.returncode != 0 or blob_line.returncode != 0:
+        reject("Phase 24 gate tree or blob is unavailable")
+    try:
+        gate_tree = tree_line.stdout.decode("ascii", "strict").strip()
+        gate_blob = blob_line.stdout.decode("ascii", "strict").strip()
+    except UnicodeDecodeError:
+        reject("Phase 24 gate tree or blob record is malformed")
+    if (gate.get("tree") != gate_tree or gate.get("blob") != gate_blob
+            or not PHASE24_GATE_REV_RE.fullmatch(gate_tree)
+            or not PHASE24_GATE_REV_RE.fullmatch(gate_blob)):
+        reject("Phase 24 gate tree or blob differs from its trusted receipt")
+
+    source = git_text(root, gate_rev, PHASE24_GATE_PATH)
+    if hashlib.sha256(source).hexdigest() != gate_sha256:
+        reject("Phase 24 immutable gate bytes do not match the trusted digest")
+    if candidate_copy is None:
+        checkout_gate = root / PHASE24_GATE_PATH
+        if checkout_gate.is_symlink() or not checkout_gate.is_file():
+            reject("Phase 24 candidate gate copy is missing or redirected")
+        candidate_copy = checkout_gate.read_bytes()
+    if candidate_copy != source:
+        reject("Phase 24 candidate gate copy differs from the immutable anchor")
+    return source
+
+
+def _phase24_promotion_controls(root: Path, gate_rev: str, gate_sha256: str) -> None:
+    source = _phase24_pinned_gate_source(root, gate_rev, gate_sha256)
+    controls = 1
+    for label, bad_rev, bad_digest, candidate_copy in (
+        ("changed revision anchor", "0" * 40, gate_sha256, source),
+        ("changed digest anchor", gate_rev, "0" * 64, source),
+        ("candidate-copy substitution", gate_rev, gate_sha256, source + b"\n"),
+    ):
+        try:
+            _phase24_pinned_gate_source(root, bad_rev, bad_digest, candidate_copy)
+        except CoverageError:
+            controls += 1
+        else:
+            reject(f"Phase 24 promotion control accepted {label}")
+
+    module_name = "_phase24_coverage_gate_" + gate_sha256[:16]
+    if module_name in sys.modules:
+        reject("Phase 24 immutable test module identity is already registered")
+    module = types.ModuleType(module_name)
+    module.__file__ = "<immutable-phase24-gate>"
+    module.__package__ = ""
+    module.__phase24_gate_bytes__ = source
+    sys.modules[module_name] = module
+    env_names = ("PHASE24_D222_GATE_REV", "PHASE24_D222_GATE_SHA256")
+    old_env = {name: os.environ.get(name) for name in env_names}
+    try:
+        os.environ[env_names[0]] = gate_rev
+        os.environ[env_names[1]] = gate_sha256
+        exec(compile(source, module.__file__, "exec"), module.__dict__)
+        if module.__dict__ is not vars(sys.modules[module_name]):
+            reject("Phase 24 gate did not execute in its registered module")
+        if module.main(["--self-test"]) != 0:
+            reject("Phase 24 immutable promotion gate self-test failed")
+    finally:
+        for name, value in old_env.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+        sys.modules.pop(module_name, None)
+    print(f"PASS: phase24-promotion-controls gate={gate_sha256} controls={controls}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="check the frozen IDs and configured CTest listing")
     mode.add_argument("--self-test", action="store_true", help="prove omission, duplication and registration refusals")
+    mode.add_argument("--phase24-promotion-controls", action="store_true",
+                      help="run direct controls against the bootstrapped immutable Phase 24 gate")
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--build-dir", type=Path, default=None)
     parser.add_argument("--rev", default="HEAD", help="immutable candidate commit whose source and registrations are checked")
+    parser.add_argument("--gate-rev", default=None)
+    parser.add_argument("--gate-sha256", default=None)
     args = parser.parse_args()
     try:
         if args.self_test:
+            if args.gate_rev or args.gate_sha256:
+                reject("--self-test does not accept Phase 24 gate pins")
             controls = _self_test(args.root.resolve(), args.rev)
             print(f"PASS: workflow policy coverage self-test controls={controls}")
             return 0
+        if args.phase24_promotion_controls:
+            if not args.gate_rev or not args.gate_sha256 or args.build_dir is not None:
+                reject("--phase24-promotion-controls requires only --gate-rev and --gate-sha256")
+            _phase24_promotion_controls(args.root.resolve(), args.gate_rev, args.gate_sha256)
+            return 0
+        if args.gate_rev or args.gate_sha256:
+            reject("Phase 24 gate pins require --phase24-promotion-controls")
         if args.build_dir is None:
             reject("--check requires --build-dir for the configured CTest listing")
         _check(args.root.resolve(), args.build_dir.resolve(), args.rev)

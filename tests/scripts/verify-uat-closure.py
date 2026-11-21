@@ -177,7 +177,7 @@ def self_test(directory):
         'changed-criterion': lambda t: re.sub(r'^expected: .+$', 'expected: "weaker"', t, count=1, flags=re.M),
         'false-complete': lambda t: t.replace('status: complete', 'status: testing', 1),
         'stale-count': lambda t: t.replace(f'total: {total}', f'total: {total - 1}', 1),
-        'missing-source': lambda t: t.replace(first + ', ', '', 1),
+        'missing-source': lambda t: re.sub(r'^source: .+$', 'source: missing', t, count=1, flags=re.M),
         'duplicate-row': lambda t: t.replace('## Summary\n', re.search(r'^### 1\..*?(?=^### 2\.)', t, re.M | re.S)[0] + '## Summary\n', 1),
         'wrong-phase': lambda t: t.replace(f'phase: {directory.name}', 'phase: GB-0-other', 1),
         'unnumbered-human-checkpoint': lambda t: t.replace('## Summary\n', '### Manual checkpoint\nresult: pending\nsource: human\n\n## Summary\n', 1),

@@ -1,0 +1,123 @@
+{
+  "build": {
+    "recipe": "The pinned Acid2 sources, exact mgblib submodule, and project-authored glyphs are built with pinned RGBDS 0.4.2. rgbfix -f hg sets only header and global checksums, preserves the zero-filled logo range, and two clean builds per variant reproduce identical 32 KiB outputs.",
+    "tools": [
+      {
+        "component": null,
+        "covered_paths": [],
+        "disposition": "build_only",
+        "name": "RGBDS",
+        "revision": "ede982b50a68a6253ffbab17dc4184710b08032f",
+        "source_repository": "https://github.com/gbdev/rgbds",
+        "terms": "MIT",
+        "version": "0.4.2"
+      }
+    ]
+  },
+  "components": {
+    "art": {
+      "covered_paths": [
+        "fixtures/acid2/derivatives.tar"
+      ],
+      "evidence": {
+        "path": "fixtures/acid2/LICENSE.txt",
+        "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044"
+      },
+      "presence": "present",
+      "scope": {
+        "public_ci": true,
+        "repository": true
+      },
+      "terms": "D-207 bounded root-MIT inference for each exact pinned repository img tree only"
+    },
+    "audio_driver": {
+      "presence": "absent",
+      "reason": "The two diagnostic programs have no separate audio-driver component."
+    },
+    "build_inputs": {
+      "presence": "absent",
+      "reason": "RGBDS is pinned build-only and no RGBDS binary or unrelated build tool is distributed."
+    },
+    "code": {
+      "covered_paths": [
+        "fixtures/acid2/derivatives.tar",
+        "fixtures/acid2/SOURCES.md"
+      ],
+      "evidence": {
+        "path": "fixtures/acid2/LICENSE.txt",
+        "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044"
+      },
+      "presence": "present",
+      "scope": {
+        "public_ci": true,
+        "repository": true
+      },
+      "terms": "MIT for exact pinned source revisions and project-authored replacement glyphs"
+    },
+    "notices": {
+      "covered_paths": [
+        "fixtures/acid2/LICENSE.txt",
+        "fixtures/acid2/derivatives.tar"
+      ],
+      "evidence": {
+        "path": "fixtures/acid2/LICENSE.txt",
+        "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044"
+      },
+      "presence": "present",
+      "scope": {
+        "public_ci": true,
+        "repository": true
+      },
+      "terms": "Complete root MIT notices are retained for dmg-acid2, cgb-acid2, and mgblib source"
+    }
+  },
+  "decision": {
+    "component_rationale": {
+      "art": "D-207 accepts the root MIT grant for only each exact pinned repository img tree; the full notices and README credit are retained.",
+      "code": "The archive contains only the two exact pinned Acid2 source closures, one font-include replacement per ROM, project-authored glyph source, deterministic build outputs, source-anchored masks and unchanged references.",
+      "notices": "Complete root MIT notices for both Acid2 repositories and mgblib are preserved in the archive and the full local notice travels beside it."
+    },
+    "rationale": "The exact pinned DMG and CGB source trees are reproduced with project-authored glyphs. The owner accepted a bounded root-MIT inference for only each exact pinned img tree under D-207; full notices travel with the fixture. The Nintendo logo and mgblib font are excluded.",
+    "reviewer_role": "project-maintainer",
+    "status": "approved"
+  },
+  "files": [
+    {
+      "path": "fixtures/acid2/LICENSE.txt",
+      "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044",
+      "size_bytes": 1068
+    },
+    {
+      "path": "fixtures/acid2/SOURCES.md",
+      "sha256": "ea01de193d58bd73de69ebe5db7c814a326382502ac6dbfaed8bdfd316ec11af",
+      "size_bytes": 3439
+    },
+    {
+      "path": "fixtures/acid2/derivatives.tar",
+      "sha256": "bd7f78881d6964e9396128814c769f93ef661030290c5e66b9b8fda5b040f5cb",
+      "size_bytes": 296960
+    }
+  ],
+  "fixture_kind": "acid2-controlled-composition-derivatives",
+  "inputs": [
+    {
+      "path": "fixtures/acid2/derivatives.tar",
+      "sha256": "bd7f78881d6964e9396128814c769f93ef661030290c5e66b9b8fda5b040f5cb",
+      "size_bytes": 296960
+    }
+  ],
+  "notices": {
+    "index_path": "THIRD_PARTY_NOTICES.md",
+    "local_path": "fixtures/acid2/LICENSE.txt",
+    "sha256": "2b5ed6f8abbded3913a08ebe8f4eedb340735efc3b024570244d6efa73418044"
+  },
+  "permissions": {
+    "public_ci": true,
+    "repository": true
+  },
+  "schema_version": 1,
+  "source": {
+    "repository": "https://github.com/mattcurrie/dmg-acid2",
+    "revision": "dc2295408f881637ff69f784d8d93f3d2db30181"
+  }
+}

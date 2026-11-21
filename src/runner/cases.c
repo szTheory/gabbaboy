@@ -12,14 +12,20 @@
 enum {
     K_ID, K_ROM, K_ROM_SHA256, K_ROM_SIZE, K_ORACLE, K_REFERENCE_DIGEST, K_INPUT_SCRIPT,
     K_INPUT_SHA256, K_BUDGET, K_MODEL_PASS, K_MODEL_FAIL, K_EXPECT_FAIL_REASON,
-    K_TARGET_REVISION, K_PREDICATE, K_EXPECT_HW, K_COUNT
+    K_TARGET_REVISION, K_PREDICATE, K_EXPECT_HW, K_DIAGNOSTIC_EXPECTED,
+    K_INSTRUCTION_LIMIT, K_EVENT_LIMIT, K_COUNT
 };
 
 static const char *const key_names[K_COUNT] = {
     "id", "rom", "rom_sha256", "rom_size", "oracle", "reference_digest", "input_script",
     "input_sha256", "budget_half_dots", "model_pass", "model_fail", "expect_fail_reason",
-    "target_revision", "predicate", "expect_hw_capability"
+    "target_revision", "predicate", "expect_hw_capability", "diagnostic_expected",
+    "instruction_limit", "event_limit"
 };
+
+#define DIAGNOSTIC_MAX_BUDGET_HALF_DOTS UINT64_C(8192)
+#define DIAGNOSTIC_MAX_INSTRUCTIONS UINT64_C(512)
+#define DIAGNOSTIC_MAX_EVENTS UINT64_C(4096)
 
 static int reject(char *err, size_t capacity, const char *reason, size_t line) {
     if (err != NULL && capacity > 0) {
@@ -33,6 +39,21 @@ static int is_lower_hex(const char *s, size_t length) {
     for (size_t i = 0; i < length; i++) {
         if (!((s[i] >= '0' && s[i] <= '9') || (s[i] >= 'a' && s[i] <= 'f'))) return 0;
     }
+    return 1;
+}
+
+static int parse_hex_byte(const char *s, uint8_t *out) {
+    if (strlen(s) != 2u) return 0;
+    unsigned value = 0;
+    for (size_t i = 0; i < 2u; i++) {
+        char c = s[i];
+        unsigned digit;
+        if (c >= '0' && c <= '9') digit = (unsigned)(c - '0');
+        else if (c >= 'a' && c <= 'f') digit = (unsigned)(c - 'a') + 10u;
+        else return 0;
+        value = value * 16u + digit;
+    }
+    *out = (uint8_t)value;
     return 1;
 }
 
@@ -146,6 +167,8 @@ static const char *apply(gbb_case *c, int key, const char *value) {
             if (!parse_u64(value + 15, GBB_ACCEPT_MAX_SCRIPT_HALF_DOTS, &number)) return "bad-number";
             c->oracle = GBB_ORACLE_FRAME_DIGEST_AT;
             c->oracle_half_dots = number;
+        } else if (strcmp(value, "diagnostic-shared-ff80-ff82") == 0) {
+            c->oracle = GBB_ORACLE_DIAGNOSTIC_SHARED;
         } else if (strcmp(value, "fibonacci-ldbb") == 0 || strcmp(value, "screen-text") == 0) {
             return "rejected-oracle";
         } else {
@@ -187,6 +210,16 @@ static const char *apply(gbb_case *c, int key, const char *value) {
         /* Open Question 4: the key is kept; only 0 is accepted this phase. */
         if (strcmp(value, "0") != 0) return "expect-hw-capability-unsupported";
         c->expect_hw_capability = 0;
+        return NULL;
+    case K_DIAGNOSTIC_EXPECTED:
+        return parse_hex_byte(value, &c->diagnostic_expected) ? NULL : "bad-diagnostic-byte";
+    case K_INSTRUCTION_LIMIT:
+        if (!parse_u64(value, DIAGNOSTIC_MAX_INSTRUCTIONS, &number)) return "bad-number";
+        c->instruction_limit = (uint32_t)number;
+        return NULL;
+    case K_EVENT_LIMIT:
+        if (!parse_u64(value, DIAGNOSTIC_MAX_EVENTS, &number)) return "bad-number";
+        c->event_limit = (uint32_t)number;
         return NULL;
     default:
         return "unknown-key";
@@ -233,8 +266,25 @@ static int parse_line(char *line, gbb_case *c, size_t line_no, char *err, size_t
         if (!(seen & (1u << K_PREDICATE)) || !(seen & (1u << K_INPUT_SCRIPT))) {
             return reject(err, err_capacity, "missing-key", line_no);
         }
+    } else if (c->oracle == GBB_ORACLE_DIAGNOSTIC_SHARED) {
+        const unsigned diag_keys = (1u << K_DIAGNOSTIC_EXPECTED) | (1u << K_INSTRUCTION_LIMIT) |
+                                   (1u << K_EVENT_LIMIT);
+        if ((seen & diag_keys) != diag_keys) return reject(err, err_capacity, "missing-key", line_no);
+        if ((seen & (1u << K_REFERENCE_DIGEST)) || (seen & (1u << K_INPUT_SCRIPT)) ||
+            (seen & (1u << K_PREDICATE))) return reject(err, err_capacity, "diagnostic-key-conflict", line_no);
+        if (c->budget_half_dots > DIAGNOSTIC_MAX_BUDGET_HALF_DOTS) {
+            return reject(err, err_capacity, "bad-number", line_no);
+        }
+        if (c->model_pass_count != 1u || strcmp(c->model_pass[0], "dmg-cpu-b") != 0 ||
+            c->model_fail_count != 0u) {
+            return reject(err, err_capacity, "diagnostic-model-scope", line_no);
+        }
     } else if (!(seen & (1u << K_REFERENCE_DIGEST))) {
         return reject(err, err_capacity, "missing-key", line_no);
+    }
+    if (c->oracle != GBB_ORACLE_DIAGNOSTIC_SHARED &&
+        (seen & ((1u << K_DIAGNOSTIC_EXPECTED) | (1u << K_INSTRUCTION_LIMIT) | (1u << K_EVENT_LIMIT)))) {
+        return reject(err, err_capacity, "diagnostic-key-not-applicable", line_no);
     }
     for (size_t i = 0; i < c->model_pass_count; i++) {
         if (list_contains(c->model_fail, c->model_fail_count, c->model_pass[i])) {

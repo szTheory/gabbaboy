@@ -22,12 +22,21 @@ MAX_OUTPUT = 32 * 1024 * 1024
 # The current immutable source archive is about 61 MiB. Keep this separate from
 # subprocess text capture and stream it to disk with a 128 MiB ceiling.
 MAX_SOURCE_ARCHIVE_BYTES = 128 * 1024 * 1024
-BASELINE = "f2542c8053db1e5183e0dd0e8702e77afbb2eb59"
+# This Phase 22 merge contains both the historical blocked assessment and the
+# point-in-time requirements boundary consumed by this checker.
+BASELINE = "ca2f0be6b38e7dd22e0eb3296b9a21cceed1a765"
+PHASE22_BOUNDARY_REVISION = "4ac46e7406329efbd4fb6ac0dc39c86c14156691"
+HISTORICAL_REQUIREMENT_REVISIONS = frozenset({BASELINE, PHASE22_BOUNDARY_REVISION})
+APPROVED_BOUNDARY_REVISIONS = frozenset({PHASE22_BOUNDARY_REVISION})
 # D-168/D-172 changed only the archive checker's self-test harness. Keep the
 # historical boundary intact and permit exactly its independently reviewed bytes.
 ARCHIVE_HARNESS_PATH = "tests/scripts/verify-v02-source-archive.py"
 ARCHIVE_HARNESS_PIN = "b50f0c10e0794591a212edbfd083f10084805532"
 ARCHIVE_HARNESS_SHA256 = "5a3083b6a7d32c0692672645564241a81d9be0b0939c9ee198afb951f43f183a"
+# D-207 adds the precisely pinned Acid2 notice rows while retaining the Phase 22
+# assessment boundary; accept only the notice index from the committed fixture snapshot.
+NOTICE_INDEX_PIN = "3d0587d49e7d88815c6af7dc36f4810579a8dc48"
+NOTICE_INDEX_SHA256 = "3ed10aa3c89249ab7e43364af94e667f14618befbd6168ba60e0211561417b37"
 # The notice-path regression changes only the self-test harness. Preserve the
 # earlier reviewed bytes too: the permanent release tag still contains them.
 NOTICE_PATH_HARNESS_PIN = "5d386d9ddea41c8529a3dadc90b4855b703e383d"
@@ -64,12 +73,33 @@ REQUIRED = (
     "docs/diagnostic-evidence.md", "docs/cgb-profile.md", ".planning/REQUIREMENTS.md",
     "tests/CMakeLists.txt", "tests/expected-tests.txt", *PRESERVED,
 )
+V04_D209_ARCHIVE_REV = "96d502d4733ac54aa8bf7fbfd7813065143771dc"
+D209_PRESERVED_SOURCE_SHA256 = {
+    "THIRD_PARTY_NOTICES.md": "38820b1dbf48d099438ccc5381d5d75d3b03ea18433e5ea46b7cbd744c1d0011",
+    "tests/scripts/verify-fixture-admission.py": "32022b4578426289c24d089c03563a934f964b58bb68c62f5f9bdffcf26e0325",
+}
+V04_ARCHIVED_REQUIREMENTS = ".planning/milestones/v0.4-REQUIREMENTS.md"
+V04_ARCHIVED_ROADMAP = ".planning/milestones/v0.4-ROADMAP.md"
+V04_ROOT_REQUIREMENTS = ".planning/REQUIREMENTS.md"
+V04_ROOT_ROADMAP = ".planning/ROADMAP.md"
+V04_ARCHIVED_DISPOSITIONS = {
+    "GAME-01": ("21", "Complete"), "GAME-02": ("21", "Complete"),
+    "FIXT-01": ("21", "Pending"), "RIGHTS-01": ("20", "Complete"),
+    "DIAG-01": ("22", "Complete"), "DIAG-02": ("22", "Complete"),
+    "FEED-01": ("21", "Complete"), "REL-01": ("23", "Complete"),
+}
+V04_ARCHIVED_REQUIREMENT_IDS = frozenset(V04_ARCHIVED_DISPOSITIONS)
 BOUNDARY_PATHS = (
     ".planning/STATE.md", ".planning/state.json", ".planning/ROADMAP.md",
     ".planning/REQUIREMENTS.md", ".planning/config.json",
     ".planning/phases/GB-22-composition-and-microtest-evidence/.continue-here.md",
 )
+V04_RECOVERY_PLAN = BOUNDARY_PATHS[-1].replace(
+    "GB-22-composition-and-microtest-evidence/.continue-here.md",
+    "GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md",
+)
 FORBIDDEN_DIRS = ("fixtures/acid2", "fixtures/gbmicrotest")
+PHASE24_ADMITTED_FIXTURE_DIRS = ("fixtures/acid2", "fixtures/gbmicrotest")
 FORBIDDEN_FILES = (
     "tests/external/diagnostic-package-identities.json",
     "tests/scripts/verify-diagnostic-packages.py",
@@ -125,14 +155,33 @@ def cmake_path_literal(path: str | pathlib.Path) -> str:
     return os.fspath(path).replace("\\", "/").replace('"', '\\"')
 
 
+def git_environment() -> dict[str, str]:
+    """Build a small Git-only environment with repository/config redirection removed."""
+    allowed = (
+        "PATH", "TMPDIR", "TMP", "TEMP", "SYSTEMROOT", "SystemRoot", "WINDIR",
+        "PATHEXT", "COMSPEC",
+    )
+    environment = {key: os.environ[key] for key in allowed if key in os.environ}
+    environment.update({
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_SYSTEM": os.devnull,
+        "GIT_TERMINAL_PROMPT": "0",
+        "LC_ALL": "C",
+    })
+    return environment
+
+
 def run(argv: list[str], root: pathlib.Path, *, timeout: int = 30,
         operation: str = "child-process",
-        limit: int = MAX_OUTPUT) -> tuple[int, bytes, bytes]:
+        limit: int = MAX_OUTPUT,
+        env: dict[str, str] | None = None) -> tuple[int, bytes, bytes]:
     if not argv or any("\x00" in arg for arg in argv):
         raise Reject("subprocess-arguments-invalid")
     try:
         process = subprocess.Popen(argv, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+                                   env=env if env is not None else
+                                   {**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     except OSError as error:
         raise Reject(f"subprocess-start-failed:{error.__class__.__name__}") from None
     outputs = [bytearray(), bytearray()]
@@ -194,7 +243,8 @@ def run(argv: list[str], root: pathlib.Path, *, timeout: int = 30,
 
 
 def git(root: pathlib.Path, *args: str, limit: int = MAX_OUTPUT) -> bytes:
-    code, out, err = run(["git", *args], root, limit=limit)
+    code, out, err = run(["git", "--no-replace-objects", *args], root,
+                         limit=limit, env=git_environment())
     if code:
         detail = err.decode("utf-8", "replace")[-350:].strip()
         raise Reject(f"git-failed:{args[0]}:{detail}")
@@ -247,10 +297,30 @@ def tree_entries(root: pathlib.Path, revision: str) -> dict[str, tuple[str, int,
     return result
 
 
+def _current_snapshot_paths(entries: dict[str, tuple[str, int, str]]) -> tuple[str, ...]:
+    has_requirements_archive = V04_ARCHIVED_REQUIREMENTS in entries
+    has_roadmap_archive = V04_ARCHIVED_ROADMAP in entries
+    if has_requirements_archive != has_roadmap_archive:
+        raise Reject("source-archive-pair-invalid")
+    if not has_requirements_archive:
+        raise Reject("source-archive-pair-required")
+    if V04_ROOT_REQUIREMENTS in entries:
+        raise Reject("active-root-requirements-restored")
+    shared = tuple(path for path in REQUIRED if path != V04_ROOT_REQUIREMENTS)
+    return (*shared, V04_ARCHIVED_REQUIREMENTS, V04_ARCHIVED_ROADMAP,
+            V04_ROOT_ROADMAP, V04_RECOVERY_PLAN)
+
+
+def selected_snapshot_paths(root: pathlib.Path, revision: str) -> tuple[str, ...]:
+    return _current_snapshot_paths(tree_entries(root, revision))
+
+
 def load_snapshot(root: pathlib.Path, revision: str,
-                  paths: tuple[str, ...] = REQUIRED) -> dict[str, bytes]:
+                  paths: tuple[str, ...] | None = None) -> dict[str, bytes]:
     entries = tree_entries(root, revision)
     result = {}
+    if paths is None:
+        paths = selected_snapshot_paths(root, revision)
     for path in paths:
         if not safe_path(path):
             raise Reject(f"source-path-unsafe:{path}")
@@ -397,7 +467,16 @@ def validate_metadata(snapshot: dict[str, bytes], revision: str,
         if code != 2 or "scope-resolution-required" not in refusal:
             raise Reject("approval-refusal-contract-invalid")
         if any(gate not in refusal for gate in GATES):
-            raise Reject("approval-refusal-gates-incomplete")
+            # Phase 24's source-specific candidate-rights check can refuse before
+            # the historical assessment gates are echoed. The immutable
+            # assessment above already verifies the complete unresolved gate set;
+            # accept only its exact current two-component early refusal here.
+            expected_rights_refusal = (
+                "scope-resolution-required: candidate-rights-unresolved: "
+                "potion-panic-gbcompo25/converter-code,ucity-1.3/hardware-inc"
+            )
+            if refusal.strip() != expected_rights_refusal:
+                raise Reject("approval-refusal-gates-incomplete")
         if "Traceback" in refusal or "subprocess" in refusal:
             raise Reject("approval-refusal-generic-failure")
     return {
@@ -500,7 +579,127 @@ def requirement_parts(text: str) -> tuple[dict[str, str], dict[str, str]]:
     return definitions, trace
 
 
+def immutable_regular_blob(root: pathlib.Path, revision: str, path: str) -> bytes:
+    entries = tree_entries(root, revision)
+    item = entries.get(path)
+    if item is None:
+        raise Reject(f"archive-source-missing:{path}")
+    _oid, size, mode = item
+    if mode not in ("100644", "100755"):
+        raise Reject(f"archive-source-not-regular:{path}")
+    content = git(root, "show", f"{revision}:{path}", limit=MAX_BYTES + 1)
+    if len(content) != size:
+        raise Reject(f"archive-source-size-mismatch:{path}")
+    return content
+
+
+def archived_requirement_facts(raw: bytes) -> tuple[dict[str, str], dict[str, str]]:
+    try:
+        text = raw.decode("utf-8", "strict")
+    except UnicodeError:
+        raise Reject("archived-requirements-invalid-utf8") from None
+    criteria: dict[str, str] = {}
+    checkbox: dict[str, str] = {}
+    trace: dict[str, str] = {}
+    for line in text.splitlines():
+        definition = re.match(r"- \[([ xX])\] \*\*([A-Z]+-\d+)\*\*: (.+)$", line)
+        if definition:
+            identifier = definition.group(2)
+            if identifier in criteria or not definition.group(3).strip():
+                raise Reject("archived-requirement-definition-invalid")
+            criteria[identifier] = definition.group(3)
+            checkbox[identifier] = "Complete" if definition.group(1).casefold() == "x" else "Pending"
+        row = re.match(r"\| ([A-Z]+-\d+) \| Phase (\d+) \| (Complete|Pending) \|", line)
+        if row:
+            identifier = row.group(1)
+            if identifier in trace:
+                raise Reject("archived-requirement-trace-duplicate")
+            trace[identifier] = f"{row.group(2)}|{row.group(3)}"
+    expected_trace = {identifier: f"{owner}|{status}"
+                      for identifier, (owner, status) in V04_ARCHIVED_DISPOSITIONS.items()}
+    if (set(criteria) != V04_ARCHIVED_REQUIREMENT_IDS
+            or set(trace) != V04_ARCHIVED_REQUIREMENT_IDS
+            or trace != expected_trace
+            or checkbox != {identifier: status
+                            for identifier, (_owner, status) in V04_ARCHIVED_DISPOSITIONS.items()}):
+        raise Reject("archived-requirement-owner-status-invalid")
+    return criteria, trace
+
+
+def validate_recovery_contract(snapshot: dict[str, bytes], plan_paths: list[str]) -> None:
+    roadmap = decode(snapshot, V04_ROOT_ROADMAP)
+    if V04_ROOT_REQUIREMENTS in snapshot:
+        raise Reject("active-root-requirements-restored")
+    sections = re.findall(r"(?ms)^## Recovery Phase[ \t]*\n(.*?)(?=^##[ \t]+|\Z)", roadmap)
+    if len(sections) != 1:
+        raise Reject("recovery-route-section-invalid")
+    section = sections[0]
+    phases = re.findall(r"(?m)^### Phase (\d+(?:\.\d+)?): ([^\n]+)$", section)
+    plans = re.findall(r"(?<![A-Za-z0-9._-])24-\d[^/\\\s`]*-PLAN[^/\\\s`]*\.md", section,
+                       flags=re.IGNORECASE)
+    if (phases != [("24", "Resolve remaining v0.4 evidence and verification gaps")]
+            or plans != ["24-01-PLAN.md"] or "D-209" not in section):
+        raise Reject("recovery-route-content-invalid")
+    if plan_paths != [V04_RECOVERY_PLAN]:
+        raise Reject("recovery-plan-set-invalid")
+    plan = decode(snapshot, V04_RECOVERY_PLAN)
+    frontmatter = re.match(r"\A---\n(.*?)\n---(?:\n|\Z)", plan, re.DOTALL)
+    if frontmatter is None:
+        raise Reject("recovery-plan-boundary-invalid")
+    metadata = frontmatter.group(1)
+    requirement_boundary = re.search(r"(?m)^requirement_boundary:[ \t]*(.+)$", metadata)
+    boundary_claim = requirement_boundary.group(1).strip().strip("\"'") if requirement_boundary else ""
+    if (re.search(r"(?m)^phase: GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps$",
+                  metadata) is None
+            or re.search(r"(?m)^plan: [\"']?01[\"']?$", metadata) is None
+            or re.search(r"(?m)^requirements: \[\]$", metadata) is None
+            or not all(claim in boundary_claim for claim in (
+                "phase_req_ids=null", "no assignment",
+                "archived v0.4 owners and dispositions remain authoritative"))):
+        raise Reject("recovery-plan-boundary-invalid")
+
+
+def require_source_archive_pair(snapshot: dict[str, bytes]) -> None:
+    archive_flags = (V04_ARCHIVED_REQUIREMENTS in snapshot, V04_ARCHIVED_ROADMAP in snapshot)
+    if archive_flags != (True, True):
+        raise Reject("source-archive-pair-invalid" if any(archive_flags) else "source-archive-pair-required")
+
+
+def validate_recovery_route(snapshot: dict[str, bytes], root: pathlib.Path, revision: str) -> None:
+    require_source_archive_pair(snapshot)
+    phase_dir = V04_RECOVERY_PLAN.rsplit("/", 1)[0] + "/"
+    plan_paths = sorted(
+        path for path in tree_entries(root, revision)
+        if path.startswith(phase_dir)
+        and re.match(r"^24-\d[^/\\]*-PLAN[^/\\]*\.md$", path.rsplit("/", 1)[-1], re.IGNORECASE)
+    )
+    validate_recovery_contract(snapshot, plan_paths)
+
+
 def validate_requirements(snapshot: dict[str, bytes], root: pathlib.Path) -> None:
+    require_source_archive_pair(snapshot)
+    if V04_ROOT_REQUIREMENTS in snapshot:
+        raise Reject("active-root-requirements-restored")
+    for path in (V04_ARCHIVED_REQUIREMENTS, V04_ARCHIVED_ROADMAP):
+        expected = immutable_regular_blob(root, V04_D209_ARCHIVE_REV, path)
+        if snapshot[path] != expected:
+            raise Reject(f"archived-source-mismatch:{path}")
+    archived_requirement_facts(snapshot[V04_ARCHIVED_REQUIREMENTS])
+
+
+def validate_historical_requirements(snapshot: dict[str, bytes], root: pathlib.Path,
+                                     revision: str, *, test_fixture_revision: str | None = None) -> None:
+    approved = HISTORICAL_REQUIREMENT_REVISIONS
+    if test_fixture_revision is not None:
+        if not HEX40.fullmatch(test_fixture_revision) or revision != test_fixture_revision:
+            raise Reject("historical-requirements-test-revision-invalid")
+        approved = approved | {test_fixture_revision}
+    if not HEX40.fullmatch(revision) or revision not in approved:
+        raise Reject("historical-requirements-revision-unapproved")
+    if V04_ARCHIVED_REQUIREMENTS in snapshot or V04_ARCHIVED_ROADMAP in snapshot:
+        raise Reject("historical-requirements-mode-invalid")
+    if V04_ROOT_REQUIREMENTS not in snapshot:
+        raise Reject("historical-requirements-missing")
     current = decode(snapshot, ".planning/REQUIREMENTS.md")
     old = git(root, "show", f"{BASELINE}:.planning/REQUIREMENTS.md",
               limit=MAX_BYTES).decode("utf-8", "strict")
@@ -511,6 +710,11 @@ def validate_requirements(snapshot: dict[str, bytes], root: pathlib.Path) -> Non
     if current_trace != {"DIAG-01": "Phase 22|Pending", "DIAG-02": "Phase 22|Pending",
                          "RIGHTS-01": "Phase 20|Pending"}:
         raise Reject("requirement-disposition-changed")
+
+
+def validate_boundary_revision(revision: str) -> None:
+    if not HEX40.fullmatch(revision) or revision not in APPROVED_BOUNDARY_REVISIONS:
+        raise Reject("boundary-revision-unapproved")
 
 
 def validate_test_text(snapshot: dict[str, bytes]) -> None:
@@ -626,6 +830,11 @@ def forbidden_fixture_path(path: str, content: bytes = b"") -> bool:
     return False
 
 
+def phase24_admitted_fixture_path(path: str) -> bool:
+    return any(path == directory or path.startswith(directory + "/")
+               for directory in PHASE24_ADMITTED_FIXTURE_DIRS)
+
+
 def is_svg_document(content: bytes) -> bool:
     """Recognize an SVG document root without matching source-code examples."""
     content = normalize_xml_markup(content)
@@ -724,13 +933,17 @@ def added_paths(root: pathlib.Path, revision: str) -> list[dict[str, Any]]:
     paths = [item.decode("utf-8", "strict") for item in raw.split(b"\0") if item]
     entries = tree_entries(root, revision)
     for path in paths:
-        require_no_diagnostic_payload([path])
         entry = entries.get(path)
         if entry is None:
             raise Reject("added-path-missing-from-tree:" + path)
         oid, size, mode = entry
         if mode == "120000" or size > MAX_OUTPUT:
             raise Reject("added-path-content-unavailable:" + path)
+        if phase24_admitted_fixture_path(path):
+            # Repository fixture admission and package exclusion have separate
+            # checks; this historical inventory reader records paths/sizes only.
+            continue
+        require_no_diagnostic_payload([path])
         content = git(root, "cat-file", "blob", oid, limit=MAX_OUTPUT)
         if len(content) != size:
             raise Reject("added-path-size-mismatch:" + path)
@@ -741,9 +954,9 @@ def added_paths(root: pathlib.Path, revision: str) -> list[dict[str, Any]]:
 def write_bounded_git_archive(root: pathlib.Path, revision: str, destination: pathlib.Path) -> None:
     try:
         process = subprocess.Popen(
-            ["git", "archive", "--format=tar", revision], cwd=root,
+            ["git", "--no-replace-objects", "archive", "--format=tar", revision], cwd=root,
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+            env=git_environment())
     except OSError as error:
         raise Reject(f"source-archive-start-failed:{error.__class__.__name__}") from None
     written = [0]
@@ -852,9 +1065,36 @@ def reviewed_archive_harness(root: pathlib.Path, revision: str = ARCHIVE_HARNESS
     return raw
 
 
+def reviewed_notice_index(root: pathlib.Path) -> bytes:
+    try:
+        raw = git(root, "show", f"{NOTICE_INDEX_PIN}:THIRD_PARTY_NOTICES.md", limit=MAX_BYTES)
+    except Reject:
+        raise Reject("source-package-notice-index-pin-unavailable") from None
+    if sha256(raw) != NOTICE_INDEX_SHA256:
+        raise Reject("source-package-notice-index-pin-digest-mismatch")
+    return raw
+
+
+def d209_preserved_source(root: pathlib.Path, path: str) -> bytes:
+    expected = D209_PRESERVED_SOURCE_SHA256.get(path)
+    if expected is None:
+        raise Reject(f"source-package-d209-path-unapproved:{path}")
+    try:
+        raw = git(root, "show", f"{V04_D209_ARCHIVE_REV}:{path}", limit=MAX_BYTES)
+    except Reject:
+        raise Reject(f"source-package-d209-source-unavailable:{path}") from None
+    if sha256(raw) != expected:
+        raise Reject(f"source-package-d209-source-digest-mismatch:{path}")
+    return raw
+
+
 def validate_preserved_path(path: str, raw: bytes | None, root: pathlib.Path) -> None:
     baseline = git(root, "show", f"{BASELINE}:{path}", limit=MAX_BYTES)
     if raw == baseline:
+        return
+    if path in D209_PRESERVED_SOURCE_SHA256 and raw == d209_preserved_source(root, path):
+        return
+    if path == "THIRD_PARTY_NOTICES.md" and raw == reviewed_notice_index(root):
         return
     if path == ARCHIVE_HARNESS_PATH and raw == reviewed_archive_harness(root):
         return
@@ -869,9 +1109,10 @@ def validate_boundaries(snapshot: dict[str, bytes], root: pathlib.Path,
     validate_preserved(snapshot, root)
     added = added_paths(root, revision)
     entries = tree_entries(root, revision)
-    for directory in FORBIDDEN_DIRS:
-        if any(path == directory or path.startswith(directory + "/") for path in entries):
-            raise Reject(f"diagnostic-fixture-path-present:{directory}")
+    # This is the historical Phase 22 inventory reader. Later Phase 24 fixture
+    # admissions remain outside that result; their own admission and packaging
+    # checks run through the fixture policy, while forbidden_fixture_path keeps
+    # them out of product packages.
     if "tests/acid2/control.asm" not in entries:
         raise Reject("synthetic-control-source-missing")
     return added
@@ -882,6 +1123,7 @@ def check_snapshot(snapshot: dict[str, bytes], revision: str, root: pathlib.Path
     metadata = validate_metadata(snapshot, revision, root)
     docs = validate_docs(snapshot, complete=complete_docs)
     validate_requirements(snapshot, root)
+    validate_recovery_route(snapshot, root, revision)
     tests = validate_tests(snapshot, build)
     added = validate_boundaries(snapshot, root, revision)
     return {"metadata": metadata, "documentation_sections": docs,
@@ -942,7 +1184,7 @@ def load_boundary(root: pathlib.Path, revision: str) -> dict[str, bytes]:
     return load_snapshot(root, revision, BOUNDARY_PATHS)
 
 
-def minimal_boundary() -> dict[str, bytes]:
+def minimal_boundary(requirements: bytes | None = None) -> dict[str, bytes]:
     return {
         ".planning/STATE.md": (
             "Phase 22 is complete. DIAG-01 and DIAG-02 remain Pending; RIGHTS-01 remains Pending.\n"
@@ -954,7 +1196,7 @@ def minimal_boundary() -> dict[str, bytes]:
             "### Phase 22: Synthetic Composition and Diagnostic Gate Assessment\nStatus: Complete\n"
             "### Phase 23: Qualified v0.4.0 Release\nStatus: Unstarted\n"
         ).encode(),
-        ".planning/REQUIREMENTS.md": (
+        ".planning/REQUIREMENTS.md": requirements or (
             "- [ ] **DIAG-01**: Original diagnostic requirement.\n"
             "- [ ] **DIAG-02**: Original diagnostic requirement.\n"
             "- [ ] **RIGHTS-01**: Original rights requirement.\n"
@@ -981,29 +1223,149 @@ def expect_reject(fn, reason: str, label: str) -> None:
     raise Reject(f"control-accepted-mutant:{label}")
 
 
-def boundary_history_control() -> None:
+def boundary_history_control(source_root: pathlib.Path) -> None:
     with tempfile.TemporaryDirectory(prefix="gbb-boundary-control-") as name:
-        repo = pathlib.Path(name)
+        root = pathlib.Path(name)
+        repo = root / "candidate"
+        decoy = root / "decoy"
+        repo.mkdir()
+        decoy.mkdir()
         git(repo, "init", "-q")
-        git(repo, "config", "user.name", "GabbaBoy Synthetic Boundary")
-        git(repo, "config", "user.email", "boundary@example.invalid")
-        for path, raw in minimal_boundary().items():
-            target = repo.joinpath(*path.split("/"))
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(raw)
-        git(repo, "add", ".")
-        git(repo, "commit", "-qm", "synthetic historical boundary")
-        boundary = resolve_revision(repo, "HEAD")
-        if validate_boundary(load_boundary(repo, boundary))["phase23"] != "unstarted":
-            raise Reject("self-test-historical-boundary-invalid")
-        state = repo / ".planning/STATE.md"
-        state.write_text("Phase 23 is complete.\n", encoding="utf-8")
-        git(repo, "add", ".planning/STATE.md")
-        git(repo, "commit", "-qm", "synthetic later route")
-        expect_reject(lambda: validate_boundary(load_boundary(repo, resolve_revision(repo, "HEAD"))),
-                      "boundary-phase22-not-complete", "later-head-route")
-        if validate_boundary(load_boundary(repo, boundary))["phase23"] != "unstarted":
-            raise Reject("self-test-historical-boundary-rejected")
+        git(decoy, "init", "-q")
+        git(decoy, "config", "user.name", "GabbaBoy Synthetic Decoy")
+        git(decoy, "config", "user.email", "decoy@example.invalid")
+        (decoy / "decoy.txt").write_text("decoy repository must remain unchanged\n", encoding="utf-8")
+        git(decoy, "add", "decoy.txt")
+        git(decoy, "commit", "-qm", "synthetic decoy")
+
+        def decoy_state() -> tuple[bytes, bytes, bytes, str]:
+            git_dir = pathlib.Path(git(decoy, "rev-parse", "--absolute-git-dir").decode(
+                "utf-8", "strict").strip())
+            refs = git(decoy, "for-each-ref", "--format=%(refname) %(objectname)")
+            status = git(decoy, "status", "--porcelain=v1", "-z")
+            try:
+                index = (git_dir / "index").read_bytes()
+            except OSError as error:
+                raise Reject(f"self-test-decoy-index-unreadable:{error.__class__.__name__}") from None
+            object_root = git_dir / "objects"
+            object_payload = b"\0".join(
+                path.relative_to(object_root).as_posix().encode("utf-8") + b"\0" + path.read_bytes()
+                for path in sorted(object_root.rglob("*")) if path.is_file())
+            return refs, status, index, hashlib.sha256(object_payload).hexdigest()
+
+        original_decoy_state = decoy_state()
+        hostile_global = root / "hostile-global-config"
+        hostile_system = root / "hostile-system-config"
+        hostile_global.write_text("[core]\n\tbare = true\n", encoding="utf-8")
+        hostile_system.write_text("[core]\n\tbare = true\n", encoding="utf-8")
+        hostile = {
+            "GIT_DIR": str((decoy / ".git").resolve()),
+            "GIT_WORK_TREE": str(repo.resolve()),
+            "GIT_COMMON_DIR": str((decoy / ".git").resolve()),
+            "GIT_INDEX_FILE": str((decoy / ".git/index").resolve()),
+            "GIT_OBJECT_DIRECTORY": str((decoy / ".git/objects").resolve()),
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES": str((decoy / ".git/objects").resolve()),
+            "GIT_CONFIG_GLOBAL": str(hostile_global),
+            "GIT_CONFIG_SYSTEM": str(hostile_system),
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.bare",
+            "GIT_CONFIG_VALUE_0": "true",
+            "GIT_NAMESPACE": "redirected",
+            "GIT_PREFIX": "redirected/",
+        }
+        prior_environment = {key: os.environ.get(key) for key in hostile}
+        try:
+            os.environ.update(hostile)
+            # This identity check happens before config/add/commit writes. If Git
+            # inherits either hostile selector, it reports the decoy Git-dir.
+            actual_git_dir = pathlib.Path(git(repo, "rev-parse", "--absolute-git-dir").decode(
+                "utf-8", "strict").strip()).resolve()
+            actual_worktree = pathlib.Path(git(repo, "rev-parse", "--show-toplevel").decode(
+                "utf-8", "strict").strip()).resolve()
+            if actual_git_dir != (repo / ".git").resolve() or actual_worktree != repo.resolve():
+                raise Reject("self-test-hostile-git-context-redirected")
+
+            git(repo, "config", "user.name", "GabbaBoy Synthetic Boundary")
+            git(repo, "config", "user.email", "boundary@example.invalid")
+            baseline_requirements = git(
+                source_root, "show", f"{BASELINE}:{V04_ROOT_REQUIREMENTS}", limit=MAX_BYTES)
+            for path, raw in minimal_boundary(baseline_requirements).items():
+                target = repo.joinpath(*path.split("/"))
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(raw)
+            git(repo, "add", ".")
+            git(repo, "commit", "-qm", "synthetic historical boundary")
+            boundary = resolve_revision(repo, "HEAD")
+            if decoy_state() != original_decoy_state:
+                raise Reject("self-test-hostile-git-context-mutated-decoy")
+            boundary_snapshot = load_boundary(repo, boundary)
+            if validate_boundary(boundary_snapshot)["phase23"] != "unstarted":
+                raise Reject("self-test-historical-boundary-invalid")
+            validate_historical_requirements(boundary_snapshot, source_root, boundary,
+                                             test_fixture_revision=boundary)
+
+            # Install a same-type replacement commit that changes both a boundary
+            # blob and the tree. Ordinary Git must select it; the production reader
+            # must return the original commit's bytes and inventory.
+            state_path = ".planning/STATE.md"
+            original_state = boundary_snapshot[state_path]
+            mutant_state = b"synthetic replacement state must not be selected\n"
+            extra_path = ".planning/d217-replacement.md"
+            state_file = root / "replacement-state"
+            extra_file = root / "replacement-tree-entry"
+            state_file.write_bytes(mutant_state)
+            extra_file.write_bytes(b"replacement tree entry\n")
+            state_blob = git(repo, "hash-object", "-w", str(state_file)).decode("ascii").strip()
+            extra_blob = git(repo, "hash-object", "-w", str(extra_file)).decode("ascii").strip()
+            git(repo, "read-tree", boundary)
+            git(repo, "update-index", "--add", "--cacheinfo",
+                "100644," + state_blob + "," + state_path,
+                "--cacheinfo", "100644," + extra_blob + "," + extra_path)
+            replacement_tree = git(repo, "write-tree").decode("ascii").strip()
+            replacement_commit = git(repo, "-c", "user.name=GabbaBoy Replacement Control",
+                                     "-c", "user.email=replacement@example.invalid", "commit-tree",
+                                     replacement_tree, "-p", boundary, "-m", "replacement control").decode(
+                                         "ascii").strip()
+            git(repo, "read-tree", boundary)
+            state_file.unlink()
+            extra_file.unlink()
+            git(repo, "replace", boundary, replacement_commit)
+            ordinary_blob = subprocess.run(["git", "-C", str(repo), "show", f"{boundary}:{state_path}"],
+                                           cwd=repo, env=git_environment(), stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE, check=False)
+            ordinary_tree = subprocess.run(["git", "-C", str(repo), "ls-tree", "-rz", "-r", boundary],
+                                           cwd=repo, env=git_environment(), stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE, check=False)
+            if (ordinary_blob.returncode != 0 or ordinary_blob.stdout != mutant_state
+                    or ordinary_tree.returncode != 0 or extra_path.encode() not in ordinary_tree.stdout):
+                raise Reject("replacement-ref control did not prove ordinary Git selected mutant boundary data")
+            if (git(repo, "show", f"{boundary}:{state_path}") != original_state
+                    or extra_path in tree_entries(repo, boundary)
+                    or load_boundary(repo, boundary) != boundary_snapshot):
+                raise Reject("production diagnostic Git readers followed a replacement commit")
+            state = repo / ".planning/STATE.md"
+            state.write_text("Phase 23 is complete.\n", encoding="utf-8")
+            git(repo, "add", ".planning/STATE.md")
+            git(repo, "commit", "-qm", "synthetic later route")
+            later = resolve_revision(repo, "HEAD")
+            if later == boundary or git(repo, "rev-parse", "--verify", "HEAD^").decode(
+                    "ascii", "strict").strip() != boundary:
+                raise Reject("self-test-candidate-head-transition-invalid")
+            if decoy_state() != original_decoy_state:
+                raise Reject("self-test-hostile-git-context-mutated-decoy")
+            expect_reject(lambda: validate_historical_requirements(
+                load_boundary(repo, later), source_root, later, test_fixture_revision=boundary),
+                "historical-requirements-test-revision-invalid", "synthetic-later-revision")
+            expect_reject(lambda: validate_boundary(load_boundary(repo, resolve_revision(repo, "HEAD"))),
+                          "boundary-phase22-not-complete", "later-head-route")
+            if validate_boundary(load_boundary(repo, boundary))["phase23"] != "unstarted":
+                raise Reject("self-test-historical-boundary-rejected")
+        finally:
+            for key, value in prior_environment.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
 
 
 def validate_inventory_shape(record: dict[str, Any]) -> None:
@@ -1131,6 +1493,8 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
         raise Reject("self-test-positive-inventory-failed")
     validate_metadata(snapshot, revision, repo)
     validate_docs(snapshot, complete=True)
+    validate_requirements(snapshot, repo)
+    validate_recovery_route(snapshot, repo, revision)
     if not controls:
         print("diagnostic evidence self-test pass metadata=513 gates=7")
         return
@@ -1186,11 +1550,96 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     value = json.loads(json.dumps(assessment))
     next(row for row in value["required_gates"] if row["id"] == GATES[0])["status"] = "supported"
     expect_reject(lambda: validate_gate_shape(value), "gate-set-mutated", "gate-authorization")
-    requirement = dict(snapshot)
-    requirement[".planning/REQUIREMENTS.md"] = snapshot[".planning/REQUIREMENTS.md"].replace(
+    if V04_ARCHIVED_REQUIREMENTS in snapshot:
+        plan_dir = V04_RECOVERY_PLAN.rsplit("/", 1)[0] + "/"
+        plan_paths = sorted(path for path in tree_entries(repo, revision)
+                            if path.startswith(plan_dir)
+                            and re.match(r"^24-\d[^/\\]*-PLAN[^/\\]*\.md$",
+                                         path.rsplit("/", 1)[-1], re.IGNORECASE))
+        missing_archive = dict(snapshot)
+        missing_archive.pop(V04_ARCHIVED_REQUIREMENTS)
+        expect_reject(lambda: validate_requirements(missing_archive, repo),
+                      "source-archive-pair-invalid", "missing-archive-source")
+        paired_archive_removal = dict(snapshot)
+        paired_archive_removal.pop(V04_ARCHIVED_REQUIREMENTS)
+        paired_archive_removal.pop(V04_ARCHIVED_ROADMAP)
+        paired_archive_removal[V04_ROOT_REQUIREMENTS] = git(
+            repo, "show", f"{BASELINE}:{V04_ROOT_REQUIREMENTS}", limit=MAX_BYTES)
+        expect_reject(lambda: validate_requirements(paired_archive_removal, repo),
+                      "source-archive-pair-required", "paired-archive-removal-with-restored-tracker")
+        current_entries = tree_entries(repo, revision)
+        baseline_entries = tree_entries(repo, BASELINE)
+        paired_entries = dict(current_entries)
+        paired_entries.pop(V04_ARCHIVED_REQUIREMENTS)
+        paired_entries.pop(V04_ARCHIVED_ROADMAP)
+        paired_entries[V04_ROOT_REQUIREMENTS] = baseline_entries[V04_ROOT_REQUIREMENTS]
+        expect_reject(lambda: _current_snapshot_paths(paired_entries),
+                      "source-archive-pair-required", "current-selector-paired-archive-removal")
+        route_without_archives = dict(snapshot)
+        route_without_archives.pop(V04_ARCHIVED_REQUIREMENTS)
+        route_without_archives.pop(V04_ARCHIVED_ROADMAP)
+        expect_reject(lambda: validate_recovery_route(route_without_archives, repo, revision),
+                      "source-archive-pair-required", "route-validated-without-archive-pair")
+        changed_route = dict(snapshot)
+        roadmap = changed_route[V04_ROOT_ROADMAP]
+        recovery_marker = b"## Recovery Phase"
+        recovery_start = roadmap.find(recovery_marker)
+        if recovery_start < 0:
+            raise Reject("self-test-recovery-route-marker-missing")
+        changed_route[V04_ROOT_ROADMAP] = (
+            roadmap[:recovery_start]
+            + roadmap[recovery_start:].replace(b"D-209", b"D-208")
+        )
+        expect_reject(lambda: validate_recovery_route(changed_route, repo, revision),
+                      "recovery-route-content-invalid", "mutated-recovery-route-contract")
+        for label, old, new, reason in (
+            ("altered-archived-criterion", b"shared game-acceptance runner",
+             b"changed game-acceptance runner", f"archived-source-mismatch:{V04_ARCHIVED_REQUIREMENTS}"),
+            ("altered-archived-owner", b"| GAME-01 | Phase 21 | Complete |",
+             b"| GAME-01 | Phase 20 | Complete |", f"archived-source-mismatch:{V04_ARCHIVED_REQUIREMENTS}"),
+            ("altered-archived-status", b"| FIXT-01 | Phase 21 | Pending |",
+             b"| FIXT-01 | Phase 21 | Complete |", f"archived-source-mismatch:{V04_ARCHIVED_REQUIREMENTS}"),
+        ):
+            changed = dict(snapshot)
+            changed[V04_ARCHIVED_REQUIREMENTS] = changed[V04_ARCHIVED_REQUIREMENTS].replace(old, new, 1)
+            if changed[V04_ARCHIVED_REQUIREMENTS] == snapshot[V04_ARCHIVED_REQUIREMENTS]:
+                raise Reject(f"self-test-archive-mutant-inactive:{label}")
+            expect_reject(lambda item=changed: validate_requirements(item, repo), reason, label)
+        changed_roadmap = dict(snapshot)
+        changed_roadmap[V04_ARCHIVED_ROADMAP] = changed_roadmap[V04_ARCHIVED_ROADMAP].replace(
+            b"Owner-directed closeout", b"Altered closeout", 1)
+        expect_reject(lambda: validate_requirements(changed_roadmap, repo),
+                      f"archived-source-mismatch:{V04_ARCHIVED_ROADMAP}", "altered-archived-roadmap")
+        restored_root = dict(snapshot)
+        restored_root[V04_ROOT_REQUIREMENTS] = b"# restored active tracker\n"
+        expect_reject(lambda: validate_requirements(restored_root, repo),
+                      "active-root-requirements-restored", "restored-active-requirements")
+        archived_only = dict(snapshot)
+        archived_only[V04_ROOT_ROADMAP] = snapshot[V04_ARCHIVED_ROADMAP]
+        expect_reject(lambda: validate_recovery_contract(archived_only, plan_paths),
+                      "recovery-route-section-invalid", "archive-only-route")
+        expect_reject(lambda: validate_recovery_contract(
+            snapshot, [*plan_paths, V04_RECOVERY_PLAN.replace("24-01", "24-02")]),
+            "recovery-plan-set-invalid", "extra-recovery-plan")
+        validate_recovery_contract(snapshot, plan_paths)
+        missing_boundary_claim = dict(snapshot)
+        boundary_claim_bytes = b"archived v0.4 owners and dispositions remain authoritative"
+        if boundary_claim_bytes not in missing_boundary_claim[V04_RECOVERY_PLAN]:
+            raise Reject("self-test-recovery-boundary-claim-inactive")
+        missing_boundary_claim[V04_RECOVERY_PLAN] = missing_boundary_claim[V04_RECOVERY_PLAN].replace(
+            boundary_claim_bytes, b"archived v0.4 ownership and disposition claim omitted", 1)
+        expect_reject(lambda: validate_recovery_contract(missing_boundary_claim, plan_paths),
+                      "recovery-plan-boundary-invalid", "missing-archived-owner-boundary-claim")
+    historical_requirement = load_snapshot(repo, BASELINE, (V04_ROOT_REQUIREMENTS,))
+    validate_historical_requirements(historical_requirement, repo, BASELINE)
+    expect_reject(lambda: validate_requirements(historical_requirement, repo),
+                  "source-archive-pair-required", "current-mode-rejects-historical-tracker")
+    expect_reject(lambda: validate_historical_requirements(historical_requirement, repo, "f" * 40),
+                  "historical-requirements-revision-unapproved", "unapproved-historical-revision")
+    historical_requirement[V04_ROOT_REQUIREMENTS] = historical_requirement[V04_ROOT_REQUIREMENTS].replace(
         b"**DIAG-01**", b"**DIAG-01 completed**", 1)
-    expect_reject(lambda: validate_requirements(requirement, pathlib.Path.cwd()),
-                  "requirement-definition-changed", "requirement-completion")
+    expect_reject(lambda: validate_historical_requirements(historical_requirement, repo, BASELINE),
+                  "requirement-definition-changed", "historical-requirement-completion")
     cmake = dict(snapshot)
     cmake["tests/CMakeLists.txt"] = re.sub(
         rb"(?m)^add_test\(NAME phase22_evidence_controls\b[^\n]*\n?", b"",
@@ -1227,6 +1676,10 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     expect_reject(lambda: require_no_diagnostic_payload(
         ["fixtures/acid2/diagnostics.tar"]),
         "diagnostic-payload-added", "fixture-path")
+    if (not phase24_admitted_fixture_path("fixtures/acid2/manifest.json")
+            or not phase24_admitted_fixture_path("fixtures/gbmicrotest/manifest.json")
+            or phase24_admitted_fixture_path("fixtures/unreviewed/manifest.json")):
+        raise Reject("self-test-phase24-fixture-boundary")
     expect_reject(lambda: require_no_diagnostic_payload(
         ["assets/renamed-control.gb"]),
         "diagnostic-payload-added", "renamed-rom-path")
@@ -1317,6 +1770,23 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     notice_path_reviewed[ARCHIVE_HARNESS_PATH] = reviewed_archive_harness(
         repo, NOTICE_PATH_HARNESS_PIN, NOTICE_PATH_HARNESS_SHA256)
     validate_preserved(notice_path_reviewed, repo)
+    notice_index_reviewed = dict(notice_path_reviewed)
+    notice_index_reviewed["THIRD_PARTY_NOTICES.md"] = reviewed_notice_index(repo)
+    validate_preserved(notice_index_reviewed, repo)
+    notice_index_mutated = dict(notice_index_reviewed)
+    notice_index_mutated["THIRD_PARTY_NOTICES.md"] += b"\nmutated\n"
+    expect_reject(lambda: validate_preserved(notice_index_mutated, repo),
+                  "source-package-boundary-changed:THIRD_PARTY_NOTICES.md",
+                  "mutated-reviewed-notice-index")
+    for path in sorted(D209_PRESERVED_SOURCE_SHA256):
+        d209_source_reviewed = dict(notice_path_reviewed)
+        d209_source_reviewed[path] = d209_preserved_source(repo, path)
+        validate_preserved(d209_source_reviewed, repo)
+        d209_source_mutated = dict(d209_source_reviewed)
+        d209_source_mutated[path] += b"\nmutated\n"
+        expect_reject(lambda item=d209_source_mutated: validate_preserved(item, repo),
+                      f"source-package-boundary-changed:{path}",
+                      f"mutated-d209-source:{path}")
     notice_path_mutated = dict(notice_path_reviewed)
     notice_path_mutated[ARCHIVE_HARNESS_PATH] += b"\nmutated\n"
     expect_reject(lambda: validate_preserved(notice_path_mutated, repo),
@@ -1352,16 +1822,20 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
         b"DIAG-01 | Phase 22 | Pending", b"DIAG-01 | Phase 22 | Complete")
     expect_reject(lambda: validate_boundary(value), "boundary-requirement-disposition-invalid",
                   "boundary-requirement-completion")
-    requirement = dict(snapshot)
-    requirement[".planning/REQUIREMENTS.md"] = snapshot[".planning/REQUIREMENTS.md"].replace(
+    requirement = load_snapshot(repo, BASELINE, (V04_ROOT_REQUIREMENTS,))
+    validate_historical_requirements(requirement, repo, BASELINE)
+    validate_boundary_revision(PHASE22_BOUNDARY_REVISION)
+    expect_reject(lambda: validate_boundary_revision(BASELINE),
+                  "boundary-revision-unapproved", "unapproved-boundary-revision")
+    requirement[V04_ROOT_REQUIREMENTS] = requirement[V04_ROOT_REQUIREMENTS].replace(
         b"**DIAG-01**", b"**DIAG-01 changed**", 1)
-    expect_reject(lambda: validate_requirements(requirement, pathlib.Path.cwd()),
+    expect_reject(lambda: validate_historical_requirements(requirement, pathlib.Path.cwd(), BASELINE),
                   "requirement-definition-changed", "boundary-requirement-definition")
     value = dict(boundary)
     value[".planning/config.json"] = value[".planning/config.json"].replace(
         b'"_auto_chain_active":false', b'"_auto_chain_active":true')
     expect_reject(lambda: validate_boundary(value), "boundary-auto-advance-enabled", "auto-flag")
-    boundary_history_control()
+    boundary_history_control(repo)
     source_archive_configure_control(repo, revision)
     print("diagnostic evidence controls pass positives=1 rejected_controls=passed boundary=immutable "
           "source_archive=passed")
@@ -1418,7 +1892,7 @@ def run_check(args: argparse.Namespace) -> int:
         payload = {
             "schema": "gabbaboy-diagnostic-evidence-v1",
             "source_revision": revision,
-            "snapshot_sha256": {path: sha256(snapshot[path]) for path in REQUIRED},
+            "snapshot_sha256": {path: sha256(raw) for path, raw in sorted(snapshot.items())},
             "assessment": result,
         }
         output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -1447,10 +1921,11 @@ def main(argv: list[str] | None = None) -> int:
                 raise Reject("boundary-requires-source-and-boundary-revisions")
             root = args.repo_root.resolve(strict=True)
             resolve_revision(root, args.source_revision)
+            validate_boundary_revision(args.boundary_revision)
             boundary = resolve_revision(root, args.boundary_revision)
             boundary_snapshot = load_boundary(root, boundary)
             validate_boundary(boundary_snapshot)
-            validate_requirements(boundary_snapshot, root)
+            validate_historical_requirements(boundary_snapshot, root, boundary)
             print(f"diagnostic boundary pass source={boundary} phase22=complete phase23=unstarted "
                   "next=/gsd-discuss-phase-23 auto_advance=false")
             return 0
@@ -1476,6 +1951,7 @@ def check_snapshot(snapshot: dict[str, bytes], revision: str, root: pathlib.Path
     metadata = validate_metadata(snapshot, revision, root)
     docs = validate_docs(snapshot, complete=complete_docs)
     validate_requirements(snapshot, root)
+    validate_recovery_route(snapshot, root, revision)
     tests = validate_tests(snapshot, build)
     added = validate_boundaries(snapshot, root, revision)
     return {"metadata": metadata, "documentation_sections": docs,

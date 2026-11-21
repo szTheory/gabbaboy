@@ -6,25 +6,21 @@ GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game 
 
 ## Current State
 
-**Published and independently reconciled: [v0.4.0](https://github.com/szTheory/gabbaboy/releases/tag/v0.4.0), Evidence Floor.** The permanent product source is `3de1b0e427f37a202be4469dd818266f359c8b20`. The successful trusted publisher and fresh public download/receipt/consumer/source checks reconcile all 22 assets; the original 20 payload/evidence identities and notes were preserved through bounded recovery. See [Phase 23 evidence](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md) for the source, control and publication boundaries.
+**Published:** [v0.4.0](https://github.com/szTheory/gabbaboy/releases/tag/v0.4.0), Evidence Floor. Its permanent product source is `3de1b0e427f37a202be4469dd818266f359c8b20`; its 22 published assets and receipts remain unchanged. See [Phase 23 evidence](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md).
 
-The release states the justified absence of a newly admitted CGB game and real diagnostic fixture. FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remain Pending. Existing DMG-CPU-B/CGB-CPU-E software-model and fixture/harness observations do not qualify hardware, perception, mode-3 timing, general game compatibility, Linux player, Steam Deck or live Playstead integration. Packages remain unsigned and not notarized. The source archive and fixture-free products retain their separate policies and notices.
+**Milestone status:** v0.4 was administratively closed on 2026-11-17 with gaps disclosed. Seven of eight original requirements are complete; FIXT-01 remains Pending. Phase 24 Task 7, the exact-final-head suite, and Phase 20/21/23.1 freshness remain incomplete. Candidate f19 passed exact-head code/security review but its D-220 protected matrix failed: required-native and preview-package-smoke failed; fixture-repro passed. D-221 candidate 9bab passed focused local checks but received review NO-GO and was not pushed. D-226's candidate `febaa91` stopped before candidate CTests because the frozen gate expected synthetic marker wording while the unchanged producer emitted the raw `PASS:` marker. D-227 now governs the bounded recovery: one same-plan update/check and one gate-only replacement after a checked boundary directly on `febaa91`, preserving the D-226 gate and verifying the D-225→D-226 history. Keep D-221's five source pins and D-226's two exact parent-bound correction objects unchanged. T27 direct/bootstrap checks precede T28's existing receipt-seam immutable control; T29 qualification stays gated until both pass. No candidate, review, protected-matrix, D-209, or closure limit resets. The D-209 dispositions, failed Acid2 result, published v0.4 assets, administrative closeout, and exclusions remain unchanged.
 
-Phase 23 release reconciliation and final nine-summary automated closure pass. Its enclosing protected planning closeout remains the final merge gate before the owner-controlled milestone audit. The v0.4 milestone audit remains owner-controlled. The archived [v0.3 audit](milestones/v0.3-MILESTONE-AUDIT.md) and its [accepted closeout debt](milestones/v0.3-CLOSEOUT.md) retain their original scope and receipts.
+**Diagnostic results:** The Acid2 lane ran once: DMG-on-DMG and CGB-on-CGB matched; DMG-on-CGB differed at all 19,840 compared pixels. Do not replay that lane or claim a proven cause. One `div_inc_timing_a` case is admitted and passed for the DMG-CPU-B software model; 512 other names remain excluded. [Phase 24 closeout](phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CLOSEOUT.md) and the [milestone audit](v0.4-MILESTONE-AUDIT.md) retain the full scope.
 
-## Current Milestone: v0.4 Evidence Floor
+**Next direction:** The independent D-227 plan check passed. Commit the checked planning boundary as the sole-parent child of D-226 candidate `febaa91`; then execute T27's one gate-only replacement through frozen direct/bootstrap checks. T28 rebinds the existing coverage receipt seam and must pass its immutable original-object control before T29 can run exact-head qualification. Continue the already authorized `$gsd-autonomous --from 24` route through fresh reviews, existing protected checks, conditional identical-head merge, automated Phase 24 verification, and D-209-compatible v0.4 closeout. Candidate two still requires a concrete in-scope first-matrix failure and causal fix. Preserve all existing checks, required contexts, D-209, FIXT-01 Pending, failed unreplayed Acid2, Task 7, D-103 and v0.4 closeout semantics; retain this worktree and keep v0.5 unstarted.
 
-**Goal:** Establish a bounded, reproducible floor for CGB game progress and rendering evidence before deeper timing work, or record a specific reason game evidence could not be admitted.
+## Closed Milestone: v0.4 Evidence Floor
 
-**Target features:**
-- Extend the existing acceptance path to observe CGB RGB555 frames and input-driven guest progress on the CGB-CPU-E software profile, with positive and negative controls.
-- Try at most two game candidates: Potion Panic (GB Compo 2025 demo) first, then µCity 1.3 as the sole fallback. Admit either only after exact ROM/source/build, CGB mode, asset and audio rights, notices, and digest checks; otherwise record a justified absence.
-- Admit the font-substituted acid2 derivatives and gbmicrotest with explicit provenance, model applicability, rights, and scope limits.
-- Turn concise title/scene/symptom feedback into agent-owned reproduction and automated regressions with independent expectations and negative controls.
+v0.4 delivered the qualified release, CGB progress/scene contracts, bounded diagnostic admission, and exact-source rights records. The owner accepted FIXT-01 and the verification gaps for later work; the v0.4 archive records the complete disposition. See [milestone record](milestones/v0.4-ROADMAP.md), [requirement traceability](milestones/v0.4-REQUIREMENTS.md), and [closeout lesson](context/LESSONS.md#gb-gsd-003--close-blocked-milestones-with-criterion-level-dispositions-2026-11-17).
 
-The root project license remains MIT. Full libretro work is deferred from v0.4; a direct Steam Deck development build over the owner's existing SSH workflow is exploratory only and does not establish Linux-player or Deck support. libfuturo informs future consumer-contract thinking but adds no dependency and does not freeze GabbaBoy's API or state format.
+## Next Milestone Goals
 
-Phases 20–22 are complete. Phase 22 closes at a metadata-only no-go assessment: no real diagnostic fixture was admitted or executed, seven real-fixture gates remain unresolved, and no license prohibition is inferred. GAME-01, GAME-02, and FEED-01 are complete; FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain pending. REL-01 is complete against actual qualified publication/readback and requirement reconciliation; Phase 23 stops at the owner-controlled milestone-audit boundary.
+Recommended direction after closeout reconciliation: **v0.5 DMG PPU Timing**. Begin with exact admission of a narrow, rights-clear Mooneye/Mealybug DMG oracle set, then implement the pixel FIFO/fetcher and variable mode-3 timing within the existing performance budget. Write independent renderer controls before implementation, keep hardware claims out without hardware evidence, and avoid adding a dependency unless the accepted scope requires one. Start with `$gsd-new-milestone` only from clean `main` after the owner resolves the current recovery blocker.
 
 <details>
 <summary>Completed v0.3 scope and kickoff context</summary>
@@ -127,9 +123,9 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 - ✓ POSIX host runner with atomic raw saves, SIGTERM save-and-exit, exit-code table and declared formats (HOST-01..03 / INT-01a) — v0.3, Phases 18–19.
 - ✓ Qualified tag-bound v0.3.0 publication, scoped claims and reconciled release receipts (REL-01) — v0.3, Phase 19.
 
-### Active
+### Requirements Status
 
-All v0.3 requirements are validated in the [requirements archive](milestones/v0.3-REQUIREMENTS.md). v0.4 requirements and status are tracked in [REQUIREMENTS.md](REQUIREMENTS.md); Phase 23 release evidence (REL-01) is complete against qualified v0.4.0 publication/readback; FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remain Pending.
+All v0.3 requirements are validated in the [requirements archive](milestones/v0.3-REQUIREMENTS.md). The v0.4 requirements are archived in [v0.4-REQUIREMENTS.md](milestones/v0.4-REQUIREMENTS.md): seven of eight are complete and FIXT-01 remains Pending and deferred.
 
 Ongoing project principles: dependency-light C API with explicit contracts; headless core independent of the player; reproducible tests, sanitizers, fuzzing, and baselines; tested artifacts through PR and release automation; source-linked decisions, current docs, and transferable lessons.
 
@@ -209,4 +205,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-11-03 after Phase 22 qualification.
+Last updated: 2026-11-17 after the D-210 candidate review blocked before PR creation.

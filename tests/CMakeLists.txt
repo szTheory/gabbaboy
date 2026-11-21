@@ -1445,7 +1445,7 @@ gbb_add_v02_contract(fixture_admission_controls 90
   verify-fixture-admission.py --self-test)
 set_tests_properties(fixture_admission_controls PROPERTIES PROCESSORS 4)
 gbb_add_v02_contract(fixture_admission_repository 30
-  [=[PASS: fixture admission repository legacy_files=[1-9][0-9]* admitted_changes=0 baseline=[0-9a-f]+]=]
+  [=[PASS: fixture admission repository legacy_files=[1-9][0-9]* admitted_changes=2 baseline=[0-9a-f]+]=]
   verify-fixture-admission.py --check-repository --repo-root "${PROJECT_SOURCE_DIR}")
 gbb_add_v02_contract(fixture_product_core_controls 120
   [=[PASS: fixture admission product layout=core positive=1 negative_controls=[1-9][0-9]*]=]
@@ -3741,23 +3741,6 @@ set_tests_properties(phase22_acid2_tracer PROPERTIES
   TIMEOUT 60)
 set(GBB_PHASE22_ACID2_MASKS "${PROJECT_SOURCE_DIR}/tests/scripts/verify-acid2-masks.py")
 set(GBB_PHASE22_DIAGNOSTIC_ADMISSION "${PROJECT_SOURCE_DIR}/tests/scripts/verify-diagnostic-admission.py")
-add_test(NAME phase22_acid2_contract
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_ACID2_MASKS}" --self-test)
-add_test(NAME phase22_acid2_controls
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_ACID2_MASKS}" --self-test-controls)
-add_test(NAME phase22_fixture_admission_contract
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test)
-add_test(NAME phase22_fixture_admission_controls
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test-controls)
-add_test(NAME phase22_admission_assessment
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}"
-    --check-assessment --repo-root "${PROJECT_SOURCE_DIR}")
-set_tests_properties(phase22_acid2_contract phase22_acid2_controls
-  phase22_fixture_admission_contract phase22_fixture_admission_controls PROPERTIES TIMEOUT 30)
-set_tests_properties(phase22_admission_assessment PROPERTIES TIMEOUT 30
-  PASS_REGULAR_EXPRESSION "diagnostic assessment valid status=blocked unresolved_gates=7 gbmicrotest_cases=513")
-# The metadata no-go is checked at one immutable configure-time source revision. The checker
-# independently validates the historical assessment revision and never fetches upstream data.
 # Source archives have no Git metadata: keep configure/build usable and fail these source-bound
 # tests closed at execution unless the caller supplied an immutable revision explicitly.
 set(GBB_PHASE22_EVIDENCE_SOURCE_REV "" CACHE STRING
@@ -3780,6 +3763,24 @@ else()
     message(FATAL_ERROR "GBB_PHASE22_EVIDENCE_SOURCE_REV must be a full immutable Git commit")
   endif()
 endif()
+add_test(NAME phase22_acid2_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_ACID2_MASKS}" --self-test)
+add_test(NAME phase22_acid2_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_ACID2_MASKS}" --self-test-controls)
+add_test(NAME phase22_fixture_admission_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test)
+add_test(NAME phase22_fixture_admission_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test-controls
+    --runner "$<TARGET_FILE:gabbaboy-runner>")
+add_test(NAME phase22_admission_assessment
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}"
+    --check-closeout --closeout-kind acid2 --require-approved --require-recorded-acid2
+    --repo-root "${PROJECT_SOURCE_DIR}" --source-revision "${GBB_PHASE22_EVIDENCE_SOURCE_REV}")
+set_tests_properties(phase22_acid2_contract phase22_acid2_controls
+  phase22_fixture_admission_contract phase22_fixture_admission_controls PROPERTIES TIMEOUT 30)
+set_tests_properties(phase22_admission_assessment PROPERTIES TIMEOUT 30
+  LABELS "integration"
+  PASS_REGULAR_EXPRESSION "diagnostic closeout acid2 recorded status=runtime-failed source=fe725bfe996a2fff2c57a0e2164a3243ca6d8cb8 comparisons=3 dmg=pass/0 dmg-on-cgb=mismatch/19840 cgb=pass/0")
 set(GBB_PHASE22_EVIDENCE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-diagnostic-evidence.py")
 add_test(NAME phase22_evidence_contract
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_EVIDENCE_CHECKER}" --check

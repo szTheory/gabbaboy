@@ -41,6 +41,18 @@ NOTICE_APPROVED_PRODUCT_CLAIM = (
     b"package checks compare recorded byte identities; they do not decide whether a\n"
     b"grant's author had authority."
 )
+NOTICE_ACID2_STATUS_BEFORE = (
+    b"bytes are excluded. Runtime comparison has not been performed yet. See\n"
+    b"fixtures/acid2/SOURCES.md."
+)
+NOTICE_ACID2_STATUS_AFTER = (
+    b"bytes are excluded. One software comparison was run: DMG-on-DMG and CGB-on-CGB\n"
+    b"matched, while DMG-on-CGB differed in all 19,840 compared pixels. The failed\n"
+    b"cross-model result was not replayed; its cause is not established. These results\n"
+    b"are controlled-composition evidence, not mode-3 timing evidence. See\n"
+    b"fixtures/acid2/SOURCES.md and the Phase 24 closeout record."
+)
+NOTICE_D209_APPROVED_INDEX_SHA256 = "38820b1dbf48d099438ccc5381d5d75d3b03ea18433e5ea46b7cbd744c1d0011"
 MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 MAX_FILE_BYTES = 32 * 1024 * 1024
 MAX_TOTAL_FIXTURE_BYTES = 256 * 1024 * 1024
@@ -798,12 +810,12 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
             raise Reject("input-identity-mismatch", path)
     current_notice_index = read_regular(root, index_path)
     notice_index = blob(root, pin, index_path)
-    if current_notice_index != notice_index:
+    if not _notice_index_matches_admission_pin(notice_index, current_notice_index, index_path):
         raise Reject("admission-pin-mismatch", index_path)
     manifest_digest = sha256(manifest_raw)
     license_digest = notices["sha256"]
     fixture_id = PurePosixPath(fixture_dir).name
-    if not _notice_digest_table_matches(notice_index, fixture_id, manifest_digest, license_digest):
+    if not _notice_digest_table_matches(current_notice_index, fixture_id, manifest_digest, license_digest):
         raise Reject("notice-index-mismatch", index_path)
     return {"fixture": fixture_dir, "pin": pin, "files": len(files)}
 
@@ -923,12 +935,25 @@ def _check_product_policy_identity(policy_bytes: bytes) -> None:
 
 
 def _check_product_notice_index(baseline_index: bytes, current_index: bytes) -> None:
-    """Allow the reviewed product-policy paragraph while pinning every other notice byte."""
+    """Allow the baseline, reviewed product claim, or the exact D-209 notice snapshot."""
     if baseline_index.count(NOTICE_BASELINE_PRODUCT_CLAIM) != 1:
         raise Reject("product-source-mismatch", "baseline product-policy paragraph is not uniquely identifiable")
     approved_index = baseline_index.replace(NOTICE_BASELINE_PRODUCT_CLAIM, NOTICE_APPROVED_PRODUCT_CLAIM, 1)
-    if current_index not in (baseline_index, approved_index):
-        raise Reject("product-source-mismatch", "THIRD_PARTY_NOTICES.md differs outside the approved product-policy paragraph")
+    if (current_index not in (baseline_index, approved_index)
+            and sha256(current_index) != NOTICE_D209_APPROVED_INDEX_SHA256):
+        raise Reject("product-source-mismatch", "THIRD_PARTY_NOTICES.md differs from the exact approved D-209 notice snapshot")
+
+
+def _notice_index_matches_admission_pin(pinned_index: bytes, current_index: bytes,
+                                        index_path: str) -> bool:
+    """Permit the exact global Acid2 status update while pinning all other notice bytes."""
+    if current_index == pinned_index:
+        return True
+    if (index_path != "THIRD_PARTY_NOTICES.md"
+            or pinned_index.count(NOTICE_ACID2_STATUS_BEFORE) != 1):
+        return False
+    return current_index == pinned_index.replace(NOTICE_ACID2_STATUS_BEFORE,
+                                                  NOTICE_ACID2_STATUS_AFTER, 1)
 
 
 def _product_source_expectations(root: Path, rules: dict, layout: str) -> tuple[dict[str, dict], set[str], bytes]:
@@ -1323,6 +1348,8 @@ def _self_test_product_notice_index(repo_root: Path) -> int:
         ("historical-digest-row-change",
          approved.replace(b"59284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c",
                           b"09284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c", 1)),
+        ("altered-acid2-status", current.replace(b"19,840", b"19,839", 1)),
+        ("status-update-with-unrelated-edit", current + b"unreviewed\n"),
     ]
     for label, candidate in controls:
         if candidate == approved:
@@ -1336,6 +1363,25 @@ def _self_test_product_notice_index(repo_root: Path) -> int:
             raise Reject("self-test-product-notice-index", f"{label} was accepted")
         print(f"rejected: notice index {label}")
     return len(controls)
+
+
+def _self_test_acid2_notice_admission_overlay() -> int:
+    pinned = b"prefix\n" + NOTICE_ACID2_STATUS_BEFORE + b"\nsuffix\n"
+    approved = b"prefix\n" + NOTICE_ACID2_STATUS_AFTER + b"\nsuffix\n"
+    cases = (
+        ("exact-acid2-status-update", approved, "THIRD_PARTY_NOTICES.md", True),
+        ("status-change-on-other-path", approved, "fixtures/acid2/LICENSE.txt", False),
+        ("altered-status-result", approved.replace(b"19,840", b"19,839", 1),
+         "THIRD_PARTY_NOTICES.md", False),
+        ("unrelated-index-edit", approved + b"unreviewed\n", "THIRD_PARTY_NOTICES.md", False),
+        ("duplicate-status-anchor", pinned + NOTICE_ACID2_STATUS_BEFORE,
+         "THIRD_PARTY_NOTICES.md", False),
+    )
+    for label, candidate, index_path, expected in cases:
+        actual = _notice_index_matches_admission_pin(pinned, candidate, index_path)
+        if actual is not expected:
+            raise Reject("self-test-acid2-notice-admission-overlay", label)
+    return sum(1 for _, _, _, expected in cases if not expected)
 
 
 def self_test_packages(layout: str) -> int:
@@ -2325,6 +2371,7 @@ def self_test() -> None:
         if positive.returncode != 0 or "PASS: fixture admission" not in positive.stdout:
             raise Reject("self-test-positive", positive.stderr.strip() or positive.stdout.strip())
         manifest_controls = _run_manifest_mutations(root) + _run_live_byte_mutations(root)
+    notice_overlay_controls = _self_test_acid2_notice_admission_overlay()
 
     def reject_case(label: str, mutate, expected: str) -> None:
         with tempfile.TemporaryDirectory(prefix=f"gbb-fixture-admission-{label}-") as directory:
@@ -2375,7 +2422,7 @@ def self_test() -> None:
     repository_controls = _run_repository_controls()
     bounded_controls = _run_bounded_input_controls()
     print(f"PASS: fixture admission self-test positives=2 negative_controls="
-          f"{manifest_controls + len(cases) + repository_controls + bounded_controls}")
+          f"{manifest_controls + notice_overlay_controls + len(cases) + repository_controls + bounded_controls}")
 
 
 def main(argv: list[str] | None = None) -> int:

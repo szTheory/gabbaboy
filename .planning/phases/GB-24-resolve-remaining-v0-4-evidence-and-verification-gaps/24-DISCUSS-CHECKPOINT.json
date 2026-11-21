@@ -1,0 +1,88 @@
+{
+  "phase": "24",
+  "phase_name": "Resolve remaining v0.4 evidence and verification gaps",
+  "timestamp": "2026-11-20T22:39:20Z",
+  "areas_completed": [
+    "Raw marker contract",
+    "Recovery boundary and qualification"
+  ],
+  "areas_remaining": [],
+  "decisions": {
+    "Raw marker contract": [
+      {
+        "question": "Which side of the direct-control contract should change?",
+        "answer": "Change only the gate consumer matcher to accept the coverage checker's existing raw PASS line.",
+        "options_presented": [
+          "Change gate matcher to the real PASS: phase24-promotion-controls output",
+          "Change the coverage checker's output",
+          "Normalize or append a marker in the evidence receipt"
+        ]
+      },
+      {
+        "question": "How should evidence remain bound to the command?",
+        "answer": "Preserve the exact command output and digest; do not transform or synthesize transcript text.",
+        "options_presented": [
+          "Validate the raw producer output and its digest",
+          "Normalize the output before validation",
+          "Append a derived marker to the transcript"
+        ]
+      },
+      {
+        "question": "What regression control proves the correction?",
+        "answer": "Accept the observed raw line and reject the old synthetic line, missing marker, wrong digest, nonzero result, and altered fixed command.",
+        "options_presented": [
+          "Use the actual observed output line and causal refusal controls",
+          "Test only a generic regex sample",
+          "Test only the producer exit code"
+        ]
+      }
+    ],
+    "Recovery boundary and qualification": [
+      {
+        "question": "What should happen after D226's final-candidate marker refusal?",
+        "answer": "Preserve D226 and its stop receipt, then use one new D227 checked planning boundary and one gate-only replacement for the exact matcher defect.",
+        "options_presented": [
+          "Create one new bounded gate-only recovery scope with a fresh checked boundary",
+          "Edit or retry the frozen D226 candidate in place",
+          "Broaden the marker contract or rerun the unchanged candidate"
+        ]
+      },
+      {
+        "question": "Which qualification and promotion limits carry forward?",
+        "answer": "Keep all existing candidate, review, matrix, required-context, exact-head, merge, and phase/milestone limits; D227 resets none of them.",
+        "options_presented": [
+          "Preserve every inherited limit and only continue if the new frozen gate passes",
+          "Reset a candidate or review allowance because the gate changed",
+          "Skip final qualification because the defect was a marker mismatch"
+        ]
+      },
+      {
+        "question": "What happens if any D227 frozen gate check fails?",
+        "answer": "Stop without another replacement, retry, hosted matrix, promotion, or closure claim; report the concrete blocker and next actor.",
+        "options_presented": [
+          "Fail closed at the gate and preserve all receipts",
+          "Repin and retry once more",
+          "Continue to CTest or CI to see whether it passes there"
+        ]
+      },
+      {
+        "question": "How should the authorized route proceed if D227 passes?",
+        "answer": "Resume the already planned exact-head qualification, ten focused CTests, independent reviews, one existing protected matrix, conditional merge, automated phase verification, and D-209-compatible closeout in order.",
+        "options_presented": [
+          "Continue the existing GSD Autonomous route under inherited gates",
+          "Close Phase 24 immediately after the gate self-test",
+          "Start v0.5 before reconciling v0.4"
+        ]
+      }
+    ]
+  },
+  "deferred_ideas": [],
+  "canonical_refs": [
+    ".github/scripts/phase24-promotion-gate.py",
+    "tests/scripts/verify-workflow-policy-coverage.py",
+    "build/phase24/d226-t26-promotion_coverage_controls.log",
+    "build/phase24/d226-t26-frozen-gate-marker-stop.json",
+    ".planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md",
+    ".planning/context/WORKFLOW.md#cicd-efficiency"
+  ]
+}

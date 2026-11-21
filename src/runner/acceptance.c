@@ -573,6 +573,145 @@ static void visit_pulses(void *context, const gbb_trace_record *trace, size_t tr
     }
 }
 
+/* The selected gbmicrotest case uses the shared FF80/FF81/FF82 protocol. Each
+ * window is at most the longest DMG instruction (48 half-dots); the guest is
+ * observed through the private instruction/bus-write recorder and stops at its
+ * first terminal FF82 write. This is deliberately not a general memory script. */
+#define DIAGNOSTIC_WINDOW_HALF_DOTS UINT64_C(48)
+#define DIAGNOSTIC_TRACE_CAPACITY 16u
+#define DIAGNOSTIC_EVENT_CAPACITY 256u
+#define DIAGNOSTIC_MAX_BUDGET_HALF_DOTS UINT64_C(8192)
+#define DIAGNOSTIC_MAX_INSTRUCTIONS 512u
+#define DIAGNOSTIC_MAX_EVENTS 4096u
+
+typedef struct {
+    uint8_t actual;
+    uint8_t expected;
+    uint8_t status;
+    unsigned seen;
+    uint64_t instructions;
+    uint64_t events;
+    bool terminal;
+} shared_diagnostic_result;
+
+static void visit_shared_diagnostic(void *context, const gbb_trace_record *trace, size_t trace_count,
+                                    const gbb_diagnostic_record *diag, size_t diag_count) {
+    (void)trace;
+    shared_diagnostic_result *result = context;
+    result->instructions += trace_count;
+    result->events += diag_count;
+    for (size_t i = 0; i < diag_count && !result->terminal; i++) {
+        if (diag[i].kind != GBB_DIAGNOSTIC_BUS_WRITE) continue;
+        if (diag[i].address == 0xFF80u && !(result->seen & 1u)) {
+            result->actual = diag[i].value;
+            result->seen |= 1u;
+        } else if (diag[i].address == 0xFF81u && !(result->seen & 2u)) {
+            result->expected = diag[i].value;
+            result->seen |= 2u;
+        } else if (diag[i].address == 0xFF82u && !(result->seen & 4u)) {
+            result->status = diag[i].value;
+            result->seen |= 4u;
+            result->terminal = true;
+        }
+    }
+}
+
+static int run_shared_diagnostic_case(const gbb_case *c, const gbb_acceptance_options *options) {
+    uint8_t *rom = NULL;
+    size_t rom_length = 0;
+    gbb_instance *instance = NULL;
+    char digest[65];
+    int code = EXIT_INVALID;
+    shared_diagnostic_result result;
+    memset(&result, 0, sizeof(result));
+
+    if (options != NULL && (options->receipt || options->observe || options->observe_input_script != NULL ||
+        options->has_frame_digest_at || options->pcm_only || options->dump_dir != NULL ||
+        options->failure_dir != NULL || options->has_drop_button || options->raw_verdict ||
+        options->expect_fail)) return input_error(c, "diagnostic-option-not-applicable");
+    if (c->budget_half_dots == 0u || c->budget_half_dots > DIAGNOSTIC_MAX_BUDGET_HALF_DOTS ||
+        c->instruction_limit == 0u || c->instruction_limit > DIAGNOSTIC_MAX_INSTRUCTIONS ||
+        c->event_limit == 0u || c->event_limit > DIAGNOSTIC_MAX_EVENTS) {
+        return input_error(c, "diagnostic-limit-invalid");
+    }
+
+    int rc = gbb_runner_read_file(c->rom, GBB_CASES_MAX_ROM_BYTES, &rom, &rom_length);
+    if (rc != 0) { code = input_error(c, rc == 1 ? "rom-missing" : "rom-unreadable"); goto done; }
+    if (rom_length != c->rom_size) { code = input_error(c, "rom-size-mismatch"); goto done; }
+    gbb_accept_sha256_hex(rom, rom_length, digest);
+    if (strcmp(digest, c->rom_sha256) != 0) { code = input_error(c, "rom-digest-mismatch"); goto done; }
+    if (gbb_create(run_profile(options), &instance) != GBB_OK) {
+        printf("acceptance id=%s status=unsupported reason=create-failed model=%s\n", c->id, run_model(options));
+        code = EXIT_UNSUPPORTED;
+        goto done;
+    }
+    if (gbb_load_rom(instance, rom, rom_length) != GBB_OK) {
+        code = input_error(c, "rom-rejected");
+        goto done;
+    }
+
+    uint64_t actual_half_dots = 0;
+    while (actual_half_dots < c->budget_half_dots && !result.terminal) {
+        uint64_t before = actual_half_dots;
+        uint64_t remaining = c->budget_half_dots - actual_half_dots;
+        uint64_t slice = remaining < DIAGNOSTIC_WINDOW_HALF_DOTS ? remaining : DIAGNOSTIC_WINDOW_HALF_DOTS;
+        uint64_t deadline = actual_half_dots + slice;
+        gbb_trace_record trace[DIAGNOSTIC_TRACE_CAPACITY];
+        gbb_diagnostic_record events[DIAGNOSTIC_EVENT_CAPACITY];
+        enum gbb_accept_step_status step = gbb_accept_diag_advance(
+            instance, &actual_half_dots, deadline, NULL, trace, DIAGNOSTIC_TRACE_CAPACITY,
+            events, DIAGNOSTIC_EVENT_CAPACITY, visit_shared_diagnostic, &result, before);
+        if (step != GBB_ACCEPT_STEP_OK || actual_half_dots == before) {
+            printf("acceptance id=%s status=bounded-failure model=%s reason=%s instructions=%llu events=%llu end_half_dots=%llu\n",
+                   c->id, run_model(options), step == GBB_ACCEPT_STEP_GUARD ? "iteration-guard" :
+                   step == GBB_ACCEPT_STEP_STOPPED ? "guest-stopped" : "no-progress",
+                   (unsigned long long)result.instructions, (unsigned long long)result.events,
+                   (unsigned long long)actual_half_dots);
+            code = EXIT_UNSUPPORTED;
+            goto done;
+        }
+        if (result.instructions > c->instruction_limit || result.events > c->event_limit) {
+            printf("acceptance id=%s status=bounded-failure model=%s reason=%s instructions=%llu events=%llu end_half_dots=%llu\n",
+                   c->id, run_model(options), result.instructions > c->instruction_limit ? "instruction-limit" : "event-limit",
+                   (unsigned long long)result.instructions, (unsigned long long)result.events,
+                   (unsigned long long)actual_half_dots);
+            code = EXIT_UNSUPPORTED;
+            goto done;
+        }
+    }
+
+    if (!result.terminal) {
+        printf("acceptance id=%s status=bounded-failure model=%s reason=guest-deadline instructions=%llu events=%llu end_half_dots=%llu\n",
+               c->id, run_model(options), (unsigned long long)result.instructions,
+               (unsigned long long)result.events, (unsigned long long)actual_half_dots);
+        code = EXIT_UNSUPPORTED;
+    } else if (result.seen != 7u || result.expected != c->diagnostic_expected) {
+        printf("acceptance id=%s status=fail model=%s reason=source-protocol actual=%02x expected=%02x terminal=%02x instructions=%llu events=%llu end_half_dots=%llu\n",
+               c->id, run_model(options), result.actual, result.expected, result.status,
+               (unsigned long long)result.instructions, (unsigned long long)result.events,
+               (unsigned long long)actual_half_dots);
+        code = EXIT_FAIL;
+    } else if (result.status == 0x01u && result.actual == result.expected) {
+        printf("acceptance id=%s status=pass model=%s class=diagnostic protocol=shared-ff80-ff82 actual=%02x expected=%02x terminal=%02x instructions=%llu events=%llu end_half_dots=%llu\n",
+               c->id, run_model(options), result.actual, result.expected, result.status,
+               (unsigned long long)result.instructions, (unsigned long long)result.events,
+               (unsigned long long)actual_half_dots);
+        code = EXIT_PASS;
+    } else {
+        const char *reason = result.status == 0xFFu && result.actual != result.expected
+            ? "observed-mismatch" : "source-verdict-inconsistent";
+        printf("acceptance id=%s status=fail model=%s reason=%s class=diagnostic protocol=shared-ff80-ff82 actual=%02x expected=%02x terminal=%02x instructions=%llu events=%llu end_half_dots=%llu\n",
+               c->id, run_model(options), reason, result.actual, result.expected, result.status,
+               (unsigned long long)result.instructions, (unsigned long long)result.events,
+               (unsigned long long)actual_half_dots);
+        code = EXIT_FAIL;
+    }
+done:
+    gbb_destroy(instance);
+    free(rom);
+    return code;
+}
+
 /* Returns 0 when the probe ran. hw is the hw_capability byte at the probe frame. */
 static int sgb_probe(const gbb_accept_predicate *predicate, const uint8_t *rom, size_t rom_length,
                      const gbb_accept_script *script, gbb_profile profile, uint8_t *hw, unsigned *pulses) {
@@ -1064,6 +1203,7 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
         return EXIT_UNSUPPORTED;
     }
 
+    if (c->oracle == GBB_ORACLE_DIAGNOSTIC_SHARED) return run_shared_diagnostic_case(c, options);
     if (c->oracle != GBB_ORACLE_PROGRESS_PREDICATE) return run_frame_case(c, options);
 
     /* Input script: digest over the raw bytes first, then syntax. Under --observe only, an explicit

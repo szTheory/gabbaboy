@@ -2275,6 +2275,10 @@ def check_preview_player_lane(root: Path) -> None:
     steps = job.get("steps", [])
     waits = [step for step in steps if step.get("id") == "candidate"]
     run = " ".join(str(waits[0].get("run", "")).split()) if len(waits) == 1 else ""
+    fail_fast = "--fail-fast-required-native"
+    if (run.count(fail_fast) != 1
+            or not run.startswith("python3 .github/scripts/wait-exact-head-ci.py " + fail_fast + " ")):
+        raise Reject("preview-player-lane", f"{_where(workflow, PREVIEW_PLAYER_JOB)} must opt into fail-fast exactly once immediately after the waiter script")
     for pin in PREVIEW_PLAYER_WAIT_PINS:
         if pin not in run:
             raise Reject("preview-player-lane", f"{_where(workflow, PREVIEW_PLAYER_JOB)} wait step must contain: {pin}")
