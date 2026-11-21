@@ -643,3 +643,36 @@ Require an object containing integer major 1 and minor 0, reject booleans and al
 The owner authorized one same-plan D-228 update, independent check and gate-only correction and directed continuation through the existing autonomous milestone route. The checked boundary is the sole-parent child of D-227 stop candidate `2e9d8cf1ed3e9889dd0199a9d30acdb06635661d`, inheriting gate blob `ac061190a7696134dd777d114fcce5228c58036d`. D-228 permits no retry or second gate replacement and resets no candidate/review/matrix/context/merge/closure limit. The existing receipt seam may be rebound after the gate freeze; T29's ten focused serial CTests remain blocked until both frozen gate and immutable seam checks pass. Continue to exact-head reviews, the existing eligible protected matrix and conditional merge only after qualification. Then verify the active Phase 24 scope, reconcile to main, and run the already-authorized D-209-compatible closeout. No v0.5, D-103, Task 7, ROM, or Acid2 replay.
 
 **Sources:** [CMake 3.25 CTest JSON object model](https://cmake.org/cmake/help/v3.25/manual/ctest.1.html#show-as-json-object-model); [official CTest JSON schema](https://cmake.org/cmake/help/latest/_downloads/a23288746b718529293c28c8c3fad9df/show-only-schema.json).
+
+## D-229 — Canonical receipt construction before the next gate freeze
+
+**Date:** 2026-11-20
+**Areas discussed:** Immutable recovery boundary; bootstrap receipt generation and validation; preflight order; inherited qualification limits
+
+### Trigger
+
+D-228 froze one gate-only replacement and passed its 39-control direct self-test. Its bootstrap receipt then failed with `bootstrap_historical_pins_mismatch` because a manually copied D-227 receipt omitted 21 D-227 history pins. D-228 forbids retry or replacement. The new recovery must preserve that stop and make the next receipt contract verifiable before freezing another gate.
+
+### Options considered
+
+| Option | Benefit | Risk / cost | Decision |
+|---|---|---|---|
+| Retry D-228 with a manually edited receipt | Minimal code change | Forbidden by D-228; repeats the brittle copy path | Reject |
+| Accept omitted history pins in the gate | May pass the current generated receipt | Weakens provenance and makes incomplete history valid | Reject |
+| Add a separate generator/dependency | Clear code separation | Duplicates trusted schema/pins and increases maintenance/trust surface | Reject |
+| Build and verify the next receipt in the standard-library gate; independently assert exact map and causal refusals before freeze | Prevents receipt omissions before the immutable boundary, with a single production authority | Adds a narrow CLI mode and exclusive output behavior | ✓ |
+
+### Cross-role synthesis
+
+| Lens | Finding | Recommendation |
+|---|---|---|
+| Security/provenance | A generator and verifier can share an incorrect map; manual/candidate-derived receipt fields can redirect trusted identities. | Construct from pinned original objects; exact schema/map equality; independent expected pin inventory; missing/extra/changed-pin negatives; zero-action refusal. |
+| Architecture | Copying the predecessor JSON misses pins introduced by later boundaries; a second script duplicates the contract. | A canonical `--write-bootstrap` mode in the new gate emits a distinct ignored receipt from its own constants and validated object reads. |
+| Test engineering | A superficial schema check can miss an omitted history key. | Exercise production generation and normal verification before freeze; compare expected keys and values independently; test no-overwrite and failure controls. |
+| Operations | Post-freeze diagnosis burns a bounded recovery even if the defect is cheap to catch. | Run syntax, identity/scope, direct self-test, receipt controls, and the unchanged scanner before freeze. Preserve all checks after freeze and stop on any failure. |
+| Maintainability/supply chain | A schema library or parallel generator adds dependencies and duplicated truth. | Python standard library and existing seams; no new dependency, CTest, workflow context, or scanner exception. |
+| Product/release | Receipt plumbing is not emulator evidence. | Keep D-209 states and every Phase 24 exclusion/budget unchanged. |
+
+**Owner's choice:** The owner directed the agent to follow its synthesized recommendations autonomously. The selected route is one new D-229 scope, one checked same-plan boundary, one gate-only replacement, a canonical no-overwrite receipt builder, exact-map preflight, then the already-authorized unchanged qualification path if all stops pass.
+
+**Authorization boundary:** D-229 supersedes D-228's stop only for one new checked boundary and one new gate-only replacement. It does not reopen or rewrite D-228 or its receipt. Any D-229 frozen direct/bootstrap/immutable or subsequent required qualification failure stops without retry/replacement and resets no candidate, review, matrix, CI, merge, or closure allowance. Keep all D-209 dispositions, FIXT-01 Pending, failed unreplayed Acid2, Task 7, D-103, release bytes, ten CTest identities/order, current required contexts, and protected merge rules. No broad suite, ROM/Acid2 replay, v0.5, or global auto-advance setting change.
