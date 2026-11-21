@@ -98,28 +98,28 @@ GROUP_BY_WORKFLOW = {
 EXPECTED_TEST_NAMES = set(GROUPS.values()) | {"workflow_policy_coverage", "workflow_policy_coverage_controls"}
 POLICY_TEST_NAMES = EXPECTED_TEST_NAMES | {"workflow_policy_check"}
 PHASE24_GATE_PATH = ".github/scripts/phase24-promotion-gate.py"
-PHASE24_BOOTSTRAP_PATH = "build/phase24/d229-bootstrap.json"
-PHASE24_BOOTSTRAP_CANONICAL_SHA256 = "e6d8af5d3e260570490798d800649ece4823f7f08160072dbee12d53ddf7defb"
-PHASE24_PLAN_REV = "3b7814793e6f2fa30f75a2f3eccdb46024f88b54"
-PHASE24_PLAN_PARENT = "6573cb05dcd978f37102ac2d3a26a821c145a2fd"
-PHASE24_PLAN_TREE = "f792337c2d7bef9343a7dd427551c19424f75c73"
-PHASE24_PLAN_BLOB = "f503366181aa88d7656cdcd8fd9486d0c5554f66"
-PHASE24_PLAN_SHA256 = "79cb1371b8082f3ff1492404d0bee789ccbc57c10c3e4ebfbae40e1370498417"
+PHASE24_BOOTSTRAP_PATH = "build/phase24/d230-bootstrap.json"
+PHASE24_BOOTSTRAP_CANONICAL_SHA256 = "e17316b0e18062b46858a992e5d91ed83d96e8dbdb48ea4c03f0aa430be8617a"
+PHASE24_PLAN_REV = "1e1fe73f24255d1a76d9b78a7320a90a4e47de2b"
+PHASE24_PLAN_PARENT = "e6926b69fde285917c2a6cedc42188085420a427"
+PHASE24_PLAN_TREE = "956057b9ca2b136cf9005c249c03c1d2cf8c32f6"
+PHASE24_PLAN_BLOB = "a3c9462f394dc5390451d8d58f20eb07d2fae654"
+PHASE24_PLAN_SHA256 = "5a39f53e085b7b7a94a6d32d3cde891a2dbfe7874509c571e4f31ec346e4fa56"
 PHASE24_PLAN_PATH_SHA256 = "981d088bc4d660fbb67e39db130bb8ec6bba081e6717b99ab9ec825388cdc72e"
-PHASE24_DISCUSSION_REV = "8f90749937467d264b5d638b757d178d0ef1120b"
-PHASE24_DISCUSSION_TREE = "0085b429044aac5ded48489ca9366a63045958d4"
-PHASE24_DISCUSSION_BLOB = "df45dd868a83cccfc8d29778247452c5c546777d"
-PHASE24_DISCUSSION_SHA256 = "1de2aa3f4a9078f2714366da7cce862f37fe1da6379dad50cdb271a8389eb118"
+PHASE24_DISCUSSION_REV = "1e1fe73f24255d1a76d9b78a7320a90a4e47de2b"
+PHASE24_DISCUSSION_TREE = "956057b9ca2b136cf9005c249c03c1d2cf8c32f6"
+PHASE24_DISCUSSION_BLOB = "ddd959f1abf4feeb2ca08140e89f8ffc89578737"
+PHASE24_DISCUSSION_SHA256 = "e5fa5c1e510b2e2c47e87154e3f9d7a02e9e70f3a82420ed82659d4a5e70fe3b"
 PHASE24_DISCUSSION_PATH_SHA256 = "3a0e982e59a695cedac174a449e3f1ad3322c943d4e48c772afc85ff6e9b9075"
-PHASE24_CLOSEOUT_REV = "9bf8048de96b9f40898238a0ef9b8a723b04bbe5"
-PHASE24_CLOSEOUT_TREE = "8f1b848155d0a24492ad6023da07e3b286fc79f4"
-PHASE24_CLOSEOUT_BLOB = "5518083f3bf5cecb8ba3eb9e127dc730a64bb4d8"
-PHASE24_CLOSEOUT_SHA256 = "5fad7cb8bfa8355338081f315240bef918bf085883f2d61d502363c641fb5e5b"
+PHASE24_CLOSEOUT_REV = "1e1fe73f24255d1a76d9b78a7320a90a4e47de2b"
+PHASE24_CLOSEOUT_TREE = "956057b9ca2b136cf9005c249c03c1d2cf8c32f6"
+PHASE24_CLOSEOUT_BLOB = "cd4855b46aeda1c521372b503b8709217f4c142c"
+PHASE24_CLOSEOUT_SHA256 = "f66e2495bdb81589cda29731501caa0e564d0bbb9c15b9250deaf55c3107435b"
 PHASE24_CLOSEOUT_PATH_SHA256 = "56f44d6804c1ae7ca224578d88d51d10a3bc086f9844bae48bcfaae0f044f703"
-PHASE24_D228_GATE_REV = "8ce5517a5777bffb87247564a9ae3afa1b0153d8"
-PHASE24_D228_GATE_TREE = "b1f57ae8e5e0173a4dcb44aee33d2b496c16529b"
-PHASE24_D228_GATE_BLOB = "da9c54b86d9b67b1195864c56186b9a98795ee6b"
-PHASE24_D228_GATE_SHA256 = "8583fcfc18d772d482cddbfbac1ec7246bb7088b217c2f1fd452c60c0bd8cefb"
+PHASE24_D229_GATE_REV = "4b8a04e259650480a259137b88df20959c86e320"
+PHASE24_D229_GATE_TREE = "b9a1824fd40f9eb3c5855f382370d365ef9ed6dd"
+PHASE24_D229_GATE_BLOB = "d274e410cb13775457581a151eded15dd692edff"
+PHASE24_D229_GATE_SHA256 = "76e3ec4aefc30695f7aa05046a4e06ed587ac36915b351f084293c50db61b0f2"
 PHASE24_GATE_REV_RE = re.compile(r"^[0-9a-f]{40}$")
 PHASE24_GATE_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 ALL_PLATFORMS = ("posix", "windows")
@@ -3410,20 +3410,28 @@ def _phase24_pinned_gate_source(root: Path, gate_rev: str, gate_sha256: str,
             "d228_plan_parent", "d228_plan_rev", "d228_plan_sha256", "d228_plan_tree",
             "d228_stop_continue_blob", "d228_stop_continue_sha256", "d228_stop_handoff_blob",
             "d228_stop_handoff_sha256", "d228_stop_parent", "d228_stop_rev", "d228_stop_tree",
-            "d229_boundary_parent", "d229_boundary_rev", "d229_boundary_tree", "d229_discussion_blob",
+            "d229_bootstrap_sha256", "d229_boundary_parent", "d229_boundary_rev", "d229_boundary_tree",
+            "d229_candidate_parent", "d229_candidate_rev", "d229_candidate_tree", "d229_discussion_blob",
             "d229_discussion_parent", "d229_discussion_path_sha256", "d229_discussion_rev",
-            "d229_discussion_sha256", "d229_discussion_tree", "d229_handoff_blob", "d229_handoff_sha256",
+            "d229_discussion_sha256", "d229_discussion_tree", "d229_gate_blob", "d229_gate_mode",
+            "d229_gate_old_blob", "d229_gate_parent", "d229_gate_rev", "d229_gate_sha256", "d229_gate_tree",
+            "d229_handoff_blob", "d229_handoff_sha256",
             "d229_inherited_gate_blob", "d229_inherited_gate_mode", "d229_inherited_gate_rev",
-            "d229_inherited_gate_sha256", "d229_inherited_gate_tree", "d229_phase_continue_blob",
+            "d229_inherited_gate_sha256", "d229_inherited_gate_tree", "d229_loader_sha256", "d229_phase_continue_blob",
             "d229_phase_continue_sha256", "d229_plan_blob", "d229_plan_sha256", "d229_roadmap_blob",
-            "d229_roadmap_sha256", "d229_root_continue_blob", "d229_root_continue_sha256", "d229_state_blob",
-            "d229_state_sha256", "planning_hygiene_sha256", "requirements_blob", "roadmap_blob",
+            "d229_roadmap_sha256", "d229_root_continue_blob", "d229_root_continue_sha256", "d229_seam_coverage_blob",
+            "d229_seam_old_coverage_blob", "d229_seam_parent", "d229_seam_rev", "d229_seam_tree",
+            "d229_state_blob", "d229_state_sha256", "d229_t35_code_review", "d229_t35_external_promotion",
+            "d229_t35_security_findings", "d229_t35_security_review", "d229_t35_tests",
+            "d230_discussion_log_blob", "d230_discussion_log_path_sha256", "d230_discussion_log_rev",
+            "d230_discussion_log_sha256", "d230_discussion_log_tree", "planning_hygiene_sha256",
+            "requirements_blob", "roadmap_blob",
             "state_forks_blob",
         },
         "trusted_handoff": {"authority", "plan_rev", "plan_sha256", "gate_rev", "gate_sha256"},
     }
     if (type(bootstrap) is not dict or set(bootstrap) != required_top_level
-            or bootstrap.get("kind") != "phase24-d229-bootstrap"
+            or bootstrap.get("kind") != "phase24-d230-bootstrap"
             or type(bootstrap.get("schema_version")) is not int
             or bootstrap.get("schema_version") != 1):
         reject("Phase 24 bootstrap receipt has the wrong identity")
@@ -3448,8 +3456,8 @@ def _phase24_pinned_gate_source(root: Path, gate_rev: str, gate_sha256: str,
         "sha256": PHASE24_CLOSEOUT_SHA256, "path_sha256": PHASE24_CLOSEOUT_PATH_SHA256,
     }
     expected_inherited_gate = {
-        "rev": PHASE24_D228_GATE_REV, "tree": PHASE24_D228_GATE_TREE,
-        "blob": PHASE24_D228_GATE_BLOB, "sha256": PHASE24_D228_GATE_SHA256, "mode": "100644",
+        "rev": PHASE24_D229_GATE_REV, "tree": PHASE24_D229_GATE_TREE,
+        "blob": PHASE24_D229_GATE_BLOB, "sha256": PHASE24_D229_GATE_SHA256, "mode": "100644",
     }
     expected_handoff = {
         "authority": "gsd-executor", "plan_rev": PHASE24_PLAN_REV,
@@ -3461,7 +3469,7 @@ def _phase24_pinned_gate_source(root: Path, gate_rev: str, gate_sha256: str,
             or type(gate) is not dict or type(handoff) is not dict
             or handoff != expected_handoff or gate.get("rev") != gate_rev
             or gate.get("sha256") != gate_sha256 or gate.get("parent") != PHASE24_PLAN_REV
-            or gate.get("old_blob") != PHASE24_D228_GATE_BLOB or gate.get("old_mode") != "100644"):
+            or gate.get("old_blob") != PHASE24_D229_GATE_BLOB or gate.get("old_mode") != "100644"):
         reject("Phase 24 gate pin differs from its trusted bootstrap anchor")
 
     repository = bootstrap["repository"]
@@ -3485,7 +3493,7 @@ def _phase24_pinned_gate_source(root: Path, gate_rev: str, gate_sha256: str,
     except (TypeError, ValueError):
         reject("Phase 24 bootstrap cannot be canonically encoded")
     if hashlib.sha256(normalized_bytes).hexdigest() != PHASE24_BOOTSTRAP_CANONICAL_SHA256:
-        reject("Phase 24 bootstrap differs from the exact D227 handoff")
+        reject("Phase 24 bootstrap differs from the exact D230 handoff")
 
     resolved = resolve_commit(root, gate_rev)
     if resolved != gate_rev:
