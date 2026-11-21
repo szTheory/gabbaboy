@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 status: in_progress
-stopped_at: Phase 24 D-228 frozen bootstrap denied; new bounded recovery scope required
-last_updated: "2026-11-21T01:37:30.598Z"
-state_head: 8ce5517a5777bffb87247564a9ae3afa1b0153d8
+stopped_at: Phase 24 D-229 context gathered
+last_updated: "2026-11-21T02:11:38.268Z"
+state_head: 8f90749937467d264b5d638b757d178d0ef1120b
 progress:
   total_phases: 6
   completed_phases: 5
@@ -127,9 +127,9 @@ Preserve the failed and unreplayed Acid2 mismatch, FIXT-01 Pending, Task 7, D-10
 
 ## Session
 
-**Last session:** 2026-11-21T01:37:30.598Z
-**Stopped at:** Phase 24 T30 frozen bootstrap denied; D-228 no-retry boundary
-**Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md
+**Last session:** 2026-11-21T02:11:37.617Z
+**Stopped at:** Phase 24 D-229 context gathered
+**Resume file:** .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-CONTEXT.md
 
 ### Blockers
 D-228 frozen bootstrap denied due to missing D-227 history pins in the new receipt. Owner must authorize a fresh bounded Phase 24 recovery before further gate execution.
