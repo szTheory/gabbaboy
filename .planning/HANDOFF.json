@@ -75,9 +75,6 @@
     }
   ],
   "uncommitted_files": [
-    " M .planning/HANDOFF.json",
-    " M .planning/STATE.md",
-    " M .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md",
     " M .planning/state.json"
   ],
   "next_action": "Owner authorizes a fresh bounded Phase 24 recovery scope using $gsd-discuss-phase 24; do not rerun D-228.",
