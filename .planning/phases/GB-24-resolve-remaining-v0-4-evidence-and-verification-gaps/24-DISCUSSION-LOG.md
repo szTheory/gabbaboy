@@ -614,3 +614,32 @@ The owner instructed the agent to follow the synthesized recommendations and con
 D-227 does not reset candidate, review, matrix, required-context, or merge limits. A failed frozen direct/bootstrap/immutable check ends the attempt without another replacement, retry, CI run, promotion or closure claim. Once the existing receipt seam passes with D-227 evidence, resume exact-head qualification, all ten existing focused CTests, fresh independent code/security reviews, the one existing protected matrix, and conditional merge of the identical reviewed head. Then run active-scope automated Phase 24 verification and D-209-compatible milestone audit/completion/cleanup after approved reconciliation to `main`. Do not start v0.5, run D-103, replay ROM/Acid2, execute Task 7, change requirements, or alter protected coverage.
 
 **Canonical references:** `.github/scripts/phase24-promotion-gate.py`; `tests/scripts/verify-workflow-policy-coverage.py`; `build/phase24/d226-t26-promotion_coverage_controls.log`; `build/phase24/d226-t26-frozen-gate-marker-stop.json`; `.planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/24-01-PLAN.md`; `.planning/context/WORKFLOW.md#cicd-efficiency`.
+
+## D-228 — Match the CTest JSON-v1 inventory version contract
+
+**Date:** 2026-11-20
+
+**Areas discussed:** Producer schema, fail-closed version validation, bounded correction, qualification order
+
+### Trigger
+
+D-227 T27/T28 passed, but T29 stopped before CTest when the immutable validator required a `patch` key. The retained raw CTest 4.4.3 `json-v1` inventory has `version: {major: 1, minor: 0}`. The official CMake 3.25 documentation and published schema define these as the model-version fields and allow additional properties. The raw inventory and stop receipt are retained at the paths and digests in 24-CONTEXT.md; no CTests or remote/promotional actions occurred.
+
+### Options and selected recommendation
+
+Require an object containing integer major 1 and minor 0, reject booleans and all missing/mistyped/wrong values, and neither require nor interpret `patch`. The official JSON Schema does not forbid extra properties, so ignore an inert extra field such as `patch` while continuing to validate every other inventory field exactly. Reject an exact-two-key policy as unnecessarily stricter than the producer schema; reject an optional/synthesized patch because that model component is not documented; reject broad version acceptance because it would hide schema drift.
+
+### Cross-role synthesis
+
+| Lens | Risk | Recommendation |
+|---|---|---|
+| Security/evidence | Weakening the version gate could admit an unsupported inventory model. | Strict JSON parser; exact integer major/minor checks; unchanged strict inventory cardinality, identity, command, properties and duplicate-key contracts; refusal controls before action. |
+| Architecture | Confusing CTest's 4.4.3 binary version with JSON model 1.0 couples unrelated version domains. | Keep producer, command and raw transcript unchanged; correct only consumer/sample/controls. |
+| Testing | Synthetic samples can hide a real producer/schema mismatch. | Promote the preserved raw transcript as the positive; negative tests cover missing, wrong, mistyped, negative, boolean, and obsolete synthetic versions; extra-property acceptance matches the official schema. |
+| Operations | Running long qualification or CI before a cheap schema preflight wastes feedback time. | Syntax/scope/schema/self-tests/scanner first; frozen direct/bootstrap, then existing immutable seam, then the same focused serial tests. No check is removed or reordered inside protected CI. |
+| Supply chain/maintenance | A general schema library would add dependency surface for a two-integer check. | Use existing Python stdlib and current test seams; no new dependency, CTest, or workflow. |
+| Product/release | The checker defect is not new emulator proof. | Preserve every D-209 disposition, accepted gap, failure and published byte. |
+
+The owner authorized one same-plan D-228 update, independent check and gate-only correction and directed continuation through the existing autonomous milestone route. The checked boundary is the sole-parent child of D-227 stop candidate `2e9d8cf1ed3e9889dd0199a9d30acdb06635661d`, inheriting gate blob `ac061190a7696134dd777d114fcce5228c58036d`. D-228 permits no retry or second gate replacement and resets no candidate/review/matrix/context/merge/closure limit. The existing receipt seam may be rebound after the gate freeze; T29's ten focused serial CTests remain blocked until both frozen gate and immutable seam checks pass. Continue to exact-head reviews, the existing eligible protected matrix and conditional merge only after qualification. Then verify the active Phase 24 scope, reconcile to main, and run the already-authorized D-209-compatible closeout. No v0.5, D-103, Task 7, ROM, or Acid2 replay.
+
+**Sources:** [CMake 3.25 CTest JSON object model](https://cmake.org/cmake/help/v3.25/manual/ctest.1.html#show-as-json-object-model); [official CTest JSON schema](https://cmake.org/cmake/help/latest/_downloads/a23288746b718529293c28c8c3fad9df/show-only-schema.json).
