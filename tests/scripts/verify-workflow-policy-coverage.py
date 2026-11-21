@@ -98,18 +98,18 @@ GROUP_BY_WORKFLOW = {
 EXPECTED_TEST_NAMES = set(GROUPS.values()) | {"workflow_policy_coverage", "workflow_policy_coverage_controls"}
 POLICY_TEST_NAMES = EXPECTED_TEST_NAMES | {"workflow_policy_check"}
 PHASE24_GATE_PATH = ".github/scripts/phase24-promotion-gate.py"
-PHASE24_BOOTSTRAP_PATH = "build/phase24/d226-bootstrap.json"
-PHASE24_BOOTSTRAP_CANONICAL_SHA256 = "69f9e05b626fdc17fde63c92280c9edf654b1b8afb87a45ab3198ca60f9df555"
-PHASE24_PLAN_REV = "9bf8048de96b9f40898238a0ef9b8a723b04bbe5"
-PHASE24_PLAN_PARENT = "e16873ad03c725e3564d857d8a5ae4850c2049e1"
-PHASE24_PLAN_TREE = "8f1b848155d0a24492ad6023da07e3b286fc79f4"
-PHASE24_PLAN_BLOB = "d548c63258a6f4a0f663ef9acdcf5fdb89981d2d"
-PHASE24_PLAN_SHA256 = "f25c20e4fabbe697796c140feebdda4517263f2e83da172f9c598d319b7d4511"
+PHASE24_BOOTSTRAP_PATH = "build/phase24/d227-bootstrap.json"
+PHASE24_BOOTSTRAP_CANONICAL_SHA256 = "29ffb38a5e6adc21d270600b5efb7093dc4f2801c9e5259d5d6d1e5afcc27255"
+PHASE24_PLAN_REV = "6d5359f90297687bc8cc4535cc5d4e2ee7921f8e"
+PHASE24_PLAN_PARENT = "febaa91c969daf2f82ac85424eb4623684ecdfc7"
+PHASE24_PLAN_TREE = "2b1588386f244c71e13480b5663629820e8dcc29"
+PHASE24_PLAN_BLOB = "cf0101b90e254e9e333ec681c79a7a5358c3d91b"
+PHASE24_PLAN_SHA256 = "367628081211701c4ef67fb8254b40969f3e921f2da6a531186c2e2a248e5f5f"
 PHASE24_PLAN_PATH_SHA256 = "981d088bc4d660fbb67e39db130bb8ec6bba081e6717b99ab9ec825388cdc72e"
-PHASE24_D225_GATE_REV = "e1f072f23d2d6a6fcfb328f0b30f224fe006c533"
-PHASE24_D225_GATE_TREE = "f02887b8ef6addb08c5bfe31a89e7a50c898a704"
-PHASE24_D225_GATE_BLOB = "13518dd3a40871c7476a9480a372b43d5550cadd"
-PHASE24_D225_GATE_SHA256 = "8c75d1963a56dd7086c5c0d97d11d2f7738abc60c1d9d92c2dd2c4d38bbe9daf"
+PHASE24_D226_GATE_REV = "f9ccf6b4a211bc33270f6f8172e40a4e4cb22cba"
+PHASE24_D226_GATE_TREE = "e2727a6873c0cce0617934e69d14844001cdbb96"
+PHASE24_D226_GATE_BLOB = "d37be8847ca654b0b318103fef07e130ad918a56"
+PHASE24_D226_GATE_SHA256 = "ea6c281eee7f3161235b235d6d67e9f4d11ebcbb230f42b9a51ee491a85afb9e"
 PHASE24_GATE_REV_RE = re.compile(r"^[0-9a-f]{40}$")
 PHASE24_GATE_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 ALL_PLATFORMS = ("posix", "windows")
@@ -3384,11 +3384,18 @@ def _phase24_pinned_gate_source(root: Path, gate_rev: str, gate_sha256: str,
         "history_pins": {
             "d209_rev", "d220_candidate", "d221_candidate", "d221_tree", "d221_exec_rev",
             "requirements_blob", "roadmap_blob", "state_forks_blob", "planning_hygiene_sha256",
+            "d225_gate_rev", "d225_gate_tree", "d225_gate_blob", "d225_gate_sha256",
+            "d225_stop_candidate", "d225_stop_parent", "d225_stop_tree",
+            "d226_plan_rev", "d226_plan_parent", "d226_plan_tree",
+            "d226_gate_rev", "d226_gate_parent", "d226_gate_tree", "d226_gate_blob", "d226_gate_sha256",
+            "d226_stop_intermediate", "d226_stop_intermediate_parent", "d226_stop_intermediate_tree",
+            "d226_waiter_correction_blob", "d226_coverage_correction_blob",
+            "d226_stop_candidate", "d226_stop_parent", "d226_stop_tree",
         },
         "trusted_handoff": {"authority", "plan_rev", "plan_sha256", "gate_rev", "gate_sha256"},
     }
     if (type(bootstrap) is not dict or set(bootstrap) != required_top_level
-            or bootstrap.get("kind") != "phase24-d226-bootstrap"
+            or bootstrap.get("kind") != "phase24-d227-bootstrap"
             or type(bootstrap.get("schema_version")) is not int
             or bootstrap.get("schema_version") != 1):
         reject("Phase 24 bootstrap receipt has the wrong identity")
@@ -3411,10 +3418,10 @@ def _phase24_pinned_gate_source(root: Path, gate_rev: str, gate_sha256: str,
     if (plan != expected_plan or type(gate) is not dict or type(handoff) is not dict
             or handoff != expected_handoff or gate.get("rev") != gate_rev
             or gate.get("sha256") != gate_sha256 or gate.get("parent") != PHASE24_PLAN_REV
-            or gate.get("old_blob") != PHASE24_D225_GATE_BLOB or gate.get("old_mode") != "100644"
+            or gate.get("old_blob") != PHASE24_D226_GATE_BLOB or gate.get("old_mode") != "100644"
             or bootstrap.get("inherited_gate") != {
-                "rev": PHASE24_D225_GATE_REV, "tree": PHASE24_D225_GATE_TREE,
-                "blob": PHASE24_D225_GATE_BLOB, "sha256": PHASE24_D225_GATE_SHA256, "mode": "100644",
+                "rev": PHASE24_D226_GATE_REV, "tree": PHASE24_D226_GATE_TREE,
+                "blob": PHASE24_D226_GATE_BLOB, "sha256": PHASE24_D226_GATE_SHA256, "mode": "100644",
             }):
         reject("Phase 24 gate pin differs from its trusted bootstrap anchor")
 
@@ -3439,7 +3446,7 @@ def _phase24_pinned_gate_source(root: Path, gate_rev: str, gate_sha256: str,
     except (TypeError, ValueError):
         reject("Phase 24 bootstrap cannot be canonically encoded")
     if hashlib.sha256(normalized_bytes).hexdigest() != PHASE24_BOOTSTRAP_CANONICAL_SHA256:
-        reject("Phase 24 bootstrap differs from the exact D226 handoff")
+        reject("Phase 24 bootstrap differs from the exact D227 handoff")
 
     resolved = resolve_commit(root, gate_rev)
     if resolved != gate_rev:
