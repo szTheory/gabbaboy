@@ -98,18 +98,28 @@ GROUP_BY_WORKFLOW = {
 EXPECTED_TEST_NAMES = set(GROUPS.values()) | {"workflow_policy_coverage", "workflow_policy_coverage_controls"}
 POLICY_TEST_NAMES = EXPECTED_TEST_NAMES | {"workflow_policy_check"}
 PHASE24_GATE_PATH = ".github/scripts/phase24-promotion-gate.py"
-PHASE24_BOOTSTRAP_PATH = "build/phase24/d227-bootstrap.json"
-PHASE24_BOOTSTRAP_CANONICAL_SHA256 = "29ffb38a5e6adc21d270600b5efb7093dc4f2801c9e5259d5d6d1e5afcc27255"
-PHASE24_PLAN_REV = "6d5359f90297687bc8cc4535cc5d4e2ee7921f8e"
-PHASE24_PLAN_PARENT = "febaa91c969daf2f82ac85424eb4623684ecdfc7"
-PHASE24_PLAN_TREE = "2b1588386f244c71e13480b5663629820e8dcc29"
-PHASE24_PLAN_BLOB = "cf0101b90e254e9e333ec681c79a7a5358c3d91b"
-PHASE24_PLAN_SHA256 = "367628081211701c4ef67fb8254b40969f3e921f2da6a531186c2e2a248e5f5f"
+PHASE24_BOOTSTRAP_PATH = "build/phase24/d229-bootstrap.json"
+PHASE24_BOOTSTRAP_CANONICAL_SHA256 = "e6d8af5d3e260570490798d800649ece4823f7f08160072dbee12d53ddf7defb"
+PHASE24_PLAN_REV = "3b7814793e6f2fa30f75a2f3eccdb46024f88b54"
+PHASE24_PLAN_PARENT = "6573cb05dcd978f37102ac2d3a26a821c145a2fd"
+PHASE24_PLAN_TREE = "f792337c2d7bef9343a7dd427551c19424f75c73"
+PHASE24_PLAN_BLOB = "f503366181aa88d7656cdcd8fd9486d0c5554f66"
+PHASE24_PLAN_SHA256 = "79cb1371b8082f3ff1492404d0bee789ccbc57c10c3e4ebfbae40e1370498417"
 PHASE24_PLAN_PATH_SHA256 = "981d088bc4d660fbb67e39db130bb8ec6bba081e6717b99ab9ec825388cdc72e"
-PHASE24_D226_GATE_REV = "f9ccf6b4a211bc33270f6f8172e40a4e4cb22cba"
-PHASE24_D226_GATE_TREE = "e2727a6873c0cce0617934e69d14844001cdbb96"
-PHASE24_D226_GATE_BLOB = "d37be8847ca654b0b318103fef07e130ad918a56"
-PHASE24_D226_GATE_SHA256 = "ea6c281eee7f3161235b235d6d67e9f4d11ebcbb230f42b9a51ee491a85afb9e"
+PHASE24_DISCUSSION_REV = "8f90749937467d264b5d638b757d178d0ef1120b"
+PHASE24_DISCUSSION_TREE = "0085b429044aac5ded48489ca9366a63045958d4"
+PHASE24_DISCUSSION_BLOB = "df45dd868a83cccfc8d29778247452c5c546777d"
+PHASE24_DISCUSSION_SHA256 = "1de2aa3f4a9078f2714366da7cce862f37fe1da6379dad50cdb271a8389eb118"
+PHASE24_DISCUSSION_PATH_SHA256 = "3a0e982e59a695cedac174a449e3f1ad3322c943d4e48c772afc85ff6e9b9075"
+PHASE24_CLOSEOUT_REV = "9bf8048de96b9f40898238a0ef9b8a723b04bbe5"
+PHASE24_CLOSEOUT_TREE = "8f1b848155d0a24492ad6023da07e3b286fc79f4"
+PHASE24_CLOSEOUT_BLOB = "5518083f3bf5cecb8ba3eb9e127dc730a64bb4d8"
+PHASE24_CLOSEOUT_SHA256 = "5fad7cb8bfa8355338081f315240bef918bf085883f2d61d502363c641fb5e5b"
+PHASE24_CLOSEOUT_PATH_SHA256 = "56f44d6804c1ae7ca224578d88d51d10a3bc086f9844bae48bcfaae0f044f703"
+PHASE24_D228_GATE_REV = "8ce5517a5777bffb87247564a9ae3afa1b0153d8"
+PHASE24_D228_GATE_TREE = "b1f57ae8e5e0173a4dcb44aee33d2b496c16529b"
+PHASE24_D228_GATE_BLOB = "da9c54b86d9b67b1195864c56186b9a98795ee6b"
+PHASE24_D228_GATE_SHA256 = "8583fcfc18d772d482cddbfbac1ec7246bb7088b217c2f1fd452c60c0bd8cefb"
 PHASE24_GATE_REV_RE = re.compile(r"^[0-9a-f]{40}$")
 PHASE24_GATE_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 ALL_PLATFORMS = ("posix", "windows")
@@ -3382,20 +3392,38 @@ def _phase24_pinned_gate_source(root: Path, gate_rev: str, gate_sha256: str,
         "repository": {"root", "git_dir", "branch"},
         "scope": {"source_allowlist", "correction_allowlist"},
         "history_pins": {
-            "d209_rev", "d220_candidate", "d221_candidate", "d221_tree", "d221_exec_rev",
-            "requirements_blob", "roadmap_blob", "state_forks_blob", "planning_hygiene_sha256",
-            "d225_gate_rev", "d225_gate_tree", "d225_gate_blob", "d225_gate_sha256",
+            "d209_rev", "d220_candidate", "d221_candidate", "d221_exec_rev", "d221_tree",
+            "d225_gate_blob", "d225_gate_rev", "d225_gate_sha256", "d225_gate_tree",
             "d225_stop_candidate", "d225_stop_parent", "d225_stop_tree",
-            "d226_plan_rev", "d226_plan_parent", "d226_plan_tree",
-            "d226_gate_rev", "d226_gate_parent", "d226_gate_tree", "d226_gate_blob", "d226_gate_sha256",
-            "d226_stop_intermediate", "d226_stop_intermediate_parent", "d226_stop_intermediate_tree",
-            "d226_waiter_correction_blob", "d226_coverage_correction_blob",
-            "d226_stop_candidate", "d226_stop_parent", "d226_stop_tree",
+            "d226_coverage_correction_blob", "d226_gate_blob", "d226_gate_parent", "d226_gate_rev",
+            "d226_gate_sha256", "d226_gate_tree", "d226_plan_parent", "d226_plan_rev", "d226_plan_tree",
+            "d226_stop_candidate", "d226_stop_intermediate", "d226_stop_intermediate_parent",
+            "d226_stop_intermediate_tree", "d226_stop_parent", "d226_stop_tree", "d226_waiter_correction_blob",
+            "d227_bootstrap_sha256", "d227_discussion_blob", "d227_discussion_sha256", "d227_gate_blob",
+            "d227_gate_parent", "d227_gate_rev", "d227_gate_sha256", "d227_gate_tree", "d227_plan_blob",
+            "d227_plan_parent", "d227_plan_rev", "d227_plan_sha256", "d227_plan_tree",
+            "d227_seam_coverage_blob", "d227_seam_old_coverage_blob", "d227_seam_parent", "d227_seam_rev",
+            "d227_seam_tree", "d227_stop_candidate", "d227_stop_parent", "d227_stop_tree",
+            "d228_bootstrap_sha256", "d228_denial_output_sha256", "d228_direct_output_sha256",
+            "d228_discussion_blob", "d228_discussion_path_sha256", "d228_discussion_sha256", "d228_gate_blob",
+            "d228_gate_parent", "d228_gate_rev", "d228_gate_sha256", "d228_gate_tree", "d228_plan_blob",
+            "d228_plan_parent", "d228_plan_rev", "d228_plan_sha256", "d228_plan_tree",
+            "d228_stop_continue_blob", "d228_stop_continue_sha256", "d228_stop_handoff_blob",
+            "d228_stop_handoff_sha256", "d228_stop_parent", "d228_stop_rev", "d228_stop_tree",
+            "d229_boundary_parent", "d229_boundary_rev", "d229_boundary_tree", "d229_discussion_blob",
+            "d229_discussion_parent", "d229_discussion_path_sha256", "d229_discussion_rev",
+            "d229_discussion_sha256", "d229_discussion_tree", "d229_handoff_blob", "d229_handoff_sha256",
+            "d229_inherited_gate_blob", "d229_inherited_gate_mode", "d229_inherited_gate_rev",
+            "d229_inherited_gate_sha256", "d229_inherited_gate_tree", "d229_phase_continue_blob",
+            "d229_phase_continue_sha256", "d229_plan_blob", "d229_plan_sha256", "d229_roadmap_blob",
+            "d229_roadmap_sha256", "d229_root_continue_blob", "d229_root_continue_sha256", "d229_state_blob",
+            "d229_state_sha256", "planning_hygiene_sha256", "requirements_blob", "roadmap_blob",
+            "state_forks_blob",
         },
         "trusted_handoff": {"authority", "plan_rev", "plan_sha256", "gate_rev", "gate_sha256"},
     }
     if (type(bootstrap) is not dict or set(bootstrap) != required_top_level
-            or bootstrap.get("kind") != "phase24-d227-bootstrap"
+            or bootstrap.get("kind") != "phase24-d229-bootstrap"
             or type(bootstrap.get("schema_version")) is not int
             or bootstrap.get("schema_version") != 1):
         reject("Phase 24 bootstrap receipt has the wrong identity")
@@ -3411,18 +3439,29 @@ def _phase24_pinned_gate_source(root: Path, gate_rev: str, gate_sha256: str,
         "blob": PHASE24_PLAN_BLOB, "sha256": PHASE24_PLAN_SHA256,
         "path_sha256": PHASE24_PLAN_PATH_SHA256,
     }
+    expected_discussion = {
+        "rev": PHASE24_DISCUSSION_REV, "tree": PHASE24_DISCUSSION_TREE, "blob": PHASE24_DISCUSSION_BLOB,
+        "sha256": PHASE24_DISCUSSION_SHA256, "path_sha256": PHASE24_DISCUSSION_PATH_SHA256,
+    }
+    expected_closeout = {
+        "rev": PHASE24_CLOSEOUT_REV, "tree": PHASE24_CLOSEOUT_TREE, "blob": PHASE24_CLOSEOUT_BLOB,
+        "sha256": PHASE24_CLOSEOUT_SHA256, "path_sha256": PHASE24_CLOSEOUT_PATH_SHA256,
+    }
+    expected_inherited_gate = {
+        "rev": PHASE24_D228_GATE_REV, "tree": PHASE24_D228_GATE_TREE,
+        "blob": PHASE24_D228_GATE_BLOB, "sha256": PHASE24_D228_GATE_SHA256, "mode": "100644",
+    }
     expected_handoff = {
         "authority": "gsd-executor", "plan_rev": PHASE24_PLAN_REV,
         "plan_sha256": PHASE24_PLAN_SHA256, "gate_rev": gate_rev, "gate_sha256": gate_sha256,
     }
-    if (plan != expected_plan or type(gate) is not dict or type(handoff) is not dict
+    if (plan != expected_plan or bootstrap.get("discussion") != expected_discussion
+            or bootstrap.get("closeout") != expected_closeout
+            or bootstrap.get("inherited_gate") != expected_inherited_gate
+            or type(gate) is not dict or type(handoff) is not dict
             or handoff != expected_handoff or gate.get("rev") != gate_rev
             or gate.get("sha256") != gate_sha256 or gate.get("parent") != PHASE24_PLAN_REV
-            or gate.get("old_blob") != PHASE24_D226_GATE_BLOB or gate.get("old_mode") != "100644"
-            or bootstrap.get("inherited_gate") != {
-                "rev": PHASE24_D226_GATE_REV, "tree": PHASE24_D226_GATE_TREE,
-                "blob": PHASE24_D226_GATE_BLOB, "sha256": PHASE24_D226_GATE_SHA256, "mode": "100644",
-            }):
+            or gate.get("old_blob") != PHASE24_D228_GATE_BLOB or gate.get("old_mode") != "100644"):
         reject("Phase 24 gate pin differs from its trusted bootstrap anchor")
 
     repository = bootstrap["repository"]
