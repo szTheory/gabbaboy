@@ -1,27 +1,85 @@
 {
-  "phase": 23,
-  "phase_title": "Qualified v0.4.0 Release",
-  "stage": "Completed Phase 23 software evidence; enclosing protected planning closeout must pass before owner handoff",
-  "completed_plan_count": 9,
-  "next_stage": "v0.4 milestone audit",
-  "next_command": "/gsd-audit-milestone",
-  "who_acts_next": "owner after the agent finishes protected closeout",
-  "auto_advance": false,
-  "auto_chain_active": false,
-  "release_url": "https://github.com/szTheory/gabbaboy/releases/tag/v0.4.0",
-  "release_source": "3de1b0e427f37a202be4469dd818266f359c8b20",
-  "publication_control": "fbea1e2cc70f7c2ab9ea5820fa92ca18ddf997e8",
-  "publisher_run": 43526085579,
-  "publisher_attempt": 1,
-  "remaining_release_requests": 0,
-  "lesson_sha": "293c9fa7743b10f130a99514d6fdf091c9d4761e",
-  "independent_public_readback": "pass",
-  "pending_requirements": [
-    "FIXT-01",
-    "RIGHTS-01",
-    "DIAG-01",
-    "DIAG-02"
+  "version": "1.0",
+  "timestamp": "2026-11-21T01:37:30.598Z",
+  "phase": 24,
+  "phase_name": "Resolve remaining v0.4 evidence and verification gaps",
+  "phase_dir": ".planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps",
+  "plan": 1,
+  "task": 30,
+  "total_tasks": 32,
+  "status": "paused",
+  "completed_tasks": [
+    {
+      "id": 27,
+      "name": "D-227 marker recovery",
+      "status": "done",
+      "commit": "0df4583"
+    },
+    {
+      "id": 28,
+      "name": "D-227 receipt seam",
+      "status": "done",
+      "commit": "a1694ca"
+    },
+    {
+      "id": 29,
+      "name": "D-227 guarded qualification",
+      "status": "stopped",
+      "commit": "2e9d8cf"
+    },
+    {
+      "id": 30,
+      "name": "D-228 CTest schema recovery",
+      "status": "blocked",
+      "progress": "Gate-only commit 8ce5517 passed immutable self-test; frozen bootstrap denied."
+    }
   ],
-  "updated_at": "2026-11-14T01:02:14.335834+00:00",
-  "documentation_boundary_sha": "e3b418dfbdb8b61d1c3088c34fb8909ad002efbd"
+  "remaining_tasks": [
+    {
+      "id": 30,
+      "name": "D-228 CTest schema recovery",
+      "status": "blocked",
+      "note": "D-228 no-retry boundary; bootstrap denial preserved."
+    },
+    {
+      "id": 31,
+      "name": "D-228 receipt seam",
+      "status": "not_started"
+    },
+    {
+      "id": 32,
+      "name": "D-228 guarded qualification",
+      "status": "not_started"
+    }
+  ],
+  "blockers": [
+    {
+      "description": "Frozen D-228 bootstrap verification denied with bootstrap_historical_pins_mismatch because the receipt omitted the 21 D-227 history pins required by the pinned gate. D-228 prohibits retries/replacements and downstream checks.",
+      "type": "human_action",
+      "workaround": "Owner must authorize a fresh bounded Phase 24 recovery scope before any further gate execution."
+    }
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {
+      "action": "Authorize a new bounded Phase 24 recovery scope via $gsd-discuss-phase 24.",
+      "context": "The D-228 frozen bootstrap denial is a no-retry stop; further gate execution is outside its authority.",
+      "blocking": true
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Stop D-228 after its first frozen bootstrap denial.",
+      "rationale": "The plan explicitly prohibits retry, replacement, repinning, CTest, review, hosted action, promotion, and closure after a frozen failure.",
+      "phase": "24"
+    }
+  ],
+  "uncommitted_files": [
+    " M .planning/HANDOFF.json",
+    " M .planning/STATE.md",
+    " M .planning/phases/GB-24-resolve-remaining-v0-4-evidence-and-verification-gaps/.continue-here.md",
+    " M .planning/state.json"
+  ],
+  "next_action": "Owner authorizes a fresh bounded Phase 24 recovery scope using $gsd-discuss-phase 24; do not rerun D-228.",
+  "context_notes": "The D-228 immutable gate self-test passed; bootstrap denial is fully captured in ignored build/phase24 artifacts. Keep generated .planning/state.json and all failure receipts."
 }
